@@ -1,25 +1,29 @@
-# Store Data Assistant 6.0
+# Store Data Assistant 6.1
 
-Functional V6 consolidation.
+Complete local-first PySide6/QML project.
 
-## Included
-- Modern PySide6 + QML interface
-- Strict 14-field store Master comparison
-- Smart header aliases
-- Store rule validation for dates, 1/0 fields, Updated By timestamp
-- Duplicate/missing SID detection
-- Broken delimited-file inspection with physical line and unplaced values
-- General Data Health Check for CSV/TSV/TXT/XLSX/XLS/JSON/XML
-- Horizontal/key-value/line-oriented structure hints
-- Missing values, duplicates, mixed types, numeric outliers
-- General column calculations
-- DuckDB read-only SQL ONLY in Explore & Analyze Data
-- Local processing architecture
-- Windows GitHub Actions build
+## Files
+- `app.py`
+- `Main.qml`
+- `requirements.txt`
+- `.github/workflows/build-windows.yml`
 
-## Repository layout
-Put app.py, Main.qml, requirements.txt and README.md in the repository root.
-Put build-windows.yml at .github/workflows/build-windows.yml.
+## Main capabilities
+- Smart matching of country-specific headers to the approved 14 store fields.
+- Master-vs-mapping validation, SID checks, date/flag checks, and report export.
+- CSV/TXT inspection with quoted-comma-aware parsing and conservative repaired-copy export.
+- General structured-data health statistics.
+- Local read-only SQL in Explore & Analyze only.
+- CSV/XLSX/JSON export.
+- Production Windows build uses `--windowed`, so no terminal window is shown.
+- Qt Quick Controls uses the Basic style to avoid the native-style customization warnings previously seen.
 
-## Important safety behavior
-The repair reader does not overwrite the original file. Extra fields are reported as unplaced values rather than silently becoming new business columns.
+## Supported structured formats
+CSV, TSV/TXT, XLSX/XLS/XLSM, JSON, XML.
+
+## Run locally
+`pip install -r requirements.txt`
+`python app.py`
+
+## Debugging
+If a future packaged build fails before showing the UI, temporarily replace `--windowed` with `--console` in the workflow to expose the startup error, then restore `--windowed` after fixing it.
