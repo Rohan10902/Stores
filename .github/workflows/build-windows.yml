@@ -24,7 +24,7 @@ jobs:
 
       - name: Build Windows EXE
         shell: pwsh
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name StoreDataAssistant --add-data "Main.qml;." app.py
+        run: pyinstaller --noconfirm --clean --onefile --console --name StoreDataAssistant --add-data "Main.qml;." app.py
 
       - name: Upload Windows application
         uses: actions/upload-artifact@v4
