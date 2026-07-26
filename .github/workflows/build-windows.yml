@@ -1,4 +1,4 @@
-name: Build Store Data Assistant 7.1.5
+name: Build Store Data Assistant 7.1.5.1
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ on:
 
 jobs:
   build:
-    name: Validate and build Windows application
+    name: Validate, launch-test and build Windows application
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -47,8 +47,13 @@ jobs:
             "app.py",
             "requirements.txt",
             "qml/Main.qml",
+            "qml/pages/HomePage.qml",
+            "qml/pages/ComparePage.qml",
             "qml/pages/SingleReviewPage.qml",
+            "qml/pages/RepairPage.qml",
             "qml/pages/CreateStorePage.qml",
+            "qml/pages/HealthPage.qml",
+            "qml/pages/ExplorePage.qml",
             "core/common.py",
             "core/store_validator.py",
             "core/file_creator.py"
@@ -67,6 +72,34 @@ jobs:
         run: |
           python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
 
+      - name: Smoke-test QML startup from source
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          @'
+          import os, sys
+          from PySide6.QtCore import QTimer
+          import app
+          from PySide6.QtGui import QGuiApplication
+          from PySide6.QtQml import QQmlApplicationEngine
+          from PySide6.QtCore import QUrl
+          os.environ["QT_QPA_PLATFORM"] = "offscreen"
+          qapp = QGuiApplication.instance() or QGuiApplication(sys.argv)
+          engine = QQmlApplicationEngine()
+          backend = app.Backend()
+          engine.rootContext().setContextProperty("backend", backend)
+          engine.addImportPath(str(app.BASE / "qml"))
+          errors = []
+          engine.warnings.connect(lambda warnings: errors.extend(w.toString() for w in warnings))
+          engine.load(QUrl.fromLocalFile(str(app.BASE / "qml" / "Main.qml")))
+          if not engine.rootObjects():
+              raise SystemExit("QML startup failed:\n" + "\n".join(errors))
+          QTimer.singleShot(500, qapp.quit)
+          qapp.exec()
+          print("QML source startup OK")
+          '@ | Set-Content -Encoding UTF8 smoke_qml.py
+          python smoke_qml.py
+
       - name: Build Store Data Assistant
         shell: pwsh
         run: |
@@ -76,8 +109,25 @@ jobs:
             --onefile `
             --windowed `
             --name "StoreDataAssistant" `
+            --collect-all PySide6 `
+            --collect-all shiboken6 `
+            --hidden-import PySide6.QtWidgets `
             --add-data "qml;qml" `
             app.py
+
+      - name: Verify packaged executable actually starts
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "dist/StoreDataAssistant.exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) {
+            $log = Join-Path $env:LOCALAPPDATA "StoreDataAssistant\logs\StoreDataAssistant.log"
+            if (Test-Path $log) { Get-Content $log -Tail 200 }
+            throw "Packaged application exited during startup with code $($p.ExitCode)."
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "Packaged executable remained alive after startup window."
 
       - name: Verify Windows executable
         shell: pwsh
@@ -86,14 +136,14 @@ jobs:
             throw "StoreDataAssistant.exe was not created."
           }
           $file = Get-Item "dist/StoreDataAssistant.exe"
-          Write-Host "Store Data Assistant 7.1.5 build complete"
+          Write-Host "Store Data Assistant 7.1.5.1 build complete"
           Write-Host "File:" $file.FullName
           Write-Host "Size:" $file.Length "bytes"
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
-          name: StoreDataAssistant-7.1.5-Windows
+          name: StoreDataAssistant-7.1.5.1-Windows
           path: dist/StoreDataAssistant.exe
           if-no-files-found: error
           retention-days: 30
