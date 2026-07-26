@@ -79,6 +79,22 @@ jobs:
         shell: pwsh
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
+      - name: Headless QML startup test
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          $p = Start-Process -FilePath "python" -ArgumentList "app.py" -PassThru -NoNewWindow
+          Start-Sleep -Seconds 5
+          if ($p.HasExited) {
+            $log = Join-Path $env:LOCALAPPDATA "StoreDataAssistant\logs\StoreDataAssistant.log"
+            if (Test-Path $log) { Get-Content $log -Tail 200 }
+            throw "Source application exited during headless QML startup. Exit code: $($p.ExitCode)"
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "Source QML application survived headless startup."
+
       - name: Build Store Data Assistant
         shell: pwsh
         run: |
@@ -88,6 +104,10 @@ jobs:
             --onefile `
             --windowed `
             --name "StoreDataAssistant" `
+            --collect-all PySide6 `
+            --collect-all shiboken6 `
+            --hidden-import PySide6.QtQuickControls2 `
+            --hidden-import PySide6.QtWidgets `
             --add-data "qml;qml" `
             app.py
 
@@ -105,15 +125,23 @@ jobs:
 
       - name: Launch packaged EXE smoke test
         shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
         run: |
           $exe = (Resolve-Path "dist/StoreDataAssistant.exe").Path
           $process = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 12
           if ($process.HasExited) {
+            $log = Join-Path $env:LOCALAPPDATA "StoreDataAssistant\logs\StoreDataAssistant.log"
+            if (Test-Path $log) {
+              Write-Host "--- StoreDataAssistant.log ---"
+              Get-Content $log -Tail 200
+            }
             throw "Packaged EXE exited during startup. Exit code: $($process.ExitCode)"
           }
           Stop-Process -Id $process.Id -Force
-          Write-Host "Packaged EXE remained alive through the startup smoke-test window."
+          Write-Host "Packaged EXE survived headless startup smoke test."
 
       - name: Generate SHA-256 checksum
         shell: pwsh
