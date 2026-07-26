@@ -1,4 +1,4 @@
-name: Build Store Data Assistant 7.1.5
+name: Build Store Data Assistant 7.2.0
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ on:
       - "requirements.txt"
       - "core/**"
       - "qml/**"
+      - "tests/**"
       - ".github/workflows/build-windows.yml"
   push:
     branches: [main]
@@ -17,12 +18,18 @@ on:
       - "requirements.txt"
       - "core/**"
       - "qml/**"
+      - "tests/**"
       - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    name: Validate and build Windows application
+    name: Test, package and smoke-test Windows application
     runs-on: windows-latest
+    timeout-minutes: 20
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,7 +58,8 @@ jobs:
             "qml/pages/CreateStorePage.qml",
             "core/common.py",
             "core/store_validator.py",
-            "core/file_creator.py"
+            "core/file_creator.py",
+            "tests/test_production_core.py"
           )
           foreach ($path in $required) {
             if (!(Test-Path $path)) { throw "$path is missing" }
@@ -60,12 +68,16 @@ jobs:
 
       - name: Check Python syntax
         shell: pwsh
-        run: python -m compileall -q app.py core
+        run: python -m compileall -q app.py core tests
 
       - name: Smoke-test core imports
         shell: pwsh
         run: |
           python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
+
+      - name: Run regression tests
+        shell: pwsh
+        run: python -m unittest discover -s tests -p "test_*.py" -v
 
       - name: Build Store Data Assistant
         shell: pwsh
@@ -86,14 +98,36 @@ jobs:
             throw "StoreDataAssistant.exe was not created."
           }
           $file = Get-Item "dist/StoreDataAssistant.exe"
-          Write-Host "Store Data Assistant 7.1.5 build complete"
+          if ($file.Length -lt 1MB) { throw "Executable is unexpectedly small." }
+          Write-Host "Store Data Assistant 7.2.0 build complete"
           Write-Host "File:" $file.FullName
           Write-Host "Size:" $file.Length "bytes"
 
-      - name: Upload Windows executable
+      - name: Launch packaged EXE smoke test
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "dist/StoreDataAssistant.exe").Path
+          $process = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 12
+          if ($process.HasExited) {
+            throw "Packaged EXE exited during startup. Exit code: $($process.ExitCode)"
+          }
+          Stop-Process -Id $process.Id -Force
+          Write-Host "Packaged EXE remained alive through the startup smoke-test window."
+
+      - name: Generate SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "dist/StoreDataAssistant.exe" -Algorithm SHA256).Hash.ToLower()
+          "$hash  StoreDataAssistant.exe" | Set-Content -Encoding ascii "dist/StoreDataAssistant.exe.sha256"
+          Get-Content "dist/StoreDataAssistant.exe.sha256"
+
+      - name: Upload Windows production candidate
         uses: actions/upload-artifact@v4
         with:
-          name: StoreDataAssistant-7.1.5-Windows
-          path: dist/StoreDataAssistant.exe
+          name: StoreDataAssistant-7.2.0-Windows
+          path: |
+            dist/StoreDataAssistant.exe
+            dist/StoreDataAssistant.exe.sha256
           if-no-files-found: error
           retention-days: 30
