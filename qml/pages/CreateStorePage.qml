@@ -26,6 +26,11 @@ Item {
     function clearAll(){saveUndo();grid.clear();for(var i=0;i<10;i++)addBlank();validation.clear();validationCount=0;notice="Table cleared"}
     function padColumn(){var col=bulkCol.currentIndex;var width=Number(padWidth.value);if(col<0||width<1)return;saveUndo();var changed=0;for(var r=0;r<grid.count;r++){var key="c"+col;var v=String(grid.get(r)[key]||"").trim();if(/^\d+$/.test(v)&&v.length<width){grid.setProperty(r,key,("00000000000000000000"+v).slice(-width));changed++}}notice="Padded "+changed+" value(s) in "+headers[col];backend.validateCreator(rowsJson())}
     function replaceAll(){var find=findText.text;if(!find){notice="Enter a value to find";return}saveUndo();var repl=replaceText.text;var only=replaceCol.currentIndex-1;var changed=0;for(var r=0;r<grid.count;r++){for(var c=0;c<headers.length;c++){if(only>=0&&c!==only)continue;var key="c"+c;var v=String(grid.get(r)[key]||"");if(v.indexOf(find)>=0){grid.setProperty(r,key,v.split(find).join(repl));changed++}}}notice="Replaced "+changed+" cell(s)";backend.validateCreator(rowsJson())}
+    function cellColor(row, col) {
+        if (selectedRow === row && selectedCol === col) return "#17375f"
+        if ((row % 2) === 1) return "#0d1b2e"
+        return "#0b1829"
+    }
 
     FileDialog{id:saveDlg;fileMode:FileDialog.SaveFile;nameFilters:["CSV (*.csv)"];onAccepted:backend.exportCreator(rowsJson(),selectedFile.toString())}
     Connections{target:backend;function onCreatorReady(p){var d=JSON.parse(p);validationCount=d.count;validation.clear();for(var i=0;i<d.findings.length;i++){var x=d.findings[i];validation.append({row:String(x.row),field:String(x.field),message:String(x.message)})}}}
@@ -63,11 +68,81 @@ Item {
             }
         }
         Rectangle{visible:validationCount>0||notice!=="";Layout.fillWidth:true;implicitHeight:42;radius:6;color:validationCount>0?"#433614":"#113426";Text{anchors.fill:parent;anchors.margins:8;text:validationCount>0?validationCount+" value(s) need review before export. "+notice:notice;color:validationCount>0?"#fde68a":"#86efac";verticalAlignment:Text.AlignVCenter}}
-        Card{Layout.fillWidth:true;Layout.fillHeight:true;clip:true
-            Flickable{id:flick;anchors.fill:parent;anchors.margins:8;contentWidth:headers.length*155;contentHeight:headerRow.height+grid.count*38;clip:true
-                Row{id:headerRow;height:38;Repeater{model:headers;delegate:Rectangle{required property string modelData;width:155;height:38;color:"#10233d";border.color:"#29415f";Text{anchors.fill:parent;anchors.margins:6;text:modelData;color:"#bfdbfe";font.bold:true;verticalAlignment:Text.AlignVCenter;elide:Text.ElideRight}}}}
-                Column{y:headerRow.height;Repeater{model:grid;delegate:Row{id:dataRow;required property int index;property int rr:index;height:38;Repeater{model:headers.length;delegate:TextField{required property int index;property int cc:index;width:155;height:38;padding:6;text:grid.get(dataRow.rr)["c"+cc]||"";selectByMouse:true;background:Rectangle{color:(selectedRow===dataRow.rr&&selectedCol===cc)?"#17375f":(dataRow.rr%2?"#0d1b2e":"#0b1829");border.color:"#29415f"};color:"#f8fafc";onActiveFocusChanged:{if(activeFocus){selectedRow=dataRow.rr;selectedCol=cc}};onEditingFinished:{saveUndo();grid.setProperty(dataRow.rr,"c"+cc,text)}}}}}}
-                ScrollBar.horizontal:ScrollBar{};ScrollBar.vertical:ScrollBar{}
+        Card {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            Flickable {
+                id: flick
+                anchors.fill: parent
+                anchors.margins: 8
+                contentWidth: headers.length * 155
+                contentHeight: headerRow.height + grid.count * 38
+                clip: true
+                Row {
+                    id: headerRow
+                    height: 38
+                    Repeater {
+                        model: headers
+                        delegate: Rectangle {
+                            required property string modelData
+                            width: 155
+                            height: 38
+                            color: "#10233d"
+                            border.color: "#29415f"
+                            Text {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                text: modelData
+                                color: "#bfdbfe"
+                                font.bold: true
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                }
+                Column {
+                    y: headerRow.height
+                    Repeater {
+                        model: grid
+                        delegate: Row {
+                            id: dataRow
+                            required property int index
+                            property int rr: index
+                            height: 38
+                            Repeater {
+                                model: headers.length
+                                delegate: TextField {
+                                    required property int index
+                                    property int cc: index
+                                    width: 155
+                                    height: 38
+                                    padding: 6
+                                    text: grid.get(dataRow.rr)["c" + cc] || ""
+                                    selectByMouse: true
+                                    background: Rectangle {
+                                        color: page.cellColor(dataRow.rr, cc)
+                                        border.color: "#29415f"
+                                    }
+                                    color: "#f8fafc"
+                                    onActiveFocusChanged: {
+                                        if (activeFocus) {
+                                            selectedRow = dataRow.rr
+                                            selectedCol = cc
+                                        }
+                                    }
+                                    onEditingFinished: {
+                                        saveUndo()
+                                        grid.setProperty(dataRow.rr, "c" + cc, text)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                ScrollBar.horizontal: ScrollBar {}
+                ScrollBar.vertical: ScrollBar {}
             }
         }
         Card{visible:validation.count>0;Layout.fillWidth:true;implicitHeight:Math.min(130,40+validation.count*28);ColumnLayout{anchors.fill:parent;anchors.margins:8;Text{text:"Validation Findings";color:"#f8fafc";font.bold:true}ListView{Layout.fillWidth:true;Layout.fillHeight:true;model:validation;delegate:Text{required property string row;required property string field;required property string message;width:ListView.view.width;height:26;text:"Row "+row+" • "+field+" — "+message;color:"#f59e0b";elide:Text.ElideRight}}}}
