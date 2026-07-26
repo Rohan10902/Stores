@@ -3,6 +3,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, Property, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuickControls2 import QQuickStyle
 from core.common import read_table, map_columns, json_value
 from core.store_validator import compare, suggest_keys, validation_insights
 from core.csv_repair import inspect_csv, apply_mapping, keep_unresolved, save_repaired, unresolved_extras, keep_issue_as_is, create_record_from_extras
@@ -206,6 +207,10 @@ class Backend(QObject):
 
 def main():
     try:
+        # Native Windows Qt Quick Controls can ignore our dark button palette and
+        # render white controls with nearly-white text. Basic gives us the same
+        # predictable, palette-aware rendering in development and in the EXE.
+        QQuickStyle.setStyle("Basic")
         app=QGuiApplication(sys.argv); engine=QQmlApplicationEngine(); backend=Backend(); engine.rootContext().setContextProperty("backend",backend); engine.addImportPath(str(BASE/"qml"))
         errors=[]; engine.warnings.connect(lambda warnings: errors.extend(w.toString() for w in warnings)); qml=BASE/"qml"/"Main.qml"; logging.info("Loading QML from %s",qml); engine.load(QUrl.fromLocalFile(str(qml)))
         if not engine.rootObjects(): raise RuntimeError("QML failed to create root object:\n"+"\n".join(errors))
