@@ -1,8 +1,7 @@
-import os, sys, re, csv, json, sqlite3
+import sys, os, re, csv, json, sqlite3
 from pathlib import Path
+from collections import Counter
 from difflib import SequenceMatcher
-os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Basic")
-
 import pandas as pd
 from PySide6.QtCore import QObject, Signal, Slot, Property, QUrl
 from PySide6.QtGui import QGuiApplication
@@ -10,249 +9,240 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 FIELDS=["Store Name","SID","Banner","Nielsen Store Code","Trip Received","Last Trip","Address 1","Address 2","Address 3","ZIP","Active / Inactive","Is Census","Is Exceptions","Updated By"]
 ALIASES={
-"Store Name":["store name","storename","outlet name","location name","shop name"],
-"SID":["sid","store id","store identifier","site id"],
-"Banner":["banner","brand","retailer banner","chain"],
-"Nielsen Store Code":["nielsen store code","nielsen store","nielsen code","nielsen id"],
-"Trip Received":["trip received","trip received date","received date"],
-"Last Trip":["last trip","last trip date","last visit"],
-"Address 1":["address 1","address1","address line 1","street address"],
-"Address 2":["address 2","address2","address line 2"],
-"Address 3":["address 3","address3","address line 3"],
-"ZIP":["zip","zip code","postal code","postcode","pin","pincode"],
-"Active / Inactive":["active inactive","active / inactive","active","status"],
-"Is Census":["is census","census","census flag"],
-"Is Exceptions":["is exceptions","is exception","exceptions","exception flag"],
-"Updated By":["updated by","updatedby","last updated","updated date","updated timestamp","modified date"]}
+"Store Name":["store name","outlet name","shop name","location name"],"SID":["sid","store id","store identifier"],
+"Banner":["banner","retail banner","brand","chain"],"Nielsen Store Code":["nielsen store code","nielsen code","nielsen id","nielsen store"],
+"Trip Received":["trip received","trip received date","received date"],"Last Trip":["last trip","last trip date","previous trip date"],
+"Address 1":["address 1","address1","street address","address line 1"],"Address 2":["address 2","address2","address line 2","address line two"],
+"Address 3":["address 3","address3","address line 3","address line three"],"ZIP":["zip","zip code","postal code","postcode","pin","pincode"],
+"Active / Inactive":["active inactive","active / inactive","store active","active flag"],"Is Census":["is census","census","census flag"],
+"Is Exceptions":["is exceptions","is exception","exceptions","exception flag"],"Updated By":["updated by","last updated","last updated timestamp","updated timestamp"]}
 
-def local_path(p):
-    s=str(p or "")
-    if s.startswith("file:///"): return QUrl(s).toLocalFile()
-    return s
-
-def clean(s):
-    s=str(s or "").strip().lower()
-    s=re.sub(r"[_\-/]+"," ",s); s=re.sub(r"[^a-z0-9 ]+","",s)
-    return re.sub(r"\s+"," ",s).strip()
-
-def sval(v):
-    if pd.isna(v): return ""
-    return str(v)
-
-def norm(v): return re.sub(r"\s+"," ",sval(v).strip().lower())
-
-def delimiter(path):
-    sample=Path(path).read_text(encoding="utf-8-sig",errors="replace")[:65536]
-    try: return csv.Sniffer().sniff(sample,delimiters=",;\t|").delimiter
-    except csv.Error: return ","
-
-def read_data(path):
-    p=local_path(path); ext=Path(p).suffix.lower()
-    if ext in {".xlsx",".xls",".xlsm"}: return pd.read_excel(p,dtype=object)
-    if ext in {".csv",".txt",".tsv"}:
-        sep="\t" if ext==".tsv" else delimiter(p)
-        return pd.read_csv(p,sep=sep,dtype=object,keep_default_na=False,engine="python",quotechar='"',on_bad_lines="error")
-    if ext==".json":
-        try: return pd.read_json(p)
-        except ValueError:
-            with open(p,encoding="utf-8-sig") as f: return pd.json_normalize(json.load(f))
-    if ext==".xml": return pd.read_xml(p)
-    raise ValueError("Unsupported file type: "+(ext or "unknown"))
-
-def score(field,col):
-    c=clean(col); candidates=[clean(field)]+[clean(x) for x in ALIASES.get(field,[])]
-    if c in candidates:return 100.0
-    best=0
-    for a in candidates:
-        r=SequenceMatcher(None,c,a).ratio()*100
-        A,C=set(a.split()),set(c.split()); u=A|C
-        j=len(A&C)/len(u)*100 if u else 0
-        best=max(best,r,j)
-    return round(best,1)
-
+def path(v):
+    s=str(v or "")
+    return QUrl(s).toLocalFile() if s.startswith("file:") else s
+def n(s): return re.sub(r"[^a-z0-9]+"," ",str(s or "").lower()).strip()
+def v(x):
+    if pd.isna(x): return ""
+    if isinstance(x,float) and x.is_integer(): return str(int(x))
+    return str(x).strip()
+def read(p):
+    p=path(p); e=Path(p).suffix.lower()
+    if e in (".xlsx",".xls",".xlsm"): return pd.read_excel(p,dtype=object)
+    if e==".json":
+        x=json.loads(Path(p).read_text(encoding="utf-8-sig"))
+        return pd.json_normalize(x if isinstance(x,list) else x)
+    if e==".xml": return pd.read_xml(p)
+    if e in (".csv",".txt",".tsv"):
+        sep="\t" if e==".tsv" else None
+        return pd.read_csv(p,sep=sep,engine="python",dtype=object)
+    raise ValueError("Unsupported file type")
 def mapping(cols):
     out={}; used=set()
     for f in FIELDS:
-        ranked=sorted([(score(f,c),str(c)) for c in cols if str(c) not in used],reverse=True)
-        if ranked and ranked[0][0]>=45:
-            out[f]={"column":ranked[0][1],"confidence":ranked[0][0]}; used.add(ranked[0][1])
-        else: out[f]={"column":"","confidence":0}
+        best=("",0)
+        for c in cols:
+            if c in used: continue
+            cn=n(c); score=max([1 if cn==n(t) else .93 if cn and (cn in n(t) or n(t) in cn) else SequenceMatcher(None,cn,n(t)).ratio() for t in [f]+ALIASES.get(f,[])])
+            if score>best[1]: best=(c,score)
+        if best[1]>=.55: used.add(best[0]); out[f]={"column":str(best[0]),"confidence":round(best[1]*100,1)}
+        else: out[f]={"column":"","confidence":round(best[1]*100,1)}
     return out
-
-def valid_date(v):
-    if not str(v or "").strip(): return True
-    try:return not pd.isna(pd.to_datetime(v,errors="coerce"))
-    except:return False
-
-def binary(v):
-    s=str(v or "").strip().lower()
-    if s in {"1","true","yes","y","active"}:return "1"
-    if s in {"0","false","no","n","inactive"}:return "0"
-    return s
+def dateok(x):
+    if not v(x): return True
+    try: pd.to_datetime(v(x),errors="raise"); return True
+    except: return False
+def binary(x): return v(x).lower() in ("","0","1","0.0","1.0","true","false","yes","no")
+def js(x):
+    if pd.isna(x): return ""
+    if isinstance(x,pd.Timestamp): return x.isoformat(sep=" ")
+    try: return x.item()
+    except: return x
 
 class Backend(QObject):
-    messageChanged=Signal(); busyChanged=Signal(); progressChanged=Signal()
-    columnMappingReady=Signal(str); validationReady=Signal(str); csvInspectionReady=Signal(str); analysisReady=Signal(str); sqlResultReady=Signal(str)
+    messageChanged=Signal(); columnMappingReady=Signal(str); validationReady=Signal(str); comparisonDetailReady=Signal(str)
+    csvInspectionReady=Signal(str); analysisReady=Signal(str); statisticsReady=Signal(str); sqlResultReady=Signal(str); errorRaised=Signal(str)
     def __init__(self):
-        super().__init__(); self._message="Ready"; self._busy=False; self._progress=0
-        self.master=None; self.mapdf=None; self.data=None; self.mm={}; self.xm={}; self.results=[]
+        super().__init__(); self._message="Ready"; self.master=None; self.upload=None; self.mm={}; self.um={}; self.valid=[]; self.data=None; self.result=None
     @Property(str,notify=messageChanged)
-    def message(self):return self._message
-    @Property(bool,notify=busyChanged)
-    def busy(self):return self._busy
-    @Property(int,notify=progressChanged)
-    def progress(self):return self._progress
-    def status(self,msg,busy=False,progress=100):
-        self._message=msg;self._busy=busy;self._progress=progress
-        self.messageChanged.emit();self.busyChanged.emit();self.progressChanged.emit()
-    def err(self,e):self.status("Error: "+str(e),False,0)
-    def emit_map(self):self.columnMappingReady.emit(json.dumps({"master":self.mm,"mapping":self.xm}))
+    def message(self): return self._message
+    def msg(self,s): self._message=s; self.messageChanged.emit()
+    def err(self,e): self.msg(str(e)); self.errorRaised.emit(str(e))
     @Slot(str)
     def loadMaster(self,p):
-        try:self.master=read_data(p);self.mm=mapping(self.master.columns);self.emit_map();self.status(f"Master loaded: {len(self.master):,} rows.")
+        try:self.master=read(p);self.mm=mapping(self.master.columns);self.msg(f"Master loaded: {len(self.master)} rows")
         except Exception as e:self.err(e)
     @Slot(str)
     def loadMapping(self,p):
-        try:self.mapdf=read_data(p);self.xm=mapping(self.mapdf.columns);self.emit_map();self.status(f"Mapping loaded: {len(self.mapdf):,} rows.")
+        try:self.upload=read(p);self.um=mapping(self.upload.columns);self.msg(f"Uploaded file loaded: {len(self.upload)} rows")
         except Exception as e:self.err(e)
     @Slot()
     def detectStoreColumns(self):
         try:
-            if self.master is None or self.mapdf is None:raise ValueError("Select both files first.")
-            self.mm=mapping(self.master.columns);self.xm=mapping(self.mapdf.columns);self.emit_map();self.status("Column detection complete.")
+            if self.master is None or self.upload is None: raise ValueError("Load both files first")
+            self.mm=mapping(self.master.columns);self.um=mapping(self.upload.columns)
+            self.columnMappingReady.emit(json.dumps({"master":self.mm,"mapping":self.um}));self.msg("Column detection complete")
         except Exception as e:self.err(e)
-    def val(self,row,mp,f):
-        c=mp.get(f,{}).get("column","");return row.get(c,"") if c else ""
+    def get(self,row,m,f):
+        c=m.get(f,{}).get("column",""); return v(row[c]) if c and c in row.index else ""
     @Slot()
     def validateStores(self):
         try:
-            if self.master is None or self.mapdf is None:raise ValueError("Select both files first.")
-            self.mm=mapping(self.master.columns);self.xm=mapping(self.mapdf.columns)
-            ms=self.mm["SID"]["column"]; xs=self.xm["SID"]["column"]
-            if not ms or not xs:raise ValueError("SID could not be identified.")
-            master={}
+            if self.master is None or self.upload is None: raise ValueError("Load both files first")
+            self.mm=mapping(self.master.columns);self.um=mapping(self.upload.columns)
+            mc=self.mm["SID"]["column"]; uc=self.um["SID"]["column"]
+            if not mc or not uc: raise ValueError("SID could not be detected")
+            lookup={}
             for _,r in self.master.iterrows():
-                k=norm(r.get(ms,""))
-                if k:master.setdefault(k,[]).append(r)
-            counts={}
-            for v in self.mapdf[xs]:
-                k=norm(v)
-                if k:counts[k]=counts.get(k,0)+1
-            res=[];ok=rev=bad=0
-            compare=["Store Name","Banner","Nielsen Store Code","Address 1","Address 2","Address 3","ZIP","Active / Inactive","Is Census","Is Exceptions"]
-            for n,(_,r) in enumerate(self.mapdf.iterrows(),2):
-                sidraw=self.val(r,self.xm,"SID");sid=norm(sidraw);problems=[];st="CORRECT";mr=None
-                if not sid:st="ERROR";problems.append("SID is blank")
-                elif sid not in master:st="ERROR";problems.append("SID not found in Master")
+                sid=v(r[mc])
+                if sid and sid not in lookup: lookup[sid]=r
+            counts=Counter(v(x) for x in self.upload[uc] if v(x)); self.valid=[]; summary=[]
+            for ix,r in self.upload.iterrows():
+                sid=v(r[uc]); mr=lookup.get(sid); comp=[]; problems=[]
+                if counts[sid]>1: problems.append("Duplicate SID in uploaded file")
+                if mr is None:
+                    status="ERROR"; problems.append("SID not found in Master")
+                    for f in FIELDS: comp.append({"field":f,"master":"","uploaded":self.get(r,self.um,f),"result":"MISSING MASTER","severity":"ERROR"})
                 else:
-                    mr=master[sid][0]
-                    if len(master[sid])>1:st="ERROR";problems.append("Duplicate SID in Master")
-                if sid and counts.get(sid,0)>1:st="ERROR";problems.append("Duplicate SID in Mapping")
-                if mr is not None:
-                    for f in compare:
-                        if not self.mm[f]["column"] or not self.xm[f]["column"]:continue
-                        a=self.val(mr,self.mm,f);b=self.val(r,self.xm,f)
-                        a,b=(binary(a),binary(b)) if f in {"Active / Inactive","Is Census","Is Exceptions"} else (norm(a),norm(b))
-                        if a!=b:
-                            if st!="ERROR":st="REVIEW"
-                            problems.append(f+" mismatch")
-                for f in ["Trip Received","Last Trip"]:
-                    v=self.val(r,self.xm,f)
-                    if str(v).strip() and not valid_date(v):
-                        if st!="ERROR":st="REVIEW"
-                        problems.append(f+" has invalid date")
-                for f in ["Active / Inactive","Is Census","Is Exceptions"]:
-                    v=self.val(r,self.xm,f)
-                    if str(v).strip() and binary(v) not in {"0","1"}:
-                        if st!="ERROR":st="REVIEW"
-                        problems.append(f+": expected 1 or 0")
-                u=self.val(r,self.xm,"Updated By")
-                if str(u).strip() and not valid_date(u):
-                    if st!="ERROR":st="REVIEW"
-                    problems.append("Updated By has invalid date/time")
-                ok+=st=="CORRECT";rev+=st=="REVIEW";bad+=st=="ERROR"
-                res.append({"row":n,"sid":sval(sidraw),"storeName":sval(self.val(r,self.xm,"Store Name")),"status":st,"problem":"; ".join(problems) or "No issues"})
-            self.results=res
-            self.validationReady.emit(json.dumps({"total":len(res),"correct":ok,"review":rev,"errors":bad,"results":res}))
-            self.status(f"Validation complete: {ok} correct, {rev} review, {bad} errors.")
+                    for f in FIELDS:
+                        a,b=self.get(mr,self.mm,f),self.get(r,self.um,f); sev="OK"; res="MATCH"; note=""
+                        if f in ("Active / Inactive","Is Census","Is Exceptions") and not binary(b): sev,res,note="ERROR","INVALID","expected 1 or 0"
+                        elif f in ("Trip Received","Last Trip") and not dateok(b): sev,res,note="ERROR","INVALID","invalid date"
+                        elif f=="Updated By" and b and not dateok(b): sev,res,note="REVIEW","REVIEW","unrecognized timestamp"
+                        elif a.casefold()!=b.casefold(): sev,res="REVIEW","DIFFERENT"
+                        if sev!="OK": problems.append(f"{f}: {note or 'mismatch'}")
+                        comp.append({"field":f,"master":a,"uploaded":b,"result":res,"severity":sev})
+                    status="ERROR" if any(x["severity"]=="ERROR" for x in comp) or counts[sid]>1 else ("REVIEW" if any(x["severity"]=="REVIEW" for x in comp) else "CORRECT")
+                rec={"row":int(ix)+2,"sid":sid,"storeName":self.get(r,self.um,"Store Name"),"status":status,"problem":"; ".join(problems) or "No differences","comparisons":comp}
+                self.valid.append(rec); summary.append({k:rec[k] for k in ("row","sid","storeName","status","problem")})
+            self.validationReady.emit(json.dumps({"total":len(summary),"correct":sum(x["status"]=="CORRECT" for x in summary),"review":sum(x["status"]=="REVIEW" for x in summary),"errors":sum(x["status"]=="ERROR" for x in summary),"results":summary}))
+            self.msg("Validation complete")
         except Exception as e:self.err(e)
+    @Slot(int,bool)
+    def getComparisonDetail(self,i,diff):
+        if 0<=i<len(self.valid):
+            rows=self.valid[i]["comparisons"]; rows=[x for x in rows if x["severity"]!="OK"] if diff else rows
+            self.comparisonDetailReady.emit(json.dumps({"rows":rows}))
+    @Slot(str)
+    def exportValidationReport(self,p):
+        try:
+            p=path(p); rows=[]
+            for r in self.valid:
+                for c in r["comparisons"]: rows.append({"Row":r["row"],"SID":r["sid"],"Store Name":r["storeName"],"Field":c["field"],"Master Value":c["master"],"Uploaded Value":c["uploaded"],"Result":c["result"]})
+            d=pd.DataFrame(rows)
+            if p.lower().endswith(".csv"): d.to_csv(p,index=False)
+            else:
+                if not p.lower().endswith(".xlsx"):p+=".xlsx"
+                d.to_excel(p,index=False)
+            self.msg("Comparison report exported")
+        except Exception as e:self.err(e)
+    def inspect(self,p):
+        p=path(p); raw=Path(p).read_text(encoding="utf-8-sig",errors="replace"); lines=raw.splitlines(keepends=True)
+        try: delim=csv.Sniffer().sniff(raw[:12000],delimiters=",;\t|").delimiter
+        except: delim=","
+        header=next(csv.reader([lines[0]],delimiter=delim)); exp=len(header); logical=[]; issues=[]; buf=""; start=1
+        def openq(s):
+            i=c=0
+            while i<len(s):
+                if s[i]=='"':
+                    if i+1<len(s) and s[i+1]=='"':i+=2;continue
+                    c+=1
+                i+=1
+            return c%2==1
+        for no,line in enumerate(lines,1):
+            if not buf:start=no
+            buf+=line
+            if openq(buf):continue
+            vals=next(csv.reader([buf],delimiter=delim)); logical.append((start,no,vals,buf.rstrip()))
+            if no>1 and len(vals)!=exp:issues.append({"line":f"{start}-{no}" if start!=no else str(no),"expectedColumns":exp,"actualColumns":len(vals),"status":"UNRESOLVED","repair":"Column count differs from header","content":buf.rstrip()})
+            elif start!=no:issues.append({"line":f"{start}-{no}","expectedColumns":exp,"actualColumns":len(vals),"status":"REPAIRED","repair":f"Combined physical lines {start}-{no} into one logical record","content":buf.rstrip()})
+            buf=""
+        if buf:issues.append({"line":f"{start}-{len(lines)}","expectedColumns":exp,"actualColumns":0,"status":"UNRESOLVED","repair":"Unclosed quoted field","content":buf.rstrip()})
+        return {"delimiter":delim,"expected":exp,"logical":logical,"issues":issues}
     @Slot(str)
     def inspectCSV(self,p):
         try:
-            p=local_path(p);d=delimiter(p);issues=[];expected=None
-            with open(p,encoding="utf-8-sig",errors="replace",newline="") as f:
-                for n,row in enumerate(csv.reader(f,delimiter=d,quotechar='"'),1):
-                    if expected is None:expected=len(row);continue
-                    if len(row)!=expected:issues.append({"line":n,"expectedColumns":expected,"actualColumns":len(row),"content":d.join(row)})
-            self.csvInspectionReady.emit(json.dumps({"problems":issues}));self.status(f"Inspection complete: {len(issues)} suspicious record(s).")
+            x=self.inspect(p);self.csvInspectionReady.emit(json.dumps({"problems":x["issues"]}));self.msg(f"CSV inspection: {len(x['issues'])} issue(s)")
         except Exception as e:self.err(e)
     @Slot(str,str)
     def repairCSV(self,src,dst):
         try:
-            src,dst=local_path(src),local_path(dst);d=delimiter(src)
-            with open(src,encoding="utf-8-sig",errors="replace",newline="") as f:rows=list(csv.reader(f,delimiter=d,quotechar='"'))
-            if not rows:raise ValueError("File is empty.")
-            expected=len(rows[0]);out=[rows[0]];changed=0
-            for row in rows[1:]:
-                if len(row)>expected:row=row[:expected-1]+[d.join(row[expected-1:])];changed+=1
-                elif len(row)<expected:row=row+[""]*(expected-len(row));changed+=1
-                out.append(row)
-            with open(dst,"w",encoding="utf-8-sig",newline="") as f:csv.writer(f,delimiter=d,quotechar='"',quoting=csv.QUOTE_MINIMAL).writerows(out)
-            self.status(f"Repaired copy saved. {len(out)-1:,} rows preserved; {changed} adjusted.")
+            x=self.inspect(src);dst=path(dst)
+            if not dst.lower().endswith(".csv"):dst+=".csv"
+            with open(dst,"w",newline="",encoding="utf-8-sig") as f:
+                w=csv.writer(f,delimiter=x["delimiter"])
+                for _,_,vals,_ in x["logical"]:
+                    if len(vals)<x["expected"]:vals+=[""]*(x["expected"]-len(vals))
+                    elif len(vals)>x["expected"]:vals=vals[:x["expected"]-1]+[x["delimiter"].join(vals[x["expected"]-1:])]
+                    w.writerow(vals)
+            self.msg("Repaired copy saved; original unchanged")
         except Exception as e:self.err(e)
     @Slot(str)
     def loadFile(self,p):
+        try:self.data=read(p);self.result=None;self.profile();self.msg(f"Dataset loaded: {len(self.data)} rows × {len(self.data.columns)} columns")
+        except Exception as e:self.err(e)
+    def profile(self):
+        d=self.data; rows,cols=d.shape; blanks=int(d.isna().sum().sum()); total=max(1,rows*cols)
+        stats=[]
+        for c in d.columns:
+            s=d[c];num=pd.to_numeric(s,errors="coerce")
+            stats.append({"column":str(c),"nonBlank":int(s.notna().sum()),"blank":int(s.isna().sum()),"unique":int(s.dropna().astype(str).nunique()),"duplicateValues":int(s.dropna().astype(str).duplicated().sum()),"numericCount":int(num.notna().sum())})
+        self.analysisReady.emit(json.dumps({"rows":rows,"columns":cols,"completeness":round((1-blanks/total)*100,1),"duplicateRows":int(d.duplicated().sum()),"columnNames":[str(c) for c in d.columns],"columnStats":stats}))
+    @Slot(str,str,str)
+    def calculateStatistics(self,col,op,grp):
         try:
-            self.data=read_data(p);df=self.data;rows,cols=df.shape
-            blankmask=df.apply(lambda c:c.apply(lambda x:pd.isna(x) or str(x).strip()==""))
-            blanks=int(blankmask.sum().sum());cells=rows*cols;complete=round((1-blanks/cells)*100,2) if cells else 100
-            stats=[]
-            for c in df.columns:
-                s=df[c];bm=s.apply(lambda x:pd.isna(x) or str(x).strip()=="");nb=int((~bm).sum());u=int(s[~bm].astype(str).nunique()) if nb else 0
-                stats.append({"column":str(c),"blank":int(bm.sum()),"nonBlank":nb,"unique":u,"duplicateValues":max(nb-u,0)})
-            payload={"rows":rows,"columns":cols,"completeness":complete,"duplicateRows":int(df.astype(str).duplicated().sum()),"columnStats":stats}
-            self.analysisReady.emit(json.dumps(payload));self.status(f"Analysis complete: {rows:,} rows, {cols} columns.")
+            if self.data is None:raise ValueError("Load a dataset first")
+            def calc(s):
+                if op=="Count":return int(s.notna().sum())
+                if op=="Distinct Count":return int(s.dropna().nunique())
+                if op=="Blank Count":return int(s.isna().sum())
+                z=pd.to_numeric(s,errors="coerce")
+                return {"Sum":z.sum(),"Average":z.mean(),"Minimum":z.min(),"Maximum":z.max(),"Median":z.median()}[op]
+            rows=[]
+            if grp and grp in self.data.columns:
+                for k,g in self.data.groupby(grp,dropna=False):rows.append({"group":v(k) or "(blank)","value":js(calc(g[col]))})
+            else:rows=[{"group":"All rows","value":js(calc(self.data[col]))}]
+            self.statisticsReady.emit(json.dumps({"rows":rows},default=str));self.msg(f"{op} calculated")
+        except Exception as e:self.err(e)
+    def emit_table(self,d):
+        self.result=d
+        rows=[[js(x) for x in r] for r in d.head(2000).itertuples(index=False,name=None)]
+        self.sqlResultReady.emit(json.dumps({"columns":[str(c) for c in d.columns],"rows":rows,"totalRows":len(d),"shownRows":min(len(d),2000)},default=str))
+    @Slot(str,str)
+    def searchData(self,text,col):
+        try:
+            d=self.data
+            if d is None:raise ValueError("Load a dataset first")
+            t=text.strip()
+            if t:
+                mask=d[col].fillna("").astype(str).str.contains(t,case=False,regex=False) if col in d.columns else d.fillna("").astype(str).apply(lambda r:r.str.contains(t,case=False,regex=False).any(),axis=1)
+                d=d[mask]
+            self.emit_table(d);self.msg(f"Search returned {len(d)} row(s)")
         except Exception as e:self.err(e)
     @Slot(str)
     def runSQL(self,q):
         try:
-            if self.data is None:raise ValueError("Load a dataset first.")
-            cmd=(re.match(r"^\s*([A-Za-z]+)",q or "") or [None,""])[1].lower()
-            if cmd not in {"select","with","pragma","explain"}:raise ValueError("SQL is read-only. Use SELECT/WITH.")
-            con=sqlite3.connect(":memory:")
-            try:self.data.to_sql("data",con,index=False,if_exists="replace");r=pd.read_sql_query(q,con)
-            finally:con.close()
-            r=r.head(5000);rows=[{str(k):sval(v) for k,v in x.items()} for x in r.to_dict("records")]
-            self.sqlResultReady.emit(json.dumps({"columns":[str(c) for c in r.columns],"rows":rows}));self.status(f"SQL returned {len(rows):,} row(s).")
-        except Exception as e:self.err(e)
-    @Slot(str)
-    def exportValidationReport(self,p):
-        try:
-            if not self.results:raise ValueError("Run validation first.")
-            p=local_path(p);df=pd.DataFrame(self.results)
-            if Path(p).suffix.lower()==".csv":df.to_csv(p,index=False,encoding="utf-8-sig")
-            else:
-                if not p.lower().endswith(".xlsx"):p+=".xlsx"
-                df.to_excel(p,index=False)
-            self.status("Validation report exported.")
+            if self.data is None:raise ValueError("Load a dataset first")
+            if not re.match(r"^(select|with)\b",q.strip(),re.I) or re.search(r"\b(insert|update|delete|drop|alter|create|attach|detach|pragma|replace|vacuum)\b",q,re.I):raise ValueError("Only read-only SELECT/WITH SQL is allowed")
+            con=sqlite3.connect(":memory:");self.data.to_sql("data",con,index=False,if_exists="replace");d=pd.read_sql_query(q,con);con.close();self.emit_table(d);self.msg(f"Query returned {len(d)} row(s)")
         except Exception as e:self.err(e)
     @Slot(str)
     def exportCurrentData(self,p):
         try:
-            if self.data is None:raise ValueError("Load a dataset first.")
-            p=local_path(p);ext=Path(p).suffix.lower()
-            if ext==".csv":self.data.to_csv(p,index=False,encoding="utf-8-sig")
-            elif ext==".json":self.data.to_json(p,orient="records",indent=2,force_ascii=False)
+            d=self.result if self.result is not None else self.data;p=path(p)
+            if d is None:raise ValueError("Nothing to export")
+            if p.lower().endswith(".csv"):d.to_csv(p,index=False)
+            elif p.lower().endswith(".json"):d.to_json(p,orient="records",indent=2)
             else:
-                if ext!=".xlsx":p+=".xlsx"
-                self.data.to_excel(p,index=False)
-            self.status("Dataset exported.")
+                if not p.lower().endswith(".xlsx"):p+=".xlsx"
+                d.to_excel(p,index=False)
+            self.msg("Data exported")
         except Exception as e:self.err(e)
 
-def resource(name):return os.path.join(getattr(sys,"_MEIPASS",os.path.dirname(os.path.abspath(__file__))),name)
 def main():
-    app=QGuiApplication(sys.argv);engine=QQmlApplicationEngine();backend=Backend()
-    engine.rootContext().setContextProperty("backend",backend);engine.load(QUrl.fromLocalFile(resource("Main.qml")))
-    if not engine.rootObjects():return 1
-    return app.exec()
-if __name__=="__main__":raise SystemExit(main())
+    os.environ.setdefault("QT_QUICK_CONTROLS_STYLE","Basic")
+    a=QGuiApplication(sys.argv);e=QQmlApplicationEngine();b=Backend();e.rootContext().setContextProperty("backend",b)
+    base=Path(sys._MEIPASS) if getattr(sys,"frozen",False) else Path(__file__).resolve().parent
+    e.load(QUrl.fromLocalFile(str(base/"Main.qml")))
+    if not e.rootObjects():raise SystemExit("Main.qml failed to load")
+    sys.exit(a.exec())
+if __name__=="__main__":main()
