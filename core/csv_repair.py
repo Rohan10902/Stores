@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+from .smart_repair import analyze_extras
 
 def _delim(raw,suffix):
     if suffix.lower()==".tsv": return "\t"
@@ -45,6 +46,17 @@ def inspect_csv(p):
         buf=""
     if buf:
         issues.append({"line":f"{start}-{len(lines)}","status":"UNRECOVERABLE","decision":"Manual recovery required","problem":"Unclosed quoted field","diagnosis":"The file ended before a quoted value was closed. No destructive repair was attempted.","expectedColumns":expected,"actualColumns":0,"difference":-expected,"confidence":"NONE","original":buf.rstrip(),"proposed":"","columns":[],"kind":"UNCLOSED_QUOTE"})
+    healthy_rows=[vals for _,_,vals,_ in logical[1:] if len(vals)==expected]
+    for issue in issues:
+        if issue.get("kind")=="EXTRA_FIELDS":
+            vals=next(csv.reader([issue["original"]],delimiter=delim))
+            suggestions=analyze_extras(header,healthy_rows,vals[expected:])
+            issue["suggestions"]=suggestions
+            for j,sug in enumerate(suggestions):
+                idx=expected+j
+                if idx<len(issue["columns"]):
+                    issue["columns"][idx].update({"suggestedField":sug["suggestedField"],"confidence":sug["confidence"],
+                                                  "decision":sug["decision"],"reason":sug["reason"]})
     auto=sum(x["status"]=="AUTO FIXED" for x in issues); review=sum(x["status"]=="REVIEW REQUIRED" for x in issues); bad=sum(x["status"]=="UNRECOVERABLE" for x in issues)
     return {"file":path.name,"delimiter":delim,"header":header,"expected":expected,"records":max(0,len(logical)-1),"healthy":max(0,len(logical)-1-len(issues)),"autoFixed":auto,"reviewRequired":review,"unrecoverable":bad,"unresolved":review+bad,"logical":logical,"issues":issues}
 

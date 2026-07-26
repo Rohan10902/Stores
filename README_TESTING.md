@@ -1,4 +1,4 @@
-# Store Data Assistant 7.0.3 — Stabilization Test
+# Store Data Assistant 7.1 — Stabilization Test
 
 Only the two confirmed findings are changed.
 
