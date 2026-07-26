@@ -10,6 +10,8 @@ Item {
  property int selectedRow:0
  property int selectedCol:0
  property int validationCount:0
+ property string pasteMessage:""
+ property string pasteState:""
  ListModel{id:gridModel}
  ListModel{id:validationModel}
 
@@ -18,13 +20,44 @@ Item {
  function resetRows(){gridModel.clear();for(var i=0;i<10;i++)addBlank()}
  function rowsJson(){var rows=[];for(var r=0;r<gridModel.count;r++){var out={};var item=gridModel.get(r);for(var c=0;c<headers.length;c++)out[headers[c]]=item["c"+c]||"";rows.push(out)}return JSON.stringify(rows)}
  function pasteText(text){
-  if(!text)return
-  var lines=text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n")
-  if(lines.length&&lines[lines.length-1]==="")lines.pop()
-  for(var r=0;r<lines.length;r++){
-   var values=lines[r].indexOf("\t")>=0?lines[r].split("\t"):lines[r].split(",")
-   while(gridModel.count<=selectedRow+r)addBlank()
-   for(var c=0;c<values.length&&selectedCol+c<headers.length;c++)gridModel.setProperty(selectedRow+r,"c"+(selectedCol+c),values[c])
+  pasteMessage=""
+  pasteState=""
+  if(!text||!String(text).trim()){
+   pasteState="error"
+   pasteMessage="Nothing was pasted. The clipboard is empty or contains no text. Copy cells from Excel/Google Sheets and try again."
+   backend.say("Paste failed — clipboard contains no text")
+   return
+  }
+  try {
+   var lines=String(text).replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n")
+   while(lines.length&&lines[lines.length-1]==="")lines.pop()
+   if(!lines.length)throw new Error("No rows were found in the clipboard.")
+   var startRow=selectedRow
+   var startCol=selectedCol
+   var pastedRows=0
+   var pastedCells=0
+   var clippedCells=0
+   for(var r=0;r<lines.length;r++){
+    if(lines[r]==="")continue
+    var values=lines[r].indexOf("\t")>=0?lines[r].split("\t"):lines[r].split(",")
+    while(gridModel.count<=startRow+pastedRows)addBlank()
+    for(var c=0;c<values.length;c++){
+     if(startCol+c<headers.length){
+      gridModel.setProperty(startRow+pastedRows,"c"+(startCol+c),values[c])
+      pastedCells++
+     } else clippedCells++
+    }
+    pastedRows++
+   }
+   if(!pastedCells)throw new Error("Clipboard data could not fit into the 14-column table from the selected cell.")
+   pasteState=clippedCells>0?"warning":"success"
+   pasteMessage="Paste successful: "+pastedRows+" row(s), "+pastedCells+" cell(s) inserted starting at row "+(startRow+1)+", "+headers[startCol]+"."
+   if(clippedCells>0)pasteMessage+=" "+clippedCells+" value(s) beyond the fixed 14-column schema were ignored."
+   backend.say(pasteMessage)
+  } catch(e) {
+   pasteState="error"
+   pasteMessage="Paste failed: "+e
+   backend.say(pasteMessage)
   }
  }
  Component.onCompleted:resetRows()
@@ -38,10 +71,20 @@ Item {
    PrimaryButton{text:"Paste from Clipboard";onClicked:pasteText(backend.clipboardText())}
    AppButton{text:"Add Row";onClicked:addBlank()}
    AppButton{text:"Delete Selected Row";enabled:gridModel.count>1;onClicked:{gridModel.remove(selectedRow);selectedRow=Math.max(0,Math.min(selectedRow,gridModel.count-1))}}
-   AppButton{text:"Clear Table";onClicked:{resetRows();validationModel.clear();validationCount=0}}
+   AppButton{text:"Clear Table";onClicked:{resetRows();validationModel.clear();validationCount=0;pasteMessage="";pasteState=""}}
    Item{Layout.fillWidth:true}
    AppButton{text:"Validate";onClicked:backend.validateCreator(rowsJson())}
    PrimaryButton{text:"Export CSV";enabled:gridModel.count>0;onClicked:saveDlg.open()}
+  }
+  Rectangle {
+   visible:pasteMessage!==""
+   Layout.fillWidth:true
+   implicitHeight:46
+   radius:6
+   color:pasteState==="success"?"#0d3b2a":pasteState==="warning"?"#433614":"#4a1720"
+   border.width:1
+   border.color:pasteState==="success"?"#22c55e":pasteState==="warning"?"#f59e0b":"#ef4444"
+   Text{anchors.fill:parent;anchors.margins:9;text:(pasteState==="success"?"✓ ":pasteState==="warning"?"⚠ ":"✕ ")+pasteMessage;color:pasteState==="success"?"#86efac":pasteState==="warning"?"#fde68a":"#fca5a5";verticalAlignment:Text.AlignVCenter;wrapMode:Text.WordWrap}
   }
   Rectangle {visible:validationCount>0;Layout.fillWidth:true;implicitHeight:42;radius:6;color:"#433614";Text{anchors.fill:parent;anchors.margins:8;text:validationCount+" value(s) need review before export.";color:"#fde68a";verticalAlignment:Text.AlignVCenter}}
   Card {Layout.fillWidth:true;Layout.fillHeight:true;clip:true
