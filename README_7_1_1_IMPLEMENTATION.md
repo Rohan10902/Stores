@@ -1,4 +1,4 @@
-# Store Data Assistant 7.1.1 — Interactive Smart Repair
+# Store Data Assistant 7.1.2 — Interactive Smart Repair
 
 This package extends 7.1 Smart Repair.
 

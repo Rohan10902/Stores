@@ -31,7 +31,7 @@ ApplicationWindow {
         height:30; color:"#081321"; border.width:1; border.color:"#263850"
         RowLayout { anchors.fill:parent;anchors.leftMargin:12;anchors.rightMargin:12
             Text{text:backend.message;color:"#94a3b8";font.pixelSize:10;Layout.fillWidth:true;elide:Text.ElideRight}
-            Text{text:"7.1.1 INTERACTIVE SMART REPAIR";color:"#94a3b8";font.pixelSize:9}
+            Text{text:"7.1.2 CORRECTNESS";color:"#94a3b8";font.pixelSize:9}
         }
     }
     RowLayout {
