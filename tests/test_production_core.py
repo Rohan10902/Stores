@@ -45,9 +45,9 @@ class ProductionCoreTests(unittest.TestCase):
         self.assertIn("Trip Received", fields)
 
     def test_valid_boolean_variants(self):
-        for value in ("", "0", "1", "true", "false", "yes", "no", "TRUE", "Yes"):
-            self.assertTrue(binary_ok(value))
-        self.assertFalse(binary_ok("active"))
+        for value in ("", "0", "1", "true", "false", "yes", "no", "TRUE", "Yes", "active", "inactive", "Active", "Inactive"):
+            self.assertTrue(binary_ok(value), value)
+        self.assertFalse(binary_ok("maybe"))
 
     def test_dates_accept_blank_and_real_dates(self):
         self.assertTrue(date_ok(""))
