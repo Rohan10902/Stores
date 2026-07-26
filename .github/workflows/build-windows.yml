@@ -4,102 +4,80 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths:
-      - "app.py"
-      - "requirements.txt"
-      - "core/**"
-      - "qml/**"
-      - ".github/workflows/build-windows.yml"
+    paths: ["app.py", "requirements.txt", "core/**", "qml/**", ".github/workflows/build-windows.yml"]
   push:
     branches: [main]
-    paths:
-      - "app.py"
-      - "requirements.txt"
-      - "core/**"
-      - "qml/**"
-      - ".github/workflows/build-windows.yml"
+    paths: ["app.py", "requirements.txt", "core/**", "qml/**", ".github/workflows/build-windows.yml"]
 
 jobs:
   build:
-    name: Validate, launch-test and build Windows application
+    name: Validate, page-test, launch-test and build Windows application
     runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
-
       - name: Install dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
       - name: Verify project structure
         shell: pwsh
         run: |
-          $required = @(
-            "app.py",
-            "requirements.txt",
-            "qml/Main.qml",
-            "qml/pages/HomePage.qml",
-            "qml/pages/ComparePage.qml",
-            "qml/pages/SingleReviewPage.qml",
-            "qml/pages/RepairPage.qml",
-            "qml/pages/CreateStorePage.qml",
-            "qml/pages/HealthPage.qml",
-            "qml/pages/ExplorePage.qml",
-            "core/common.py",
-            "core/store_validator.py",
-            "core/file_creator.py"
-          )
-          foreach ($path in $required) {
-            if (!(Test-Path $path)) { throw "$path is missing" }
-          }
+          $required = @("app.py","requirements.txt","qml/Main.qml","qml/pages/HomePage.qml","qml/pages/ComparePage.qml","qml/pages/SingleReviewPage.qml","qml/pages/RepairPage.qml","qml/pages/CreateStorePage.qml","qml/pages/HealthPage.qml","qml/pages/ExplorePage.qml","core/common.py","core/store_validator.py","core/file_creator.py")
+          foreach ($path in $required) { if (!(Test-Path $path)) { throw "$path is missing" } }
           Write-Host "Project structure OK."
-
       - name: Check Python syntax
         shell: pwsh
         run: python -m compileall -q app.py core
-
       - name: Smoke-test core imports
         shell: pwsh
-        run: |
-          python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
-
-      - name: Smoke-test QML startup from source
+        run: python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
+      - name: Smoke-test QML startup and every workspace page
         shell: pwsh
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           @'
           import os, sys
-          from PySide6.QtCore import QTimer
+          os.environ["QT_QPA_PLATFORM"] = "offscreen"
           import app
           from PySide6.QtGui import QGuiApplication
-          from PySide6.QtQml import QQmlApplicationEngine
-          from PySide6.QtCore import QUrl
-          os.environ["QT_QPA_PLATFORM"] = "offscreen"
+          from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent
+          from PySide6.QtCore import QUrl, QTimer
           qapp = QGuiApplication.instance() or QGuiApplication(sys.argv)
           engine = QQmlApplicationEngine()
           backend = app.Backend()
           engine.rootContext().setContextProperty("backend", backend)
           engine.addImportPath(str(app.BASE / "qml"))
-          errors = []
-          engine.warnings.connect(lambda warnings: errors.extend(w.toString() for w in warnings))
-          engine.load(QUrl.fromLocalFile(str(app.BASE / "qml" / "Main.qml")))
+          warnings = []
+          engine.warnings.connect(lambda items: warnings.extend(w.toString() for w in items))
+          main_url = QUrl.fromLocalFile(str(app.BASE / "qml" / "Main.qml"))
+          engine.load(main_url)
           if not engine.rootObjects():
-              raise SystemExit("QML startup failed:\n" + "\n".join(errors))
-          QTimer.singleShot(500, qapp.quit)
+              raise SystemExit("Main QML startup failed:\n" + "\n".join(warnings))
+          pages = ["HomePage.qml","ComparePage.qml","SingleReviewPage.qml","RepairPage.qml","CreateStorePage.qml","HealthPage.qml","ExplorePage.qml"]
+          created = []
+          for page in pages:
+              url = QUrl.fromLocalFile(str(app.BASE / "qml" / "pages" / page))
+              component = QQmlComponent(engine, url)
+              if component.status() == QQmlComponent.Error:
+                  raise SystemExit(f"{page} compile failed:\n{component.errorString()}")
+              obj = component.create(engine.rootContext())
+              if obj is None:
+                  raise SystemExit(f"{page} instantiation failed:\n{component.errorString()}")
+              created.append(obj)
+              print(f"PAGE OK: {page}")
+          QTimer.singleShot(250, qapp.quit)
           qapp.exec()
-          print("QML source startup OK")
+          print("Main QML and all workspace pages OK")
           '@ | Set-Content -Encoding UTF8 smoke_qml.py
           python smoke_qml.py
-
       - name: Build Store Data Assistant
         shell: pwsh
         run: |
@@ -114,7 +92,6 @@ jobs:
             --hidden-import PySide6.QtWidgets `
             --add-data "qml;qml" `
             app.py
-
       - name: Verify packaged executable actually starts
         shell: pwsh
         run: |
@@ -128,18 +105,14 @@ jobs:
           }
           Stop-Process -Id $p.Id -Force
           Write-Host "Packaged executable remained alive after startup window."
-
       - name: Verify Windows executable
         shell: pwsh
         run: |
-          if (!(Test-Path "dist/StoreDataAssistant.exe")) {
-            throw "StoreDataAssistant.exe was not created."
-          }
+          if (!(Test-Path "dist/StoreDataAssistant.exe")) { throw "StoreDataAssistant.exe was not created." }
           $file = Get-Item "dist/StoreDataAssistant.exe"
           Write-Host "Store Data Assistant 7.1.5.1 build complete"
           Write-Host "File:" $file.FullName
           Write-Host "Size:" $file.Length "bytes"
-
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
