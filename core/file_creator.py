@@ -9,23 +9,27 @@ def empty_rows(n=10):
 def parse_clipboard(text):
     text=str(text or "").replace("\r\n","\n").replace("\r","\n")
     if not text.strip(): return []
-    # Excel/Sheets clipboard is tab-separated; fall back to CSV for comma text.
     delim="\t" if "\t" in text else ","
     return [row for row in csv.reader(text.splitlines(),delimiter=delim)]
 
-def normalize_nielsen(value,width):
+def normalize_identifier(value,width):
     s=norm_value(value)
     if not s:return ""
-    # Preserve non-numeric identifiers; only zero-pad all-digit codes.
     return s.zfill(int(width)) if s.isdigit() else s
 
+def normalize_nielsen(value,width):
+    return normalize_identifier(value,width)
+
 def review_dataframe(df):
-    rows=[]; issues=[]; widths=[]
+    rows=[]; widths=[]; sid_widths=[]
     if "Nielsen Store Code" in df.columns:
         codes=[norm_value(x) for x in df["Nielsen Store Code"] if norm_value(x)]
-        numeric=[x for x in codes if x.isdigit()]
-        widths=[len(x) for x in numeric]
+        widths=[len(x) for x in codes if x.isdigit()]
+    if "SID" in df.columns:
+        sids=[norm_value(x) for x in df["SID"] if norm_value(x)]
+        sid_widths=[len(x) for x in sids if x.isdigit()]
     suggested=max(widths) if widths else 0
+    sid_suggested=max(sid_widths) if sid_widths else 0
     for ix,r in df.iterrows():
         item={"row":int(ix)+2,"severity":"OK","issues":[]}
         for f in STORE_FIELDS:
@@ -39,10 +43,14 @@ def review_dataframe(df):
             code=norm_value(r.get("Nielsen Store Code",""))
             if suggested and code.isdigit() and len(code)<suggested:
                 item["issues"].append(f"Nielsen Store Code: {code} is shorter than suggested width {suggested}")
+        if "SID" in df.columns:
+            sid=norm_value(r.get("SID",""))
+            if sid_suggested and sid.isdigit() and len(sid)<sid_suggested:
+                item["issues"].append(f"SID: {sid} is shorter than suggested width {sid_suggested}")
         if item["issues"]: item["severity"]="REVIEW"
-        rows.append(item); issues.extend(item["issues"])
+        rows.append(item)
     return {"rows":rows,"issueCount":sum(bool(x["issues"]) for x in rows),
-            "suggestedNielsenWidth":suggested,
+            "suggestedNielsenWidth":suggested,"suggestedSidWidth":sid_suggested,
             "columns":[str(c) for c in df.columns]}
 
 def creator_validate(rows):
