@@ -1,11 +1,17 @@
-name: Build Store Data Assistant 7.0
+name: Build Store Data Assistant 7.1.5
 
 on:
   workflow_dispatch:
-
+  pull_request:
+    branches: [main]
+    paths:
+      - "app.py"
+      - "requirements.txt"
+      - "core/**"
+      - "qml/**"
+      - ".github/workflows/build-windows.yml"
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "app.py"
       - "requirements.txt"
@@ -15,96 +21,52 @@ on:
 
 jobs:
   build:
-    name: Build Windows Application
+    name: Validate and build Windows application
     runs-on: windows-latest
-
     steps:
-      # ------------------------------------------------------------
-      # 1. Download repository
-      # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ------------------------------------------------------------
-      # 2. Install Python
-      # ------------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
-      # ------------------------------------------------------------
-      # 3. Upgrade pip
-      # ------------------------------------------------------------
-      - name: Upgrade pip
+      - name: Install dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-
-      # ------------------------------------------------------------
-      # 4. Install project dependencies
-      # ------------------------------------------------------------
-      - name: Install application dependencies
-        shell: pwsh
-        run: |
           pip install -r requirements.txt
-
-      # ------------------------------------------------------------
-      # 5. Install PyInstaller
-      # ------------------------------------------------------------
-      - name: Install PyInstaller
-        shell: pwsh
-        run: |
           pip install pyinstaller
 
-      # ------------------------------------------------------------
-      # 6. Verify important project files
-      # Prevents wasting time building an incomplete upload.
-      # ------------------------------------------------------------
       - name: Verify project structure
         shell: pwsh
         run: |
-          Write-Host "Checking Store Data Assistant project..."
-
-          if (!(Test-Path "app.py")) {
-              throw "app.py is missing"
+          $required = @(
+            "app.py",
+            "requirements.txt",
+            "qml/Main.qml",
+            "qml/pages/SingleReviewPage.qml",
+            "qml/pages/CreateStorePage.qml",
+            "core/common.py",
+            "core/store_validator.py",
+            "core/file_creator.py"
+          )
+          foreach ($path in $required) {
+            if (!(Test-Path $path)) { throw "$path is missing" }
           }
-
-          if (!(Test-Path "requirements.txt")) {
-              throw "requirements.txt is missing"
-          }
-
-          if (!(Test-Path "qml")) {
-              throw "qml folder is missing"
-          }
-
-          if (!(Test-Path "qml/Main.qml")) {
-              throw "qml/Main.qml is missing"
-          }
-
-          if (!(Test-Path "core")) {
-              throw "core folder is missing"
-          }
-
           Write-Host "Project structure OK."
 
-      # ------------------------------------------------------------
-      # 7. Python syntax check
-      # ------------------------------------------------------------
       - name: Check Python syntax
         shell: pwsh
-        run: |
-          python -m compileall app.py core
+        run: python -m compileall -q app.py core
 
-      # ------------------------------------------------------------
-      # 8. Build Windows EXE
-      #
-      # --windowed is IMPORTANT.
-      # It prevents the terminal/console window from opening.
-      #
-      # qml and core are bundled with the application.
-      # ------------------------------------------------------------
+      - name: Smoke-test core imports
+        shell: pwsh
+        run: |
+          python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
+
       - name: Build Store Data Assistant
         shell: pwsh
         run: |
@@ -117,31 +79,21 @@ jobs:
             --add-data "qml;qml" `
             app.py
 
-      # ------------------------------------------------------------
-      # 9. Verify EXE actually exists
-      # ------------------------------------------------------------
       - name: Verify Windows executable
         shell: pwsh
         run: |
           if (!(Test-Path "dist/StoreDataAssistant.exe")) {
-              throw "StoreDataAssistant.exe was not created."
+            throw "StoreDataAssistant.exe was not created."
           }
-
           $file = Get-Item "dist/StoreDataAssistant.exe"
-
-          Write-Host "----------------------------------------"
-          Write-Host "Store Data Assistant 7.0 build complete"
-          Write-Host "----------------------------------------"
+          Write-Host "Store Data Assistant 7.1.5 build complete"
           Write-Host "File:" $file.FullName
           Write-Host "Size:" $file.Length "bytes"
 
-      # ------------------------------------------------------------
-      # 10. Upload EXE
-      # ------------------------------------------------------------
-      - name: Upload Store Data Assistant 7.0
+      - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
-          name: StoreDataAssistant-7.0-Windows
+          name: StoreDataAssistant-7.1.5-Windows
           path: dist/StoreDataAssistant.exe
           if-no-files-found: error
           retention-days: 30
