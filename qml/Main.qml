@@ -12,6 +12,22 @@ ApplicationWindow {
     title: "Store Data Assistant 7.1.5.1"
     color: "#07111f"
 
+    // One application-wide palette keeps every Qt Quick Control readable on
+    // Windows regardless of the user's OS light/dark theme.
+    palette.window: "#07111f"
+    palette.windowText: "#f8fafc"
+    palette.base: "#081321"
+    palette.alternateBase: "#0d1b2e"
+    palette.text: "#f8fafc"
+    palette.button: "#14243a"
+    palette.buttonText: "#f8fafc"
+    palette.highlight: "#3b82f6"
+    palette.highlightedText: "#ffffff"
+    palette.placeholderText: "#64748b"
+    palette.mid: "#263850"
+    palette.dark: "#07111f"
+    palette.light: "#334155"
+
     property int page: 0
     property real uiScale: Math.max(0.9, Math.min(1.18, width / 1440))
     property var pageSources: [
