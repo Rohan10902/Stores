@@ -1,33 +1,13 @@
-# Store Data Assistant 7.0.1 — Test Build
+# Store Data Assistant 7.0.2 — Stabilization Test
 
-This build consolidates fixes found during 7.0 testing.
+Test at 1366x768, 1920x1080 and maximized window.
 
-## Regression tests
-
-1. Compare & Validate
-   - Load Master and uploaded/country files.
-   - Validate.
-   - Click a normal mismatch: confirm Field / Master Value / Uploaded Value / Result.
-   - Click a missing SID: confirm the missing-master explanation appears.
-
-2. Repair CSV / Text
-   - Load a CSV with a quoted multiline record: it should show AUTO FIXED / HIGH confidence.
-   - Load a row with too many/few fields: it must remain UNRESOLVED.
-   - Confirm extra data is shown in Repair Preview and is never silently deleted.
-   - Saving with unresolved issues must say "Reviewed copy", not claim the file is fully repaired.
-
-3. Data Health & Statistics
-   - Column list must come from the loaded file.
-   - Operations must change based on detected type.
-   - Text columns must not offer numeric Sum/Average/Maximum.
-   - Numeric columns should support Sum/Average/Min/Max/Median.
-   - Grouping should produce one result per group.
-
-4. Explore & Analyze
-   - Search dropdown must exactly follow the loaded file headers.
-   - Result table headers must exactly follow the loaded file/query result.
-   - Cells must show actual values, never QQmlDMAbstractItemModelData(...).
-   - SQL is read-only and uses table name `data`.
-
-## Privacy
-All processing is local. Source files are not overwritten.
+## Required regression tests
+1. Compare: tables must expand vertically; resize the splitter; field comparison must remain readable.
+2. Repair: inspect extra-field and quoted multiline samples. Ambiguous values must show UNRESOLVED with diagnosis and no silent deletion.
+3. Statistics: verify known numeric answers (10,20,30,40 => Sum 100, Average 25, Min 10, Max 40, Median 25).
+4. Text statistics: Most/Least Common and Frequency Distribution must return meaningful values/counts.
+5. Grouping: verify one result per group and record counts.
+6. Explore: uploaded headers must drive dropdown/table; no QQmlDMAbstractItemModelData text.
+7. SQL remains read-only and only visible in Explore & Analyze.
+8. Original files must never be overwritten.
