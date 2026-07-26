@@ -41,7 +41,7 @@ jobs:
       - name: Verify project structure
         shell: pwsh
         run: |
-          $required = @("app.py","qml/Main.qml","qml/pages/SingleReviewPage.qml","qml/pages/CreateStorePage.qml","core/common.py","core/store_validator.py","core/file_creator.py","tests/test_production_core.py")
+          $required = @("app.py","qml/Main.qml","qml/pages/SingleReviewPage.qml","qml/pages/CreateStorePage.qml","qml/pages/ExplorePage.qml","core/common.py","core/store_validator.py","core/file_creator.py","tests/test_production_core.py")
           foreach ($path in $required) { if (!(Test-Path $path)) { throw "$path is missing" } }
 
       - name: Check Python and regression tests
@@ -51,10 +51,6 @@ jobs:
           python -c "import PySide6; import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Imports OK')"
           python -m unittest discover -s tests -p "test_*.py" -v
 
-      # GitHub-hosted Windows runners are non-interactive. A long-running GUI
-      # assertion there is not a valid desktop-launch test and caused run #80
-      # to fail before packaging. We validate source/imports/tests above, then
-      # package both a normal desktop build and a console diagnostic build.
       - name: Build production onedir application
         shell: pwsh
         run: |
@@ -103,7 +99,7 @@ jobs:
           Write-Host "Production package bytes: $prodSize"
           Write-Host "Diagnostic package bytes: $diagSize"
 
-      - name: Probe diagnostic executable
+      - name: Require diagnostic QML startup success
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
@@ -114,16 +110,24 @@ jobs:
           $stderr = Join-Path $env:RUNNER_TEMP "sda-stderr.txt"
           $p = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           Start-Sleep -Seconds 8
-          if ($p.HasExited) {
-            Write-Host "--- stdout ---"
-            if (Test-Path $stdout) { Get-Content $stdout }
-            Write-Host "--- stderr ---"
-            if (Test-Path $stderr) { Get-Content $stderr }
-            Write-Warning "Headless diagnostic process exited with code $($p.ExitCode). This does not block packaging because hosted CI has no interactive Windows desktop. The console output above remains available for diagnosis."
-          } else {
-            Stop-Process -Id $p.Id -Force
-            Write-Host "Diagnostic package survived the CI probe."
+          $out = ""
+          $err = ""
+          if (Test-Path $stdout) { $out = Get-Content $stdout -Raw }
+          if (Test-Path $stderr) { $err = Get-Content $stderr -Raw }
+          Write-Host "--- stdout ---"
+          Write-Host $out
+          Write-Host "--- stderr ---"
+          Write-Host $err
+          $combined = $out + "`n" + $err
+          if ($combined -match "QQmlApplicationEngine failed to load component|Type .* unavailable|Unexpected token|Main.qml failed to load") {
+            if (!$p.HasExited) { Stop-Process -Id $p.Id -Force }
+            throw "Packaged application has a QML startup/parser failure."
           }
+          if ($p.HasExited) {
+            throw "Diagnostic executable exited during startup with code $($p.ExitCode)."
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "Diagnostic package loaded QML and survived the startup gate."
 
       - name: Create checksums and launch instructions
         shell: pwsh
