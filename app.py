@@ -1,4 +1,4 @@
-import sys, os, json, logging
+import sys, os, json, logging, traceback
 from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, Property, QUrl
 from PySide6.QtGui import QGuiApplication
@@ -11,11 +11,21 @@ from core.health import profile, statistic
 from core.explorer import run_sql
 from core.file_creator import review_dataframe, normalize_nielsen, creator_validate, export_creator
 
-BASE = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 LOG_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "StoreDataAssistant" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(filename=LOG_DIR / "StoreDataAssistant.log", level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
+LOG_FILE = LOG_DIR / "StoreDataAssistant.log"
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+                    format="%(asctime)s %(levelname)s %(message)s", force=True)
+
+
+def _write_fatal(message):
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a", encoding="utf-8") as fh:
+            fh.write("\nFATAL STARTUP ERROR\n" + str(message) + "\n")
+    except Exception:
+        pass
 
 
 class Backend(QObject):
@@ -202,7 +212,6 @@ class Backend(QObject):
         except Exception as e:
             self.fail(e)
 
-    # One-file review: no Master required. The loaded dataframe is kept in memory only.
     @Slot(str)
     def reviewSingleFile(self, path):
         try:
@@ -343,11 +352,45 @@ def main():
     backend = Backend()
     engine.rootContext().setContextProperty("backend", backend)
     engine.addImportPath(str(BASE / "qml"))
-    engine.load(QUrl.fromLocalFile(str(BASE / "qml" / "Main.qml")))
+
+    qml_file = BASE / "qml" / "Main.qml"
+    logging.info("Starting Store Data Assistant; BASE=%s; QML=%s", BASE, qml_file)
+    if not qml_file.exists():
+        raise RuntimeError(f"Packaged UI is missing: {qml_file}")
+
+    qml_errors = []
+    def on_warnings(warnings):
+        for warning in warnings:
+            text = warning.toString()
+            qml_errors.append(text)
+            logging.error("QML: %s", text)
+    engine.warnings.connect(on_warnings)
+
+    engine.load(QUrl.fromLocalFile(str(qml_file)))
     if not engine.rootObjects():
-        raise SystemExit("Main.qml failed to load")
-    sys.exit(app.exec())
+        detail = "\n".join(qml_errors) or "Main.qml produced no root object."
+        raise RuntimeError("Main.qml failed to load.\n" + detail)
+    logging.info("UI loaded successfully")
+    return app.exec()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except BaseException as exc:
+        detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        logging.critical("Fatal startup failure\n%s", detail)
+        _write_fatal(detail)
+        try:
+            from PySide6.QtWidgets import QApplication, QMessageBox
+            app = QApplication.instance() or QApplication(sys.argv)
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Critical)
+            box.setWindowTitle("Store Data Assistant — Startup Error")
+            box.setText("The application could not start.")
+            box.setInformativeText(str(exc))
+            box.setDetailedText(detail + f"\n\nLog: {LOG_FILE}")
+            box.exec()
+        except Exception:
+            pass
+        raise SystemExit(1)
