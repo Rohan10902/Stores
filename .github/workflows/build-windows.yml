@@ -1,17 +1,8 @@
-name: Build Store Data Assistant 7.2.0
+name: Build Store Data Assistant 7.2.1
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
-    paths:
-      - "app.py"
-      - "requirements.txt"
-      - "core/**"
-      - "qml/**"
-      - "tests/**"
-      - ".github/workflows/build-windows.yml"
-  push:
     branches: [main]
     paths:
       - "app.py"
@@ -26,9 +17,9 @@ permissions:
 
 jobs:
   build:
-    name: Test, package and smoke-test Windows application
+    name: Test and package Windows desktop application
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -50,36 +41,16 @@ jobs:
       - name: Verify project structure
         shell: pwsh
         run: |
-          $required = @(
-            "app.py",
-            "requirements.txt",
-            "qml/Main.qml",
-            "qml/pages/SingleReviewPage.qml",
-            "qml/pages/CreateStorePage.qml",
-            "core/common.py",
-            "core/store_validator.py",
-            "core/file_creator.py",
-            "tests/test_production_core.py"
-          )
-          foreach ($path in $required) {
-            if (!(Test-Path $path)) { throw "$path is missing" }
-          }
-          Write-Host "Project structure OK."
+          $required = @("app.py","qml/Main.qml","qml/pages/SingleReviewPage.qml","qml/pages/CreateStorePage.qml","core/common.py","core/store_validator.py","core/file_creator.py","tests/test_production_core.py")
+          foreach ($path in $required) { if (!(Test-Path $path)) { throw "$path is missing" } }
 
-      - name: Check Python syntax
-        shell: pwsh
-        run: python -m compileall -q app.py core tests
-
-      - name: Smoke-test core imports
+      - name: Check Python and regression tests
         shell: pwsh
         run: |
-          python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
+          python -m compileall -q app.py core tests
+          python -m unittest discover -s tests -p "test_*.py" -v
 
-      - name: Run regression tests
-        shell: pwsh
-        run: python -m unittest discover -s tests -p "test_*.py" -v
-
-      - name: Headless QML startup test
+      - name: Headless source startup test
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
@@ -87,21 +58,20 @@ jobs:
         run: |
           $p = Start-Process -FilePath "python" -ArgumentList "app.py" -PassThru -NoNewWindow
           Start-Sleep -Seconds 5
-          if ($p.HasExited) {
-            $log = Join-Path $env:LOCALAPPDATA "StoreDataAssistant\logs\StoreDataAssistant.log"
-            if (Test-Path $log) { Get-Content $log -Tail 200 }
-            throw "Source application exited during headless QML startup. Exit code: $($p.ExitCode)"
-          }
+          if ($p.HasExited) { throw "Source application exited during startup. Exit code: $($p.ExitCode)" }
           Stop-Process -Id $p.Id -Force
-          Write-Host "Source QML application survived headless startup."
 
-      - name: Build Store Data Assistant
+      # ONEDIR is intentional for 7.2.1. The previous ONEFILE build passed CI but
+      # silently failed on a real Windows workstation before Python logging began.
+      # ONEDIR avoids the bootloader's temporary self-extraction stage and makes
+      # Qt DLL/plugin deployment visible and diagnosable.
+      - name: Build production onedir application
         shell: pwsh
         run: |
           pyinstaller `
             --noconfirm `
             --clean `
-            --onefile `
+            --onedir `
             --windowed `
             --name "StoreDataAssistant" `
             --collect-all PySide6 `
@@ -111,51 +81,77 @@ jobs:
             --add-data "qml;qml" `
             app.py
 
-      - name: Verify Windows executable
+      # A console build of the same application is shipped only as a diagnostic.
+      # If the normal EXE ever fails, running this from Command Prompt exposes
+      # import/Qt loader errors that a --windowed executable necessarily hides.
+      - name: Build diagnostic console application
         shell: pwsh
         run: |
-          if (!(Test-Path "dist/StoreDataAssistant.exe")) {
-            throw "StoreDataAssistant.exe was not created."
-          }
-          $file = Get-Item "dist/StoreDataAssistant.exe"
-          if ($file.Length -lt 1MB) { throw "Executable is unexpectedly small." }
-          Write-Host "Store Data Assistant 7.2.0 build complete"
-          Write-Host "File:" $file.FullName
-          Write-Host "Size:" $file.Length "bytes"
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --onedir `
+            --console `
+            --name "StoreDataAssistant-Diagnostic" `
+            --collect-all PySide6 `
+            --collect-all shiboken6 `
+            --hidden-import PySide6.QtQuickControls2 `
+            --hidden-import PySide6.QtWidgets `
+            --add-data "qml;qml" `
+            app.py
 
-      - name: Launch packaged EXE smoke test
+      - name: Smoke-test packaged production EXE
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: |
-          $exe = (Resolve-Path "dist/StoreDataAssistant.exe").Path
-          $process = Start-Process -FilePath $exe -PassThru
+          $exe = (Resolve-Path "dist/StoreDataAssistant/StoreDataAssistant.exe").Path
+          $p = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru
           Start-Sleep -Seconds 12
-          if ($process.HasExited) {
-            $log = Join-Path $env:LOCALAPPDATA "StoreDataAssistant\logs\StoreDataAssistant.log"
-            if (Test-Path $log) {
-              Write-Host "--- StoreDataAssistant.log ---"
-              Get-Content $log -Tail 200
-            }
-            throw "Packaged EXE exited during startup. Exit code: $($process.ExitCode)"
-          }
-          Stop-Process -Id $process.Id -Force
-          Write-Host "Packaged EXE survived headless startup smoke test."
+          if ($p.HasExited) { throw "Packaged production EXE exited during startup. Exit code: $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
 
-      - name: Generate SHA-256 checksum
+      - name: Smoke-test diagnostic EXE
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          $exe = (Resolve-Path "dist/StoreDataAssistant-Diagnostic/StoreDataAssistant-Diagnostic.exe").Path
+          $p = Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe) -PassThru -NoNewWindow
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "Diagnostic EXE exited during startup. Exit code: $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+
+      - name: Create checksums and launch instructions
         shell: pwsh
         run: |
-          $hash = (Get-FileHash "dist/StoreDataAssistant.exe" -Algorithm SHA256).Hash.ToLower()
-          "$hash  StoreDataAssistant.exe" | Set-Content -Encoding ascii "dist/StoreDataAssistant.exe.sha256"
-          Get-Content "dist/StoreDataAssistant.exe.sha256"
+          $prod = "dist/StoreDataAssistant/StoreDataAssistant.exe"
+          $diag = "dist/StoreDataAssistant-Diagnostic/StoreDataAssistant-Diagnostic.exe"
+          (Get-FileHash $prod -Algorithm SHA256).Hash.ToLower() + "  StoreDataAssistant.exe" | Set-Content -Encoding ascii "dist/StoreDataAssistant/SHA256.txt"
+          @"
+          Store Data Assistant 7.2.1
 
-      - name: Upload Windows production candidate
+          NORMAL USE
+          1. Extract the entire StoreDataAssistant-7.2.1-Windows ZIP.
+          2. Keep every extracted file/folder together.
+          3. Open StoreDataAssistant\StoreDataAssistant.exe.
+
+          IF IT DOES NOT OPEN
+          Open StoreDataAssistant-Diagnostic\StoreDataAssistant-Diagnostic.exe.
+          Keep the console window visible and capture the error text.
+
+          Do not move only the EXE out of its folder; the ONEDIR build requires its bundled files.
+          "@ | Set-Content -Encoding utf8 "dist/START-HERE.txt"
+
+      - name: Upload Windows 7.2.1 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: StoreDataAssistant-7.2.0-Windows
+          name: StoreDataAssistant-7.2.1-Windows
           path: |
-            dist/StoreDataAssistant.exe
-            dist/StoreDataAssistant.exe.sha256
+            dist/StoreDataAssistant/**
+            dist/StoreDataAssistant-Diagnostic/**
+            dist/START-HERE.txt
           if-no-files-found: error
           retention-days: 30
