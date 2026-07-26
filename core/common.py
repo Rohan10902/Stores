@@ -62,4 +62,6 @@ def date_ok(x):
     if not norm_value(x): return True
     try: pd.to_datetime(norm_value(x),errors="raise"); return True
     except Exception: return False
-def binary_ok(x): return norm_value(x).lower() in ("","0","1","0.0","1.0","true","false","yes","no")
+
+def binary_ok(x):
+    return norm_value(x).lower() in ("","0","1","0.0","1.0","true","false","yes","no","y","n","active","inactive")
