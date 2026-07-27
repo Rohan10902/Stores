@@ -1,10 +1,68 @@
-name: Legacy workflow disabled
+name: StoreLens Clean Build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [storelens-clean]
+
+permissions:
+  contents: read
 
 jobs:
-  disabled:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
     steps:
-      - run: echo "Legacy Store Data Assistant workflow disabled. Clean StoreLens branch is being rebuilt."
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Python and regression tests
+        shell: pwsh
+        run: |
+          python -m compileall -q app.py core tests
+          python -c "import app; print('IMPORT_OK')"
+          python -m unittest discover -s tests -p "test_*.py" -v
+      - name: StoreLens source startup
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          STORELENS_CI_STARTUP_TEST: "1"
+        run: |
+          python app.py
+          if($LASTEXITCODE -ne 0){throw "Source startup failed: $LASTEXITCODE"}
+      - name: Build StoreLens
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name StoreLens --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
+      - name: Packaged startup
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          STORELENS_CI_STARTUP_TEST: "1"
+        run: |
+          $p=Start-Process -FilePath (Resolve-Path "dist/StoreLens.exe").Path -PassThru
+          if(-not $p.WaitForExit(45000)){Stop-Process -Id $p.Id -Force;throw "Packaged startup timed out"}
+          if($p.ExitCode -ne 0){throw "Packaged startup failed: $($p.ExitCode)"}
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $hash=(Get-FileHash "dist/StoreLens.exe" -Algorithm SHA256).Hash.ToLower()
+          "$hash  StoreLens.exe" | Set-Content -Encoding ascii "dist/StoreLens.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StoreLens-Windows-Testing
+          path: |
+            dist/StoreLens.exe
+            dist/StoreLens.sha256
+          if-no-files-found: error
+          retention-days: 30
