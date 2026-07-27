@@ -32,7 +32,7 @@ Item{
    Text{text:"Records Needing Attention";color:"#f8fafc";font.bold:true}
    Text{visible:findings.count===0;text:"No findings to display.";color:"#22c55e"}
    RowLayout{Layout.fillWidth:true;Text{text:"Row";color:"#94a3b8";font.bold:true;Layout.preferredWidth:80}Text{text:"State";color:"#94a3b8";font.bold:true;Layout.preferredWidth:130}Text{text:"Finding";color:"#94a3b8";font.bold:true;Layout.fillWidth:true}}
-   ListView{Layout.fillWidth:true;Layout.fillHeight:true;model:findings;clip:true;delegate:Rectangle{required property int index;required property string row;required property string severity;required property string problem;width:ListView.view.width;height:44;color:index%2?"#0d1b2e":"#0b1829";RowLayout{anchors.fill:parent;Text{text:row;color:"#f8fafc";Layout.preferredWidth:80;leftPadding:6}Text{text:severity;color:severity==="AUTO FIXED"?"#22c55e":"#f59e0b";font.bold:true;Layout.preferredWidth:130}Text{text:problem;color:"#f8fafc";Layout.fillWidth:true;wrapMode:Text.Wrap;elide:Text.ElideRight}}}}
+   ListView{Layout.fillWidth:true;Layout.fillHeight:true;model:findings;clip:true;delegate:Rectangle{required property int index;required property string row;required property string severity;required property string problem;width:ListView.view.width;height:44;color:index%2?"#0d1b2e":"#0b1829";RowLayout{anchors.fill:parent;anchors.leftMargin:6;Text{text:row;color:"#f8fafc";Layout.preferredWidth:74}Text{text:severity;color:severity==="AUTO FIXED"?"#22c55e":"#f59e0b";font.bold:true;Layout.preferredWidth:130}Text{text:problem;color:"#f8fafc";Layout.fillWidth:true;wrapMode:Text.Wrap;elide:Text.ElideRight}}}}
   }}
  }
 }
