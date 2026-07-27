@@ -14,7 +14,7 @@ Item{
  Connections{target:backend
   function onMappingReady(p){var d=JSON.parse(p);suggestedKeys=d.suggestedKeys||["SID"];key1=suggestedKeys[0]||"SID";key2=suggestedKeys.length>1?suggestedKeys[1]:"(None)"}
   function onValidationReady(p){var d=JSON.parse(p);total=d.total;ok=d.correct;rev=d.review;err=d.errors;attention=d.attention||0;filterKey="";rows.clear();insights.clear();details.clear();related.clear();selected=-1;for(var i=0;i<d.rows.length;i++){var r=d.rows[i];rows.append({row:String(r.row),sid:String(r.sid),store:String(r.storeName),status:String(r.status),problem:String(r.problem),categoriesJson:JSON.stringify(r.categories||[])})}for(var j=0;j<(d.insights||[]).length;j++){var x=d.insights[j];insights.append({key:String(x.key),title:String(x.title),count:String(x.count),severity:String(x.severity),action:String(x.action)})}}
-  function onDetailReady(p){var d=JSON.parse(p);detailProblem=d.problem;detailStatus=d.status;detailContext=d.context||({});details.clear();related.clear();for(var i=0;i<d.rows.length;i++){var r=d.rows[i];details.append({f:String(r.field),m:String(r.master),u:String(r.uploaded),res:String(r.result),sev:String(r.severity)})}var rr=(detailContext.relatedUploaded||[]);for(var j=0;j<rr.length;j++)related.append({row:String(rr[j].row),sid:String(rr[j].sid),nielsen:String(rr[j].nielsen),store:String(rr[j].storeName)})}
+  function onDetailReady(p){var d=JSON.parse(p);detailProblem=d.problem;detailStatus=d.status;detailContext=d.context||({});details.clear();related.clear();for(var i=0;i<d.rows.length;i++){var r=d.rows[i];details.append({fieldName:String(r.field),masterValue:r.master===undefined||r.master===null?"":String(r.master),uploadedValue:r.uploaded===undefined||r.uploaded===null?"":String(r.uploaded),resultText:String(r.result),severityText:String(r.severity)})}var rr=(detailContext.relatedUploaded||[]);for(var j=0;j<rr.length;j++)related.append({row:String(rr[j].row),sid:String(rr[j].sid),nielsen:String(rr[j].nielsen),store:String(rr[j].storeName)})}
  }
  ColumnLayout{anchors.fill:parent;anchors.margins:22;spacing:10
   PageTitle{text:"Compare & Validate"}
@@ -53,8 +53,18 @@ Item{
     Rectangle{visible:selected>=0;Layout.fillWidth:true;implicitHeight:52;radius:6;color:detailStatus==="ERROR"?"#421820":detailStatus==="REVIEW"?"#433614":"#113426";Text{anchors.fill:parent;anchors.margins:8;text:detailProblem;color:"#f8fafc";wrapMode:Text.WordWrap}}
     Text{visible:related.count>1;text:"Related uploaded records for this identity";color:"#f59e0b";font.bold:true}
     ListView{visible:related.count>1;Layout.fillWidth:true;Layout.preferredHeight:Math.min(78,related.count*28);model:related;delegate:RowLayout{required property string row;required property string sid;required property string nielsen;required property string store;width:ListView.view.width;height:26;Text{text:"Row "+row;color:"#94a3b8";Layout.preferredWidth:80}Text{text:sid;color:"#f8fafc";Layout.preferredWidth:130}Text{text:nielsen;color:"#60a5fa";Layout.preferredWidth:170}Text{text:store;color:"#f8fafc";Layout.fillWidth:true}}}
-    RowLayout{Layout.fillWidth:true;Text{text:"Field";color:"#94a3b8";font.bold:true;Layout.preferredWidth:190}Text{text:"Master Value";color:"#94a3b8";font.bold:true;Layout.fillWidth:true}Text{text:"Uploaded Value";color:"#94a3b8";font.bold:true;Layout.fillWidth:true}Text{text:"Result";color:"#94a3b8";font.bold:true;Layout.preferredWidth:140}}
-    ListView{Layout.fillWidth:true;Layout.fillHeight:true;model:details;clip:true;delegate:Rectangle{required property string f;required property string m;required property string u;required property string res;required property string sev;width:ListView.view.width;height:34;color:sev==="ERROR"?"#421820":sev==="REVIEW"?"#433614":"#113426";RowLayout{anchors.fill:parent;Text{text:f;color:"#f8fafc";font.bold:true;Layout.preferredWidth:190;leftPadding:6}Text{text:m;color:"#f8fafc";Layout.fillWidth:true;elide:Text.ElideRight}Text{text:u;color:"#f8fafc";Layout.fillWidth:true;elide:Text.ElideRight}Text{text:res;color:sev==="ERROR"?"#ef4444":sev==="REVIEW"?"#f59e0b":"#22c55e";font.bold:true;Layout.preferredWidth:140}}}}}}
+    RowLayout{Layout.fillWidth:true;spacing:8;Text{text:"Field";color:"#94a3b8";font.bold:true;Layout.preferredWidth:190}Text{text:"Master Value";color:"#94a3b8";font.bold:true;Layout.fillWidth:true}Text{text:"Uploaded / Updated Value";color:"#94a3b8";font.bold:true;Layout.fillWidth:true}Text{text:"Result";color:"#94a3b8";font.bold:true;Layout.preferredWidth:140}}
+    ListView{Layout.fillWidth:true;Layout.fillHeight:true;model:details;clip:true;delegate:Rectangle{
+     required property string fieldName;required property string masterValue;required property string uploadedValue;required property string resultText;required property string severityText
+     width:ListView.view.width;height:34;color:severityText==="ERROR"?"#421820":severityText==="REVIEW"?"#433614":"#113426"
+     RowLayout{anchors.fill:parent;spacing:8
+      Text{text:fieldName;color:"#f8fafc";font.bold:true;Layout.preferredWidth:190;leftPadding:6}
+      Text{text:masterValue===""?"—":masterValue;color:masterValue===""?"#64748b":"#f8fafc";Layout.fillWidth:true;elide:Text.ElideRight}
+      Text{text:uploadedValue===""?"—":uploadedValue;color:uploadedValue===""?"#64748b":"#f8fafc";Layout.fillWidth:true;elide:Text.ElideRight}
+      Text{text:resultText;color:severityText==="ERROR"?"#ef4444":severityText==="REVIEW"?"#f59e0b":"#22c55e";font.bold:true;Layout.preferredWidth:140}
+     }
+    }}
+   }}
   }
  }
 }
