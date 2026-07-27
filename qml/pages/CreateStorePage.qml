@@ -26,6 +26,8 @@ Item {
     function pasteText(t){if(!t)return;var lines=t.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n");if(lines.length&&lines[lines.length-1]==="")lines.pop();for(var r=0;r<lines.length;++r){var vals=lines[r].indexOf("\t")>=0?lines[r].split("\t"):lines[r].split(",");while(grid.count<=selectedRow+r)addBlank(false);grid.setProperty(selectedRow+r,"included",true);for(var c=0;c<vals.length&&selectedCol+c<headers.length;++c)grid.setProperty(selectedRow+r,"c"+(selectedCol+c),vals[c])}dirty=true;backend.say("Pasted "+lines.length+" row(s). Extra rows were created automatically.")}
     function clearAll(){grid.clear();for(var i=0;i<10;++i)addBlank(false);validation.clear();validationCount=0;dirty=false}
     function rowHasFinding(rr){for(var i=0;i<validation.count;i++)if(Number(validation.get(i).row)===rr+1)return true;return false}
+    function rowBackground(rr){if(rowHasFinding(rr))return "#3a211b";return rr%2 ? "#0d1b2e" : "#0b1829"}
+    function cellBackground(rr,cc){if(!grid.get(rr).included)return "#151b25";if(rowHasFinding(rr))return "#301b1d";if(selectedRow===rr&&selectedCol===cc)return "#17375f";return rr%2 ? "#0d1b2e" : "#0b1829"}
     FileDialog{id:saveDlg;fileMode:FileDialog.SaveFile;nameFilters:["CSV (*.csv)"];onAccepted:{backend.exportCreator(rowsJson(),selectedFile.toString());dirty=false}}
     Connections{target:backend;function onCreatorReady(payload){var d=JSON.parse(payload);validationCount=d.count;validation.clear();for(var i=0;i<d.findings.length;++i){var x=d.findings[i];validation.append({row:String(x.row),field:String(x.field),message:String(x.message)})}}}
 
@@ -60,14 +62,14 @@ Item {
                 }
                 Column{y:headerRow.height
                     Repeater{model:grid;delegate:Row{id:dataRow;required property int index;property int rr:index;height:38
-                        Rectangle{width:84;height:38;color:page.rowHasFinding(dataRow.rr)?"#3a211b":dataRow.rr%2?"#0d1b2e":"#0b1829";border.color:selectedRow===dataRow.rr?"#60a5fa":"#29415f"
+                        Rectangle{width:84;height:38;color:page.rowBackground(dataRow.rr);border.color:selectedRow===dataRow.rr?"#60a5fa":"#29415f"
                             RowLayout{anchors.fill:parent;spacing:0
                                 CheckBox{checked:grid.get(dataRow.rr).included;onToggled:{grid.setProperty(dataRow.rr,"included",checked);dirty=true};ToolTip.visible:hovered;ToolTip.text:checked?"Included in validation and export":"Excluded from validation and export"}
                                 Text{text:String(dataRow.rr+1);color:"#94a3b8";Layout.fillWidth:true}
                             }
                         }
                         Repeater{model:headers.length;delegate:TextField{required property int index;property int cc:index;width:155;height:38;padding:6;text:grid.get(dataRow.rr)["c"+cc]||"";selectByMouse:true
-                            background:Rectangle{color:!grid.get(dataRow.rr).included?"#151b25":page.rowHasFinding(dataRow.rr)?"#301b1d":((selectedRow===dataRow.rr&&selectedCol===cc)?"#17375f":(dataRow.rr%2?"#0d1b2e":"#0b1829"));border.width:selectedRow===dataRow.rr&&selectedCol===cc?2:1;border.color:selectedRow===dataRow.rr&&selectedCol===cc?"#60a5fa":"#29415f"}
+                            background:Rectangle{color:page.cellBackground(dataRow.rr,cc);border.width:selectedRow===dataRow.rr&&selectedCol===cc?2:1;border.color:selectedRow===dataRow.rr&&selectedCol===cc?"#60a5fa":"#29415f"}
                             color:grid.get(dataRow.rr).included?"#f8fafc":"#64748b";onActiveFocusChanged:if(activeFocus){selectedRow=dataRow.rr;selectedCol=cc};onEditingFinished:{grid.setProperty(dataRow.rr,"c"+cc,text);dirty=true}
                         }}
                     }}
