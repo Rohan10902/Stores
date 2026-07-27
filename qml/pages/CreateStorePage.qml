@@ -61,7 +61,10 @@ Item {
                 Column{y:headerRow.height
                     Repeater{model:grid;delegate:Row{id:dataRow;required property int index;property int rr:index;height:38
                         Rectangle{width:84;height:38;color:page.rowHasFinding(dataRow.rr)?"#3a211b":dataRow.rr%2?"#0d1b2e":"#0b1829";border.color:selectedRow===dataRow.rr?"#60a5fa":"#29415f"
-                            RowLayout{anchors.fill:parent;spacing:0;CheckBox{checked:grid.get(dataRow.rr).included;onToggled:{grid.setProperty(dataRow.rr,"included",checked);dirty=true};ToolTip.visible:hovered;ToolTip.text:checked?"Included in validation and export":"Excluded from validation and export"}Text{text:String(dataRow.rr+1);color:"#94a3b8";Layout.fillWidth:true}}
+                            RowLayout{anchors.fill:parent;spacing:0
+                                CheckBox{checked:grid.get(dataRow.rr).included;onToggled:{grid.setProperty(dataRow.rr,"included",checked);dirty=true};ToolTip.visible:hovered;ToolTip.text:checked?"Included in validation and export":"Excluded from validation and export"}
+                                Text{text:String(dataRow.rr+1);color:"#94a3b8";Layout.fillWidth:true}
+                            }
                         }
                         Repeater{model:headers.length;delegate:TextField{required property int index;property int cc:index;width:155;height:38;padding:6;text:grid.get(dataRow.rr)["c"+cc]||"";selectByMouse:true
                             background:Rectangle{color:!grid.get(dataRow.rr).included?"#151b25":page.rowHasFinding(dataRow.rr)?"#301b1d":((selectedRow===dataRow.rr&&selectedCol===cc)?"#17375f":(dataRow.rr%2?"#0d1b2e":"#0b1829"));border.width:selectedRow===dataRow.rr&&selectedCol===cc?2:1;border.color:selectedRow===dataRow.rr&&selectedCol===cc?"#60a5fa":"#29415f"}
@@ -69,7 +72,8 @@ Item {
                         }}
                     }}
                 }
-                ScrollBar.horizontal:ScrollBar{};ScrollBar.vertical:ScrollBar{}
+                ScrollBar.horizontal:ScrollBar{}
+                ScrollBar.vertical:ScrollBar{}
             }
         }
         Card{visible:validation.count>0;Layout.fillWidth:true;implicitHeight:Math.min(150,42+validation.count*28);ColumnLayout{anchors.fill:parent;anchors.margins:8
