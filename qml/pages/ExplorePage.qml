@@ -80,7 +80,7 @@ Item {
                         MouseArea { anchors.fill:parent; onClicked:{ suggestionList.currentIndex=index; sql.text=query } }
                         Column { anchors.fill:parent; anchors.margins:8; spacing:4; Text { width:parent.width; text:title; color:"#bfdbfe"; font.bold:true; elide:Text.ElideRight } Text { width:parent.width; text:description; color:"#94a3b8"; font.pixelSize:10; wrapMode:Text.WordWrap; maximumLineCount:2; elide:Text.ElideRight } }
                     }
-                    ScrollBar.horizontal:ScrollBar {}
+                    ScrollBar.horizontal: ScrollBar {}
                 }
             }
         }
@@ -96,7 +96,8 @@ Item {
                         Row { height:34; Repeater { model:resultCols; delegate:Rectangle { required property var modelData; width:180; height:34; color:"#132238"; Text { anchors.fill:parent; anchors.margins:6; text:String(modelData); color:"#94a3b8"; font.bold:true; elide:Text.ElideRight } } } }
                         Repeater { model:tableRows; delegate:Rectangle { required property int index; required property string rowJson; property var cells:JSON.parse(rowJson); width:tableColumn.width; height:32; color:index%2?"#0d1b2e":"#0b1829"; Row { anchors.fill:parent; Repeater { model:cells; delegate:Rectangle { required property var modelData; width:180; height:32; color:"transparent"; border.width:1; border.color:"#17283d"; Text { anchors.fill:parent; anchors.margins:5; text:modelData===null?"":String(modelData); color:"#f8fafc"; font.pixelSize:10; elide:Text.ElideRight } } } } } }
                     }
-                    ScrollBar.vertical:ScrollBar {}; ScrollBar.horizontal:ScrollBar {}
+                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.horizontal: ScrollBar {}
                 }
             }
         }
