@@ -47,7 +47,7 @@ ApplicationWindow {
                 anchors.fill:parent;anchors.margins:10
                 Text{text:"WORKSPACE";color:"#94a3b8";font.pixelSize:9;font.bold:true;Layout.leftMargin:8}
                 Repeater {
-                    model:["Home","Compare & Validate","Review One File","Repair CSV / Text","Create Store File","Data Health & Statistics","Explore & Analyze"]
+                    model:["Dashboard","Match & Verify","File Review","Record Repair","Store Builder","Data Intelligence","Query Studio"]
                     delegate:Button {
                         required property string modelData;required property int index
                         Layout.fillWidth:true;implicitHeight:42*root.uiScale;text:modelData
