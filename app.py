@@ -171,9 +171,12 @@ def main():
     engine.warnings.connect(capture_warnings);engine.load(QUrl.fromLocalFile(str(BASE/"qml"/"Main.qml")))
     if not engine.rootObjects():
         for error in qml_errors:print(error,file=sys.stderr,flush=True)
-        raise SystemExit(2)
+        return 2
     logging.info("StoreLens UI loaded successfully")
-    if os.getenv("STORELENS_CI_STARTUP_TEST")=="1":QTimer.singleShot(3000,app.quit)
+    if os.getenv("STORELENS_CI_STARTUP_TEST")=="1":
+        print("STORELENS_STARTUP_OK",flush=True)
+        app.processEvents()
+        return 0
     return app.exec()
 
 if __name__=="__main__":sys.exit(main())
