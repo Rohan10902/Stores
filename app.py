@@ -3,7 +3,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, Property, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from core.common import read_table, map_columns, json_value
+from core.common import read_table, map_columns, json_value, norm_value
 from core.store_validator import compare, suggest_keys, validation_insights
 from core.csv_repair import inspect_csv, apply_mapping, keep_unresolved, save_repaired, unresolved_extras, keep_issue_as_is, create_record_from_extras
 from core.mapping_store import MappingStore
@@ -89,10 +89,18 @@ class Backend(QObject):
             if pending:raise ValueError(f"{len(pending)} unresolved value(s) remain")
             dest=self._local(dst);dest=dest if dest.lower().endswith(".csv") else dest+".csv";save_repaired(self.repair_audit,dest);self.say("Reviewed copy saved")
         except Exception as e:self.fail(e)
+    def _single_report(self,preview_width=0):
+        report=review_dataframe(self.single_review);report["total"]=int(len(self.single_review));report["previewWidth"]=int(preview_width or 0);report["paddingPreview"]=[]
+        mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
+        if column and preview_width:
+            for ix,value in self.single_review[column].items():
+                before=norm_value(value);after=normalize_nielsen(value,preview_width)
+                if before!=after:report["paddingPreview"].append({"row":int(ix)+2,"before":before,"after":after})
+        return report
     @Slot(str)
     def reviewSingleFile(self,path):
         try:
-            local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;report=review_dataframe(self.single_review);report["total"]=int(len(self.single_review));self.singleReviewReady.emit(json.dumps(report,default=str))
+            local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
         except Exception as e:self.fail(e)
     @Slot(int)
     def normalizeSingleNielsen(self,width):
@@ -100,7 +108,7 @@ class Backend(QObject):
             if self.single_review is None:raise ValueError("Analyze a file first.")
             mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
             if not column:raise ValueError("Nielsen Store Code column could not be detected.")
-            self.single_review[column]=self.single_review[column].map(lambda v:normalize_nielsen(v,width));report=review_dataframe(self.single_review);report["total"]=int(len(self.single_review));self.singleReviewReady.emit(json.dumps(report,default=str));self.say(f"Preview updated with Nielsen width {width}")
+            report=self._single_report(width);self.singleReviewReady.emit(json.dumps(report,default=str));self.say(f"Previewing Nielsen padding to width {width}; export applies this reviewed transformation")
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def exportSingleReview(self,src,dst):
