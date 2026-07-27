@@ -5,7 +5,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from core.common import read_table, map_columns, json_value, norm_value
 from core.store_validator import compare, suggest_keys, validation_insights
-from core.csv_repair import inspect_csv, apply_mapping, keep_unresolved, save_repaired, unresolved_extras, keep_issue_as_is, create_record_from_extras, delete_created_record, undo_last_created_action
+from core.csv_repair import inspect_csv, apply_mapping, absorb_extras, keep_unresolved, save_repaired, unresolved_extras, keep_issue_as_is, create_record_from_extras, delete_created_record, undo_last_created_action
 from core.mapping_store import MappingStore
 from core.health import profile, statistic
 from core.explorer import run_sql
@@ -55,10 +55,7 @@ class Backend(QObject):
             self.detailReady.emit(json.dumps({"missingMaster":"not found in Master" in rec["problem"],"sid":rec["sid"],"rows":rows,"problem":rec["problem"],"status":rec["status"],"context":rec["context"]}))
         except Exception as e:self.fail(e)
     def _emit_repair(self):
-        data={k:v for k,v in self.repair_audit.items() if k not in ("logical","undoStack")}
-        data["previewRows"]=[dict(zip(self.repair_audit["header"],list(rec["values"])[:self.repair_audit["expected"]])) for rec in self.repair_audit["logical"][1:]]
-        data["canUndo"]=bool(self.repair_audit.get("undoStack"));data["records"]=max(0,len(self.repair_audit["logical"])-1)
-        self.repairReady.emit(json.dumps(data,default=str))
+        data={k:v for k,v in self.repair_audit.items() if k not in ("logical","undoStack")};data["previewRows"]=[dict(zip(self.repair_audit["header"],list(rec["values"])[:self.repair_audit["expected"]])) for rec in self.repair_audit["logical"][1:]];data["canUndo"]=bool(self.repair_audit.get("undoStack"));data["records"]=max(0,len(self.repair_audit["logical"])-1);self.repairReady.emit(json.dumps(data,default=str))
     @Slot(str)
     def inspectRepair(self,path):
         try:self.repair_audit=inspect_csv(self._local(path));self._emit_repair();self.say("Inspection complete")
@@ -69,6 +66,10 @@ class Backend(QObject):
             value=self.repair_audit["issues"][issue_idx]["columns"][col_idx]["detected"];apply_mapping(self.repair_audit,issue_idx,col_idx,target)
             if remember:self.mapping_store.remember(value,target)
             self._emit_repair()
+        except Exception as e:self.fail(e)
+    @Slot(int,str)
+    def absorbBrokenLine(self,issue_idx,target):
+        try:absorb_extras(self.repair_audit,issue_idx,target);self._emit_repair();self.say(f"Broken line absorbed into {target}. Undo is available.")
         except Exception as e:self.fail(e)
     @Slot(int,int)
     def keepRepairUnresolved(self,issue_idx,col_idx):
@@ -88,7 +89,7 @@ class Backend(QObject):
         except Exception as e:self.fail(e)
     @Slot()
     def undoRepairAction(self):
-        try:undo_last_created_action(self.repair_audit);self._emit_repair();self.say("Last new-line action undone.")
+        try:undo_last_created_action(self.repair_audit);self._emit_repair();self.say("Last repair action undone.")
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def repair(self,src,dst):
@@ -99,30 +100,24 @@ class Backend(QObject):
             dest=self._local(dst);dest=dest if dest.lower().endswith(".csv") else dest+".csv";save_repaired(self.repair_audit,dest);self.say("Reviewed copy saved")
         except Exception as e:self.fail(e)
     def _single_report(self,preview_width=0):
-        report=review_dataframe(self.single_review);report["total"]=int(report.get("recordCount",len(self.single_review)))
-        report["previewColumns"]=[str(c) for c in self.single_review.columns]
-        report["previewRows"]=[[json_value(v) for v in row] for row in self.single_review.head(200).itertuples(index=False,name=None)]
-        return report
+        report=review_dataframe(self.single_review);report["total"]=int(report.get("recordCount",len(self.single_review)));report["previewColumns"]=[str(c) for c in self.single_review.columns];report["previewRows"]=[[json_value(v) for v in row] for row in self.single_review.head(200).itertuples(index=False,name=None)];return report
     @Slot(str)
     def reviewSingleFile(self,path):
-        try:
-            local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.single_review_width=0;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
+        try:local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.single_review_width=0;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def exportSingleReview(self,src,dst):
         try:
             local=self._local(src)
             if self.single_review is None or self.single_review_path!=local:self.single_review=read_table(local);self.single_review_path=local
-            output=self.single_review.copy()
-            dest=Path(self._local(dst));dest=dest if dest.suffix.lower()==".csv" else dest.with_suffix(".csv");output.to_csv(dest,index=False,encoding="utf-8-sig");self.say("Reviewed copy exported")
+            output=self.single_review.copy();dest=Path(self._local(dst));dest=dest if dest.suffix.lower()==".csv" else dest.with_suffix(".csv");output.to_csv(dest,index=False,encoding="utf-8-sig");self.say("Reviewed copy exported")
         except Exception as e:self.fail(e)
     @Slot(result=str)
     def clipboardText(self):
         app=QGuiApplication.instance();return app.clipboard().text() if app else ""
     @Slot(str)
     def validateCreator(self,rows_json):
-        try:
-            findings=creator_validate(json.loads(rows_json or "[]"));self.creatorReady.emit(json.dumps({"count":len(findings),"findings":findings},default=str))
+        try:findings=creator_validate(json.loads(rows_json or "[]"));self.creatorReady.emit(json.dumps({"count":len(findings),"findings":findings},default=str))
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def exportCreator(self,rows_json,dst):
@@ -148,8 +143,7 @@ class Backend(QObject):
         try:
             if self.data is None:raise ValueError("Load a dataset first.")
             data=self.data;term=text.strip()
-            if term:
-                mask=data[col].fillna("").astype(str).str.contains(term,case=False,regex=False) if col and col in data.columns else data.fillna("").astype(str).apply(lambda r:r.str.contains(term,case=False,regex=False).any(),axis=1);data=data[mask]
+            if term:mask=data[col].fillna("").astype(str).str.contains(term,case=False,regex=False) if col and col in data.columns else data.fillna("").astype(str).apply(lambda r:r.str.contains(term,case=False,regex=False).any(),axis=1);data=data[mask]
             self.emit_table(data)
         except Exception as e:self.fail(e)
     @Slot(str)
@@ -160,20 +154,15 @@ class Backend(QObject):
         except Exception as e:self.fail(e)
 
 def main():
-    os.environ.setdefault("QT_QUICK_CONTROLS_STYLE","Basic")
-    app=QGuiApplication(sys.argv);engine=QQmlApplicationEngine();backend=Backend();engine.rootContext().setContextProperty("backend",backend);engine.addImportPath(str(BASE/"qml"))
-    warnings=[]
+    os.environ.setdefault("QT_QUICK_CONTROLS_STYLE","Basic");app=QGuiApplication(sys.argv);engine=QQmlApplicationEngine();backend=Backend();engine.rootContext().setContextProperty("backend",backend);engine.addImportPath(str(BASE/"qml"));warnings=[]
     def capture(items):
-        for item in items:
-            text=item.toString();warnings.append(text);logging.error("QML: %s",text);print("QML:",text,file=sys.stderr,flush=True)
-    engine.warnings.connect(capture)
-    engine.load(QUrl.fromLocalFile(str(BASE/"qml"/"Main.qml")))
+        for item in items:text=item.toString();warnings.append(text);logging.error("QML: %s",text);print("QML:",text,file=sys.stderr,flush=True)
+    engine.warnings.connect(capture);engine.load(QUrl.fromLocalFile(str(BASE/"qml"/"Main.qml")))
     if not engine.rootObjects():
         print("STORELENS_QML_STARTUP_FAILED",file=sys.stderr,flush=True)
         for text in warnings:print(text,file=sys.stderr,flush=True)
         return 2
-    if os.getenv("STORELENS_CI_STARTUP_TEST")=="1":
-        app.processEvents();print("STORELENS_STARTUP_OK",flush=True);return 0
+    if os.getenv("STORELENS_CI_STARTUP_TEST")=="1":app.processEvents();print("STORELENS_STARTUP_OK",flush=True);return 0
     return app.exec()
 
 if __name__=="__main__":sys.exit(main())
