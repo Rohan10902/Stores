@@ -1,37 +1,23 @@
+import re
 import pandas as pd
-
-def _blank(s): return s.isna() | s.astype(str).str.strip().eq("")
-
-def infer_type(s):
+_IDENTIFIER=re.compile(r"(^|\b)(sid|id|code|zip|postal|postcode|pincode|pin)(\b|$)",re.I)
+def _blank(s):return s.isna()|s.astype(str).str.strip().eq("")
+def infer_type(s,name=""):
     x=s[~_blank(s)]
     if x.empty:return "empty"
+    if _IDENTIFIER.search(str(name)):return "text"
     vals=set(x.astype(str).str.strip().str.lower().unique())
     if vals and vals.issubset({"0","1","true","false","yes","no","y","n"}):return "boolean"
     if pd.to_numeric(x,errors="coerce").notna().mean()>=.95:return "numeric"
     txt=x.astype(str)
     if txt.str.contains(r"[-/:]|[A-Za-z]{3,}",regex=True).mean()>=.8 and pd.to_datetime(x,errors="coerce").notna().mean()>=.95:return "date"
     return "text"
-
-OPS={
-"numeric":["Quick Summary","Count","Distinct Count","Blank Count","Sum","Average","Minimum","Maximum","Median"],
-"date":["Count","Distinct Count","Blank Count","Earliest Date","Latest Date","Date Range"],
-"boolean":["Count","Distinct Count","Blank Count","Most Common Value","Least Common Value","Frequency Distribution"],
-"text":["Count","Distinct Count","Blank Count","Most Common Value","Least Common Value","Frequency Distribution"],
-"empty":["Count","Distinct Count","Blank Count"]}
-
+OPS={"numeric":["Quick Summary","Count","Distinct Count","Blank Count","Sum","Average","Minimum","Maximum","Median"],"date":["Count","Distinct Count","Blank Count","Earliest Date","Latest Date","Date Range"],"boolean":["Count","Distinct Count","Blank Count","Most Common Value","Least Common Value","Frequency Distribution"],"text":["Count","Distinct Count","Blank Count","Most Common Value","Least Common Value","Frequency Distribution"],"empty":["Count","Distinct Count","Blank Count"]}
 def profile(df):
-    rows,cols=df.shape; stats=[];types={};blanks=0
+    rows,cols=df.shape;stats=[];types={};blanks=0
     for c in df.columns:
-        s=df[c];typ=infer_type(s);types[str(c)]=typ;b=int(_blank(s).sum());blanks+=b;clean=s[~_blank(s)]
-        stats.append({"column":str(c),"type":typ,"nonBlank":len(clean),"blank":b,
-                      "unique":int(clean.astype(str).nunique()),
-                      "duplicateValues":int(clean.astype(str).duplicated().sum())})
-    completeness=round((1-blanks/max(1,rows*cols))*100,1)
-    dup=int(df.fillna("").astype(str).duplicated().sum())
-    score=max(0,round(completeness-min(20,dup/max(1,rows)*100),1))
-    return {"rows":rows,"columns":cols,"completeness":completeness,"duplicateRows":dup,"score":score,
-            "columnNames":[str(c) for c in df.columns],"columnTypes":types,"operations":OPS,"columnStats":stats}
-
+        s=df[c];typ=infer_type(s,str(c));types[str(c)]=typ;b=int(_blank(s).sum());blanks+=b;clean=s[~_blank(s)];stats.append({"column":str(c),"type":typ,"nonBlank":len(clean),"blank":b,"unique":int(clean.astype(str).nunique()) if len(clean) else 0,"duplicateValues":int(clean.astype(str).duplicated().sum()) if len(clean) else 0,"empty":not len(clean)})
+    completeness=round((1-blanks/max(1,rows*cols))*100,1);dup=int(df.fillna("").astype(str).duplicated().sum());score=max(0,round(completeness-min(20,dup/max(1,rows)*100),1));return {"rows":rows,"columns":cols,"completeness":completeness,"duplicateRows":dup,"score":score,"columnNames":[str(c) for c in df.columns],"columnTypes":types,"operations":OPS,"columnStats":stats}
 def _scalar(s,op,typ):
     clean=s[~_blank(s)]
     if op=="Count":return len(clean)
@@ -49,42 +35,34 @@ def _scalar(s,op,typ):
         return f"{d.min().isoformat()} → {d.max().isoformat()}"
     if op in ("Most Common Value","Least Common Value"):
         if clean.empty:return ""
-        vc=clean.astype(str).value_counts()
-        return vc.index[0] if op=="Most Common Value" else vc.index[-1]
+        vc=clean.astype(str).value_counts();return vc.index[0] if op=="Most Common Value" else vc.index[-1]
     raise ValueError(f"{op} is not valid for {typ} data.")
-
 def _insight(df,col,typ,op,rows):
-    s=df[col]; total=len(s); blanks=int(_blank(s).sum()); clean=s[~_blank(s)];bits=[]
-    if blanks: bits.append(f"{blanks} blank value(s) ({round(blanks/max(1,total)*100,1)}%).")
-    if typ=="numeric" and len(clean):
+    s=df[col];total=len(s);blanks=int(_blank(s).sum());clean=s[~_blank(s)];bits=[]
+    if not len(clean):return f"Column is completely blank ({total} blank value(s))."
+    if blanks:bits.append(f"{blanks} blank value(s) ({round(blanks/max(1,total)*100,1)}%).")
+    if typ=="numeric":
         n=pd.to_numeric(clean,errors="coerce").dropna()
         if len(n):
-            bits.append(f"Range {n.min():g} to {n.max():g}; average {n.mean():g}; median {n.median():g}.")
-            q1,q3=n.quantile(.25),n.quantile(.75);iqr=q3-q1
-            outliers=int(((n<q1-1.5*iqr)|(n>q3+1.5*iqr)).sum()) if iqr else 0
+            bits.append(f"Range {n.min():g} to {n.max():g}; average {n.mean():g}; median {n.median():g}.");q1,q3=n.quantile(.25),n.quantile(.75);iqr=q3-q1;outliers=int(((n<q1-1.5*iqr)|(n>q3+1.5*iqr)).sum()) if iqr else 0
             if outliers:bits.append(f"{outliers} potential IQR outlier(s) detected.")
-    elif typ in ("text","boolean") and len(clean):
-        vc=clean.astype(str).value_counts();top=vc.iloc[0];names=", ".join(map(str,vc[vc==top].index[:4]))
-        bits.append(f"Most frequent: {names} ({int(top)} record(s), {round(top/len(clean)*100,1)}%).")
-    elif typ=="date" and len(clean):
+    elif typ in ("text","boolean"):
+        vc=clean.astype(str).value_counts();top=vc.iloc[0];names=", ".join(map(str,vc[vc==top].index[:4]));bits.append(f"Most frequent: {names} ({int(top)} record(s), {round(top/len(clean)*100,1)}%).")
+    elif typ=="date":
         d=pd.to_datetime(clean,errors="coerce").dropna()
         if len(d):bits.append(f"Dates span {d.min().date()} to {d.max().date()}.")
     return " ".join(bits) or "No notable issue detected for this calculation."
-
 def statistic(df,col,op,group=""):
     if col not in df.columns:raise ValueError("Select a valid column.")
-    typ=infer_type(df[col])
+    typ=infer_type(df[col],col)
     if op not in OPS[typ]:raise ValueError(f"{op} is not available for {typ} column '{col}'.")
-    rows=[]; grouped=bool(group and group in df.columns)
+    rows=[];grouped=bool(group and group in df.columns)
     if grouped and op=="Quick Summary":
         if typ!="numeric":raise ValueError("Quick Summary grouping is available for numeric columns only.")
         for k,g in df.groupby(group,dropna=False):
-            n=pd.to_numeric(g[col],errors="coerce").dropna()
-            rows.append({"label":"(blank)" if pd.isna(k) else str(k),"result":round(float(n.mean()),4) if len(n) else "","count":len(g),"percent":round(len(g)/max(1,len(df))*100,1),"interpretation":"Average / group"})
+            n=pd.to_numeric(g[col],errors="coerce").dropna();rows.append({"label":"(blank)" if pd.isna(k) else str(k),"result":round(float(n.mean()),4) if len(n) else "","count":len(g),"percent":round(len(g)/max(1,len(df))*100,1),"interpretation":"Average / group"})
     elif op=="Quick Summary":
-        n=pd.to_numeric(df[col],errors="coerce");clean=n.dropna()
-        metrics=[("Records",len(df)),("Valid Numeric",len(clean)),("Blank",int(_blank(df[col]).sum())),("Sum",clean.sum() if len(clean) else ""),("Average",clean.mean() if len(clean) else ""),("Minimum",clean.min() if len(clean) else ""),("Maximum",clean.max() if len(clean) else ""),("Median",clean.median() if len(clean) else "")]
-        rows=[{"label":k,"result":v,"count":"","percent":"","interpretation":"Quick Summary"} for k,v in metrics]
+        n=pd.to_numeric(df[col],errors="coerce");clean=n.dropna();metrics=[("Records",len(df)),("Valid Numeric",len(clean)),("Blank",int(_blank(df[col]).sum())),("Sum",clean.sum() if len(clean) else ""),("Average",clean.mean() if len(clean) else ""),("Minimum",clean.min() if len(clean) else ""),("Maximum",clean.max() if len(clean) else ""),("Median",clean.median() if len(clean) else "")];rows=[{"label":k,"result":v,"count":"","percent":"","interpretation":"Quick Summary"} for k,v in metrics]
     elif op=="Frequency Distribution":
         if grouped:
             for k,g in df.groupby(group,dropna=False):
@@ -94,8 +72,7 @@ def statistic(df,col,op,group=""):
             clean=df[col][~_blank(df[col])].astype(str);vc=clean.value_counts();den=max(1,len(clean))
             for v,n in vc.items():rows.append({"label":str(v),"result":str(v),"count":int(n),"percent":round(n/den*100,1),"interpretation":"Frequency"})
     elif grouped:
-        for k,g in df.groupby(group,dropna=False):
-            rows.append({"label":"(blank)" if pd.isna(k) else str(k),"result":_scalar(g[col],op,typ),"count":len(g),"percent":round(len(g)/max(1,len(df))*100,1),"interpretation":op})
+        for k,g in df.groupby(group,dropna=False):rows.append({"label":"(blank)" if pd.isna(k) else str(k),"result":_scalar(g[col],op,typ),"count":len(g),"percent":round(len(g)/max(1,len(df))*100,1),"interpretation":op})
     else:
         val=_scalar(df[col],op,typ);count="";percent="";clean=df[col][~_blank(df[col])]
         if op in ("Most Common Value","Least Common Value") and len(clean):count=int((clean.astype(str)==str(val)).sum());percent=round(count/len(clean)*100,1)
