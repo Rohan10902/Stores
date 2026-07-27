@@ -37,12 +37,17 @@ jobs:
       - name: Check Python syntax
         shell: pwsh
         run: python -m compileall -q app.py launcher.py core tests
-      - name: Smoke-test core imports
+      - name: Smoke-test application imports
         shell: pwsh
-        run: python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
+        run: python -c "import app, launcher, core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Application imports OK')"
       - name: Run regression tests
         shell: pwsh
         run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: QML static validation
+        shell: pwsh
+        run: |
+          $files=Get-ChildItem qml -Recurse -Filter *.qml
+          foreach($file in $files){Write-Host "Linting $($file.FullName)";& pyside6-qmllint $file.FullName;if($LASTEXITCODE -ne 0){throw "QML lint failed: $($file.FullName)"}}
       - name: Deterministic source QML startup test
         shell: pwsh
         env:
@@ -52,6 +57,12 @@ jobs:
         run: |
           python app.py
           if($LASTEXITCODE -ne 0){throw "Source QML startup probe failed with exit code $LASTEXITCODE"}
+      - name: Print StoreLens diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $log=Join-Path $env:LOCALAPPDATA "StoreLens\logs\StoreLens.log"
+          if(Test-Path $log){Write-Host "===== StoreLens.log =====";Get-Content $log}else{Write-Host "No StoreLens.log was created."}
       - name: Build StoreLens core
         shell: pwsh
         run: pyinstaller --noconfirm --clean --onefile --windowed --name "StoreLensCore" --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
