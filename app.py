@@ -3,36 +3,35 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot, Property, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from core.common import read_table, map_columns, json_value, norm_value
+from core.common import read_table, map_columns, json_value
 from core.store_validator import compare, suggest_keys, validation_insights
 from core.csv_repair import inspect_csv, apply_mapping, keep_unresolved, save_repaired, unresolved_extras, keep_issue_as_is, create_record_from_extras, delete_created_record, undo_last_created_action, join_shifted_rows
 from core.mapping_store import MappingStore
 from core.health import profile, statistic
 from core.explorer import run_sql
-from core.file_creator import review_dataframe, normalize_nielsen, creator_validate, export_creator
+from core.file_creator import review_dataframe, creator_validate, export_creator
 
 BASE = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
-LOG_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "StoreLens" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "StoreLens" / "logs";LOG_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(filename=LOG_DIR / "StoreLens.log", level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
 class Backend(QObject):
     messageChanged=Signal();errorRaised=Signal(str);mappingReady=Signal(str);validationReady=Signal(str);detailReady=Signal(str);repairReady=Signal(str);healthReady=Signal(str);statsReady=Signal(str);tableReady=Signal(str);singleReviewReady=Signal(str);creatorReady=Signal(str)
     def __init__(self):
-        super().__init__();self._message="Ready";self.master=self.upload=self.data=self.result=None;self.single_review=None;self.single_review_path="";self.single_review_width=0;self.records=[];self.repair_audit=None;self.mapping_store=MappingStore();self.key_fields=[]
+        super().__init__();self._message="Ready";self.master=self.upload=self.data=self.result=None;self.single_review=None;self.single_review_path="";self.records=[];self.repair_audit=None;self.repair_source="";self.mapping_store=MappingStore();self.key_fields=[]
     @Property(str,notify=messageChanged)
     def message(self):return self._message
     def say(self,text):self._message=str(text);self.messageChanged.emit()
     def fail(self,error):logging.exception(str(error));self.say(str(error));self.errorRaised.emit(str(error))
     def _local(self,path):
         url=QUrl(path);return url.toLocalFile() if url.isLocalFile() else path
+    def _reset_validation(self):self.records=[];self.key_fields=[];self.result=None
     @Slot(str)
     def loadMaster(self,path):
-        try:self.master=read_table(self._local(path));self.say(f"Master loaded: {len(self.master):,} rows")
+        try:self.master=read_table(self._local(path));self._reset_validation();self.say(f"Master loaded: {len(self.master):,} rows")
         except Exception as e:self.fail(e)
     @Slot(str)
     def loadUpload(self,path):
-        try:self.upload=read_table(self._local(path));self.say(f"Uploaded file loaded: {len(self.upload):,} rows")
+        try:self.upload=read_table(self._local(path));self._reset_validation();self.say(f"Uploaded file loaded: {len(self.upload):,} rows")
         except Exception as e:self.fail(e)
     @Slot()
     def detect(self):
@@ -58,7 +57,7 @@ class Backend(QObject):
         data={k:v for k,v in self.repair_audit.items() if k not in ("logical","undoStack")};data["previewRows"]=[dict(zip(self.repair_audit["header"],list(rec["values"])[:self.repair_audit["expected"]])) for rec in self.repair_audit["logical"][1:]];data["canUndo"]=bool(self.repair_audit.get("undoStack"));data["records"]=max(0,len(self.repair_audit["logical"])-1);self.repairReady.emit(json.dumps(data,default=str))
     @Slot(str)
     def inspectRepair(self,path):
-        try:self.repair_audit=inspect_csv(self._local(path));self._emit_repair();self.say("Inspection complete")
+        try:self.repair_source=self._local(path);self.repair_audit=inspect_csv(self.repair_source);self._emit_repair();self.say("Inspection complete")
         except Exception as e:self.fail(e)
     @Slot(int)
     def joinRepairRows(self,issue_idx):
@@ -95,15 +94,16 @@ class Backend(QObject):
     def repair(self,src,dst):
         try:
             if self.repair_audit is None:raise ValueError("Inspect a file first.")
+            if os.path.normcase(os.path.abspath(self._local(src)))!=os.path.normcase(os.path.abspath(self.repair_source)):raise ValueError("The selected source changed. Inspect it again before saving.")
             pending=unresolved_extras(self.repair_audit)
             if pending:raise ValueError(f"{len(pending)} unresolved value(s) remain")
             dest=self._local(dst);dest=dest if dest.lower().endswith(".csv") else dest+".csv";save_repaired(self.repair_audit,dest);self.say("Reviewed copy saved")
         except Exception as e:self.fail(e)
-    def _single_report(self,preview_width=0):
+    def _single_report(self):
         report=review_dataframe(self.single_review);report["total"]=int(report.get("recordCount",len(self.single_review)));report["previewColumns"]=[str(c) for c in self.single_review.columns];report["previewRows"]=[[json_value(v) for v in row] for row in self.single_review.head(200).itertuples(index=False,name=None)];return report
     @Slot(str)
     def reviewSingleFile(self,path):
-        try:local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.single_review_width=0;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
+        try:local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def exportSingleReview(self,src,dst):
@@ -137,7 +137,7 @@ class Backend(QObject):
             self.statsReady.emit(json.dumps(statistic(self.data,col,op,group),default=str))
         except Exception as e:self.fail(e)
     def emit_table(self,data):
-        self.result=data;rows=[[json_value(x) for x in r] for r in data.head(1000).itertuples(index=False,name=None)];self.tableReady.emit(json.dumps({"columns":[str(c) for c in data.columns],"rows":rows,"total":int(len(data)),"displayed":len(rows)},default=str))
+        self.result=data;rows=[[json_value(x) for x in r] for r in data.head(1000).itertuples(index=False,name=None)];self.tableReady.emit(json.dumps({"columns":[str(c) for c in data.columns],"rows":rows,"total":int(len(data)),"displayed":len(rows),"truncated":len(data)>len(rows)},default=str))
     @Slot(str,str)
     def search(self,text,col):
         try:
@@ -152,7 +152,6 @@ class Backend(QObject):
             if self.data is None:raise ValueError("Load a dataset first.")
             self.emit_table(run_sql(self.data,query))
         except Exception as e:self.fail(e)
-
 def main():
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE","Basic");app=QGuiApplication(sys.argv);engine=QQmlApplicationEngine();backend=Backend();engine.rootContext().setContextProperty("backend",backend);engine.addImportPath(str(BASE/"qml"));warnings=[]
     def capture(items):
@@ -164,5 +163,4 @@ def main():
         return 2
     if os.getenv("STORELENS_CI_STARTUP_TEST")=="1":app.processEvents();print("STORELENS_STARTUP_OK",flush=True);return 0
     return app.exec()
-
 if __name__=="__main__":sys.exit(main())
