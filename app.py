@@ -5,7 +5,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from core.common import read_table, map_columns, json_value, norm_value
 from core.store_validator import compare, suggest_keys, validation_insights
-from core.csv_repair import inspect_csv, apply_mapping, keep_unresolved, save_repaired, unresolved_extras, keep_issue_as_is, create_record_from_extras
+from core.csv_repair import inspect_csv, apply_mapping, keep_unresolved, save_repaired, unresolved_extras, keep_issue_as_is, create_record_from_extras, delete_created_record, undo_last_created_action
 from core.mapping_store import MappingStore
 from core.health import profile, statistic
 from core.explorer import run_sql
@@ -55,8 +55,9 @@ class Backend(QObject):
             self.detailReady.emit(json.dumps({"missingMaster":"not found in Master" in rec["problem"],"sid":rec["sid"],"rows":rows,"problem":rec["problem"],"status":rec["status"],"context":rec["context"]}))
         except Exception as e:self.fail(e)
     def _emit_repair(self):
-        data={k:v for k,v in self.repair_audit.items() if k!="logical"}
+        data={k:v for k,v in self.repair_audit.items() if k not in ("logical","undoStack")}
         data["previewRows"]=[dict(zip(self.repair_audit["header"],list(rec["values"])[:self.repair_audit["expected"]])) for rec in self.repair_audit["logical"][1:]]
+        data["canUndo"]=bool(self.repair_audit.get("undoStack"));data["records"]=max(0,len(self.repair_audit["logical"])-1)
         self.repairReady.emit(json.dumps(data,default=str))
     @Slot(str)
     def inspectRepair(self,path):
@@ -79,7 +80,15 @@ class Backend(QObject):
         except Exception as e:self.fail(e)
     @Slot(int,str)
     def createRepairRecord(self,issue_idx,mapping_json):
-        try:create_record_from_extras(self.repair_audit,issue_idx,json.loads(mapping_json or "{}"));self._emit_repair();self.say("New record added to reviewed preview")
+        try:create_record_from_extras(self.repair_audit,issue_idx,json.loads(mapping_json or "{}"));self._emit_repair();self.say("New line created successfully. Review it below; Delete and Undo are available.")
+        except Exception as e:self.fail(e)
+    @Slot(int)
+    def deleteRepairRecord(self,record_id):
+        try:delete_created_record(self.repair_audit,record_id);self._emit_repair();self.say(f"Created line #{record_id} deleted. Undo is available.")
+        except Exception as e:self.fail(e)
+    @Slot()
+    def undoRepairAction(self):
+        try:undo_last_created_action(self.repair_audit);self._emit_repair();self.say("Last new-line action undone.")
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def repair(self,src,dst):
