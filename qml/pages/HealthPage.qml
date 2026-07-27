@@ -10,7 +10,7 @@ Item{
  function refreshOps(){if(!statCol.currentText||!types[statCol.currentText]){op.model=[];return}op.model=operations[types[statCol.currentText]]||[]}
  Connections{target:backend
   function onHealthReady(p){var d=JSON.parse(p);h=d;cols=d.columnNames;types=d.columnTypes;operations=d.operations;quality.clear();for(var i=0;i<d.columnStats.length;i++){var r=d.columnStats[i];quality.append({c:String(r.column),t:String(r.type),b:String(r.blank),u:String(r.unique),n:String(r.nonBlank)})}statCol.model=cols;groupCol.model=["(No grouping)"].concat(cols);refreshOps()}
-  function onStatsReady(p){var d=JSON.parse(p);insight=String(d.insight||"");statsRows.clear();for(var i=0;i<d.rows.length;i++){var r=d.rows[i];statsRows.append({label:String(r.label||""),result:String(r.result??""),count:String(r.count??""),percent:String(r.percent??""),interp:String(r.interpretation||"")})}}
+  function onStatsReady(p){var d=JSON.parse(p);insight=String(d.insight||"");statsRows.clear();for(var i=0;i<d.rows.length;i++){var r=d.rows[i];statsRows.append({label:String(r.label||""),result:String(r.result===undefined||r.result===null?"":r.result),count:String(r.count===undefined||r.count===null?"":r.count),percent:String(r.percent===undefined||r.percent===null?"":r.percent),interp:String(r.interpretation||"")})}}
  }
  ColumnLayout{anchors.fill:parent;anchors.margins:22;spacing:10
   PageTitle{text:"Data Health & Statistics"}
