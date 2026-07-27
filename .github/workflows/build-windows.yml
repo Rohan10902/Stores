@@ -43,20 +43,18 @@ jobs:
       - name: Run regression tests
         shell: pwsh
         run: python -m unittest discover -s tests -p "test_*.py" -v
-      - name: Headless source QML startup test
+      - name: Deterministic source QML startup test
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
+          STORELENS_CI_STARTUP_TEST: "1"
         run: |
-          $p=Start-Process -FilePath "python" -ArgumentList "app.py" -PassThru -NoNewWindow
-          Start-Sleep -Seconds 6
-          if($p.HasExited){throw "Source application exited during QML startup. Exit code: $($p.ExitCode)"}
-          Stop-Process -Id $p.Id -Force
+          python app.py
+          if($LASTEXITCODE -ne 0){throw "Source QML startup probe failed with exit code $LASTEXITCODE"}
       - name: Build StoreLens core
         shell: pwsh
-        run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name "StoreLensCore" --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name "StoreLensCore" --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
       - name: Build StoreLens recovery launcher
         shell: pwsh
         run: pyinstaller --noconfirm --clean --onefile --windowed --name "StoreLens" launcher.py
@@ -64,16 +62,16 @@ jobs:
         shell: pwsh
         run: |
           foreach($file in @("dist/StoreLens.exe","dist/StoreLensCore.exe")){if(!(Test-Path $file)){throw "$file was not created"};if((Get-Item $file).Length -lt 1MB){throw "$file is unexpectedly small"}}
-      - name: Packaged core startup smoke test
+      - name: Deterministic packaged core startup test
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
+          STORELENS_CI_STARTUP_TEST: "1"
         run: |
           $p=Start-Process -FilePath (Resolve-Path "dist/StoreLensCore.exe").Path -PassThru
-          Start-Sleep -Seconds 12
-          if($p.HasExited){throw "Packaged core exited during startup. Exit code: $($p.ExitCode)"}
-          Stop-Process -Id $p.Id -Force
+          if(-not $p.WaitForExit(30000)){Stop-Process -Id $p.Id -Force;throw "Packaged core startup probe timed out"}
+          if($p.ExitCode -ne 0){throw "Packaged core startup probe failed with exit code $($p.ExitCode)"}
       - name: Recovery launcher startup smoke test
         shell: pwsh
         env:
