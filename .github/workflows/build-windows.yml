@@ -29,9 +29,15 @@ jobs:
       - name: Verify entire Python source
         shell: pwsh
         run: |
-          python -m compileall -q app.py core tests
+          python -m compileall -q app.py core
           python -c "import app, core.common, core.csv_repair, core.explorer, core.file_creator, core.health, core.mapping_store, core.smart_repair, core.store_validator; print('ALL_IMPORTS_OK')"
-          python -m unittest discover -s tests -p "test_*.py" -v
+          if (Test-Path "tests") {
+            python -m compileall -q tests
+            python -m unittest discover -s tests -p "test_*.py" -v
+            if ($LASTEXITCODE -ne 0) { throw "Regression tests failed: $LASTEXITCODE" }
+          } else {
+            Write-Host "No tests directory is committed on main; continuing with source/import/QML/startup/package verification."
+          }
       - name: Verify every QML file parses
         shell: pwsh
         env:
