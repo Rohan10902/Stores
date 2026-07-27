@@ -99,12 +99,14 @@ class Backend(QObject):
             dest=self._local(dst);dest=dest if dest.lower().endswith(".csv") else dest+".csv";save_repaired(self.repair_audit,dest);self.say("Reviewed copy saved")
         except Exception as e:self.fail(e)
     def _single_report(self,preview_width=0):
-        report=review_dataframe(self.single_review);report["total"]=int(len(self.single_review));report["previewWidth"]=int(preview_width or 0);report["paddingPreview"]=[]
-        mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
-        if column and preview_width:
-            for ix,value in self.single_review[column].items():
-                before=norm_value(value);after=normalize_nielsen(value,preview_width)
-                if before!=after:report["paddingPreview"].append({"row":int(ix)+2,"before":before,"after":after})
+        report=review_dataframe(self.single_review);report["total"]=int(report.get("recordCount",len(self.single_review)));report["previewWidth"]=int(preview_width or 0);report["paddingPreview"]=[]
+        # Nielsen padding only applies when a real horizontal Nielsen column was detected.
+        if report.get("structure",{}).get("kind")=="HORIZONTAL":
+            mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
+            if column and preview_width:
+                for ix,value in self.single_review[column].items():
+                    before=norm_value(value);after=normalize_nielsen(before,preview_width)
+                    if before!=after:report["paddingPreview"].append({"row":int(ix)+2,"before":before,"after":after})
         return report
     @Slot(str)
     def reviewSingleFile(self,path):
@@ -115,6 +117,8 @@ class Backend(QObject):
     def normalizeSingleNielsen(self,width):
         try:
             if self.single_review is None:raise ValueError("Analyze a file first.")
+            report=review_dataframe(self.single_review)
+            if report.get("structure",{}).get("kind")!="HORIZONTAL":raise ValueError("Nielsen padding is only available after the file is interpreted as a horizontal record table.")
             mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
             if not column:raise ValueError("Nielsen Store Code column could not be detected.")
             self.single_review_width=int(width);report=self._single_report(width);self.singleReviewReady.emit(json.dumps(report,default=str));self.say(f"Previewing Nielsen padding to width {width}; source remains unchanged")
