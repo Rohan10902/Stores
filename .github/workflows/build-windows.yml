@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,12 +26,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-      - name: Verify and test source
+      - name: Verify entire Python source
         shell: pwsh
         run: |
           python -m compileall -q app.py core tests
-          python -c "import app; print('IMPORT_OK')"
+          python -c "import app, core.common, core.csv_repair, core.explorer, core.file_creator, core.health, core.mapping_store, core.smart_repair, core.store_validator; print('ALL_IMPORTS_OK')"
           python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Verify every QML file parses
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          @'
+          import os, sys
+          from pathlib import Path
+          from PySide6.QtCore import QUrl
+          from PySide6.QtGui import QGuiApplication
+          from PySide6.QtQml import QQmlComponent, QQmlEngine
+          os.environ.setdefault("QT_QPA_PLATFORM","offscreen")
+          os.environ.setdefault("QT_QUICK_BACKEND","software")
+          app=QGuiApplication(sys.argv); engine=QQmlEngine(); engine.addImportPath(str(Path("qml").resolve()))
+          failed=[]
+          for p in sorted(Path("qml").rglob("*.qml")):
+              c=QQmlComponent(engine,QUrl.fromLocalFile(str(p.resolve())))
+              if c.isError():
+                  failed.append(str(p)); print(f"QML_FAIL {p}")
+                  for e in c.errors(): print(e.toString())
+              else: print(f"QML_OK {p}")
+          if failed: raise SystemExit("QML parse failures: "+", ".join(failed))
+          '@ | python -
       - name: Verify StoreLens UI startup
         shell: pwsh
         env:
@@ -39,8 +63,8 @@ jobs:
           QT_QUICK_BACKEND: software
           STORELENS_CI_STARTUP_TEST: "1"
         run: |
-          python app.py
-          if($LASTEXITCODE -ne 0){throw "Source startup failed: $LASTEXITCODE"}
+          python app.py 2>&1 | Tee-Object -FilePath source-startup.log
+          if($LASTEXITCODE -ne 0){Get-Content source-startup.log;throw "Source startup failed: $LASTEXITCODE"}
       - name: Build StoreLens.exe
         shell: pwsh
         run: pyinstaller --noconfirm --clean --onefile --windowed --name StoreLens --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
@@ -52,8 +76,10 @@ jobs:
           STORELENS_CI_STARTUP_TEST: "1"
         run: |
           if(!(Test-Path "dist/StoreLens.exe")){throw "StoreLens.exe was not created"}
-          $p=Start-Process -FilePath (Resolve-Path "dist/StoreLens.exe").Path -PassThru
-          if(-not $p.WaitForExit(45000)){Stop-Process -Id $p.Id -Force;throw "Packaged startup timed out"}
+          $p=Start-Process -FilePath (Resolve-Path "dist/StoreLens.exe").Path -PassThru -RedirectStandardOutput packaged-out.log -RedirectStandardError packaged-err.log
+          if(-not $p.WaitForExit(60000)){Stop-Process -Id $p.Id -Force;throw "Packaged startup timed out"}
+          if(Test-Path packaged-out.log){Get-Content packaged-out.log}
+          if(Test-Path packaged-err.log){Get-Content packaged-err.log}
           if($p.ExitCode -ne 0){throw "Packaged startup failed: $($p.ExitCode)"}
       - name: Create checksum
         shell: pwsh
