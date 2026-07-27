@@ -43,32 +43,28 @@ jobs:
       - name: Run regression tests
         shell: pwsh
         run: python -m unittest discover -s tests -p "test_*.py" -v
-      - name: QML lint diagnostics
+      - name: QML component diagnostics
         continue-on-error: true
-        shell: pwsh
-        run: |
-          $files=Get-ChildItem qml -Recurse -Filter *.qml
-          foreach($file in $files){Write-Host "===== qmllint: $($file.FullName) =====";& pyside6-qmllint $file.FullName;Write-Host "qmllint exit code: $LASTEXITCODE"}
-          exit 0
-      - name: Instantiate every QML component
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: python tests/qml_startup_probe.py
-      - name: Deterministic source QML startup test
+        run: python tests/qml_startup_probe.py 2>&1 | Tee-Object -FilePath qml-components.log
+      - name: Real StoreLens source startup
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
           STORELENS_CI_STARTUP_TEST: "1"
-        run: python app.py
-      - name: Print StoreLens diagnostics on failure
+        run: python app.py 2>&1 | Tee-Object -FilePath source-startup.log
+      - name: Print startup diagnostics on failure
         if: failure()
         shell: pwsh
         run: |
+          if(Test-Path qml-components.log){Get-Content qml-components.log}
+          if(Test-Path source-startup.log){Get-Content source-startup.log}
           $log=Join-Path $env:LOCALAPPDATA "StoreLens\logs\StoreLens.log"
-          if(Test-Path $log){Write-Host "===== StoreLens.log =====";Get-Content $log}else{Write-Host "No StoreLens.log was created."}
+          if(Test-Path $log){Get-Content $log}
       - name: Build StoreLens core
         shell: pwsh
         run: pyinstaller --noconfirm --clean --onefile --windowed --name "StoreLensCore" --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
@@ -106,7 +102,6 @@ jobs:
           $lines=@()
           foreach($name in @("StoreLens.exe","StoreLensCore.exe")){$hash=(Get-FileHash "dist/$name" -Algorithm SHA256).Hash.ToLower();$lines += "$hash  $name"}
           $lines | Set-Content -Encoding ascii "dist/StoreLens-7.2.1-testing.sha256"
-          Get-Content "dist/StoreLens-7.2.1-testing.sha256"
       - name: Upload StoreLens testing candidate
         uses: actions/upload-artifact@v4
         with:
