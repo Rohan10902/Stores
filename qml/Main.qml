@@ -42,7 +42,6 @@ ApplicationWindow {
             Layout.preferredWidth: root.navOpen ? Math.max(210, 220*root.uiScale) : 54
             Layout.fillHeight:true
             color:"#0b1728";border.width:1;border.color:"#263850"
-            Behavior on Layout.preferredWidth { NumberAnimation { duration: 120 } }
             ColumnLayout {
                 anchors.fill:parent;anchors.margins:8
                 Button { Layout.fillWidth:true; implicitHeight:38; text:root.navOpen?"◀ Hide":"▶"; onClicked:root.navOpen=!root.navOpen }
@@ -50,10 +49,15 @@ ApplicationWindow {
                 Repeater {
                     model:["Home","Compare & Validate","Review One File","Repair CSV / Text","Create Store File","Data Health & Statistics","Explore & Analyze"]
                     delegate:Button {
-                        required property string modelData;required property int index
-                        Layout.fillWidth:true;implicitHeight:42*root.uiScale;text:root.navOpen?modelData:String(index+1)
-                        palette.button:root.page===index?"#1d4777":"#0b1728";palette.buttonText:"#f8fafc"
-                        ToolTip.visible:hovered&&!root.navOpen;ToolTip.text:modelData
+                        required property string modelData
+                        required property int index
+                        Layout.fillWidth:true
+                        implicitHeight:42*root.uiScale
+                        text:root.navOpen?modelData:String(index+1)
+                        palette.button:root.page===index?"#1d4777":"#0b1728"
+                        palette.buttonText:"#f8fafc"
+                        ToolTip.visible:hovered&&!root.navOpen
+                        ToolTip.text:modelData
                         onClicked:root.page=index
                     }
                 }
@@ -63,7 +67,7 @@ ApplicationWindow {
         }
         StackLayout {
             currentIndex:root.page;Layout.fillWidth:true;Layout.fillHeight:true
-            HomePage{onNavigate:(p)=>root.page=p}
+            HomePage{onNavigate:function(p){root.page=p}}
             ComparePage{}
             SingleReviewPage{}
             RepairPage{}
