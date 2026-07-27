@@ -1,9 +1,9 @@
-name: StoreLens Clean Build
+name: StoreLens Windows Build
 
 on:
   workflow_dispatch:
   push:
-    branches: [storelens-clean]
+    branches: [main]
 
 permissions:
   contents: read
@@ -24,13 +24,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-      - name: Python and regression tests
+      - name: Verify and test source
         shell: pwsh
         run: |
           python -m compileall -q app.py core tests
           python -c "import app; print('IMPORT_OK')"
           python -m unittest discover -s tests -p "test_*.py" -v
-      - name: StoreLens source startup
+      - name: Verify StoreLens UI startup
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
@@ -39,26 +39,27 @@ jobs:
         run: |
           python app.py
           if($LASTEXITCODE -ne 0){throw "Source startup failed: $LASTEXITCODE"}
-      - name: Build StoreLens
+      - name: Build StoreLens.exe
         shell: pwsh
-        run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name StoreLens --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
-      - name: Packaged startup
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name StoreLens --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
+      - name: Verify packaged StoreLens.exe
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
           STORELENS_CI_STARTUP_TEST: "1"
         run: |
+          if(!(Test-Path "dist/StoreLens.exe")){throw "StoreLens.exe was not created"}
           $p=Start-Process -FilePath (Resolve-Path "dist/StoreLens.exe").Path -PassThru
           if(-not $p.WaitForExit(45000)){Stop-Process -Id $p.Id -Force;throw "Packaged startup timed out"}
           if($p.ExitCode -ne 0){throw "Packaged startup failed: $($p.ExitCode)"}
-      - name: Checksum
+      - name: Create checksum
         shell: pwsh
         run: |
           $hash=(Get-FileHash "dist/StoreLens.exe" -Algorithm SHA256).Hash.ToLower()
           "$hash  StoreLens.exe" | Set-Content -Encoding ascii "dist/StoreLens.sha256"
-      - uses: actions/upload-artifact@v4
+      - name: Publish testing build
+        uses: actions/upload-artifact@v4
         with:
           name: StoreLens-Windows-Testing
           path: |
