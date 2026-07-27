@@ -99,29 +99,14 @@ class Backend(QObject):
             dest=self._local(dst);dest=dest if dest.lower().endswith(".csv") else dest+".csv";save_repaired(self.repair_audit,dest);self.say("Reviewed copy saved")
         except Exception as e:self.fail(e)
     def _single_report(self,preview_width=0):
-        report=review_dataframe(self.single_review);report["total"]=int(report.get("recordCount",len(self.single_review)));report["previewWidth"]=int(preview_width or 0);report["paddingPreview"]=[]
-        # Nielsen padding only applies when a real horizontal Nielsen column was detected.
-        if report.get("structure",{}).get("kind")=="HORIZONTAL":
-            mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
-            if column and preview_width:
-                for ix,value in self.single_review[column].items():
-                    before=norm_value(value);after=normalize_nielsen(before,preview_width)
-                    if before!=after:report["paddingPreview"].append({"row":int(ix)+2,"before":before,"after":after})
+        report=review_dataframe(self.single_review);report["total"]=int(report.get("recordCount",len(self.single_review)))
+        report["previewColumns"]=[str(c) for c in self.single_review.columns]
+        report["previewRows"]=[[json_value(v) for v in row] for row in self.single_review.head(200).itertuples(index=False,name=None)]
         return report
     @Slot(str)
     def reviewSingleFile(self,path):
         try:
             local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.single_review_width=0;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
-        except Exception as e:self.fail(e)
-    @Slot(int)
-    def normalizeSingleNielsen(self,width):
-        try:
-            if self.single_review is None:raise ValueError("Analyze a file first.")
-            report=review_dataframe(self.single_review)
-            if report.get("structure",{}).get("kind")!="HORIZONTAL":raise ValueError("Nielsen padding is only available after the file is interpreted as a horizontal record table.")
-            mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
-            if not column:raise ValueError("Nielsen Store Code column could not be detected.")
-            self.single_review_width=int(width);report=self._single_report(width);self.singleReviewReady.emit(json.dumps(report,default=str));self.say(f"Previewing Nielsen padding to width {width}; source remains unchanged")
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def exportSingleReview(self,src,dst):
@@ -129,9 +114,6 @@ class Backend(QObject):
             local=self._local(src)
             if self.single_review is None or self.single_review_path!=local:self.single_review=read_table(local);self.single_review_path=local
             output=self.single_review.copy()
-            if self.single_review_width:
-                mapping=map_columns(output.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
-                if column:output[column]=output[column].map(lambda v:normalize_nielsen(v,self.single_review_width))
             dest=Path(self._local(dst));dest=dest if dest.suffix.lower()==".csv" else dest.with_suffix(".csv");output.to_csv(dest,index=False,encoding="utf-8-sig");self.say("Reviewed copy exported")
         except Exception as e:self.fail(e)
     @Slot(result=str)
