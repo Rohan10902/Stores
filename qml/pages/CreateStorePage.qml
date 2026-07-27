@@ -9,21 +9,21 @@ Item{
  property int selectedRow:0;property int selectedCol:0;property int validationCount:0
  ListModel{id:grid}
  ListModel{id:validation}
- Component.onCompleted:for(var i=0;i<10;i++)addBlank()
- function blank(){var o={};for(var i=0;i<headers.length;i++)o["c"+i]="";return o}
+ Component.onCompleted:{for(var i=0;i<10;i++){addBlank()}}
+ function blank(){var o={};for(var i=0;i<headers.length;i++){o["c"+i]=""}return o}
  function addBlank(){grid.append(blank())}
- function rowsJson(){var a=[];for(var r=0;r<grid.count;r++){var o={};for(var c=0;c<headers.length;c++)o[headers[c]]=grid.get(r)["c"+c]||"";a.push(o)}return JSON.stringify(a)}
+ function rowsJson(){var a=[];for(var r=0;r<grid.count;r++){var o={};for(var c=0;c<headers.length;c++){o[headers[c]]=grid.get(r)["c"+c]||""}a.push(o)}return JSON.stringify(a)}
  function pasteText(t){
-   if(!t)return
+   if(!t){return}
    var lines=t.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n")
-   if(lines.length&&lines[lines.length-1]==="")lines.pop()
+   if(lines.length&&lines[lines.length-1]===""){lines.pop()}
    for(var r=0;r<lines.length;r++){
      var vals=lines[r].indexOf("\t")>=0?lines[r].split("\t"):lines[r].split(",")
-     while(grid.count<=selectedRow+r)addBlank()
-     for(var c=0;c<vals.length&&selectedCol+c<headers.length;c++)grid.setProperty(selectedRow+r,"c"+(selectedCol+c),vals[c])
+     while(grid.count<=selectedRow+r){addBlank()}
+     for(var c=0;c<vals.length&&selectedCol+c<headers.length;c++){grid.setProperty(selectedRow+r,"c"+(selectedCol+c),vals[c])}
    }
  }
- function clearAll(){grid.clear();for(var i=0;i<10;i++)addBlank();validation.clear();validationCount=0}
+ function clearAll(){grid.clear();for(var i=0;i<10;i++){addBlank()}validation.clear();validationCount=0}
  FileDialog{id:saveDlg;fileMode:FileDialog.SaveFile;nameFilters:["CSV (*.csv)"];onAccepted:backend.exportCreator(rowsJson(),selectedFile.toString())}
  Connections{target:backend;function onCreatorReady(p){var d=JSON.parse(p);validationCount=d.count;validation.clear();for(var i=0;i<d.findings.length;i++){var x=d.findings[i];validation.append({row:String(x.row),field:String(x.field),message:String(x.message)})}}}
  ColumnLayout{anchors.fill:parent;anchors.margins:18;spacing:8
@@ -46,7 +46,7 @@ Item{
      Repeater{model:grid;delegate:Row{id:dataRow;required property int index;property int rr:index;height:38
       Repeater{model:headers.length;delegate:TextField{required property int index;property int cc:index;width:155;height:38;padding:6;text:grid.get(dataRow.rr)["c"+cc]||"";selectByMouse:true
        background:Rectangle{color:(selectedRow===dataRow.rr&&selectedCol===cc)?"#17375f":dataRow.rr%2?"#0d1b2e":"#0b1829";border.color:"#29415f"}
-       color:"#f8fafc";onActiveFocusChanged:if(activeFocus){selectedRow=dataRow.rr;selectedCol=cc}onEditingFinished:grid.setProperty(dataRow.rr,"c"+cc,text)
+       color:"#f8fafc";onActiveFocusChanged:{if(activeFocus){selectedRow=dataRow.rr;selectedCol=cc}}onEditingFinished:grid.setProperty(dataRow.rr,"c"+cc,text)
       }}
      }}
     }
