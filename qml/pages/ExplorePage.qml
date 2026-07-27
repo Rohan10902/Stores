@@ -60,16 +60,22 @@ Item {
             addSuggestion("Total "+measure+" by "+group,"Sum "+measure+" for each "+group,"SELECT "+qi(group)+", SUM("+qi(measure)+") AS total FROM data GROUP BY "+qi(group)+" ORDER BY total DESC LIMIT 50")
             addSuggestion("Average "+measure+" by "+group,"Average "+measure+" for each "+group,"SELECT "+qi(group)+", AVG("+qi(measure)+") AS average FROM data GROUP BY "+qi(group)+" ORDER BY average DESC LIMIT 50")
         }
-        // Always replace SQL when a new dataset is profiled; never leave a query from the previous file.
         sql.text=suggestions.count>0?suggestions.get(0).query:"SELECT * FROM data LIMIT 100"
     }
 
-    FileDialog { id:fd; nameFilters:["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]; onAccepted:{ suggestions.clear(); tableRows.clear(); cols=[]; resultCols=[]; sql.text="SELECT * FROM data LIMIT 100"; src=selectedFile.toString(); backend.loadData(src) } }
+    FileDialog { id:fd; nameFilters:["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]; onAccepted:{ suggestions.clear(); tableRows.clear(); cols=[]; resultCols=[]; info.text="Loading..."; sql.text="SELECT * FROM data LIMIT 100"; src=selectedFile.toString(); backend.loadData(src) } }
 
     Connections {
         target:backend
         function onHealthReady(p) { var d=JSON.parse(p); cols=d.columnNames || []; searchCol.model=["All columns"].concat(cols); searchCol.currentIndex=0; buildSuggestions(d) }
-        function onTableReady(p) { var d=JSON.parse(p); resultCols=d.columns; tableRows.clear(); for(var i=0;i<d.rows.length;i++) tableRows.append({rowJson:JSON.stringify(d.rows[i])}); info.text=d.total+" row(s) — "+d.displayed+" displayed" }
+        function onTableReady(p) {
+            var d=JSON.parse(p)
+            resultCols=d.columns || []
+            tableRows.clear()
+            var rows=d.rows || []
+            for(var i=0;i<rows.length;i++) tableRows.append({rowJson:JSON.stringify(rows[i])})
+            info.text=String(d.total || 0)+" row(s) — "+String(d.displayed || rows.length)+" displayed"
+        }
     }
 
     ColumnLayout {
@@ -104,7 +110,7 @@ Item {
                     id:flick; Layout.fillWidth:true; Layout.fillHeight:true; clip:true; contentWidth:Math.max(width,resultCols.length*180); contentHeight:tableColumn.height
                     Column {
                         id:tableColumn; width:flick.contentWidth
-                        Row { height:34; Repeater { model:resultCols; delegate:Rectangle { required property var modelData; width:180; height:34; color:"#132238"; Text { anchors.fill:parent; anchors.margins:6; text:String(modelData); color:"#94a3b8"; font.bold:true; elide:Text.ElideRight } } } }
+                        Row { height:resultCols.length?34:0; Repeater { model:resultCols; delegate:Rectangle { required property var modelData; width:180; height:34; color:"#132238"; border.width:1; border.color:"#29415f"; Text { anchors.fill:parent; anchors.margins:6; text:String(modelData); color:"#bfdbfe"; font.bold:true; elide:Text.ElideRight } } } }
                         Repeater { model:tableRows; delegate:Rectangle { required property int index; required property string rowJson; property var cells:JSON.parse(rowJson); width:tableColumn.width; height:32; color:index%2?"#0d1b2e":"#0b1829"; Row { anchors.fill:parent; Repeater { model:cells; delegate:Rectangle { required property var modelData; width:180; height:32; color:"transparent"; border.width:1; border.color:"#17283d"; Text { anchors.fill:parent; anchors.margins:5; text:modelData===null?"":String(modelData); color:"#f8fafc"; font.pixelSize:10; elide:Text.ElideRight } } } } } }
                     }
                     ScrollBar.vertical:ScrollBar {}
