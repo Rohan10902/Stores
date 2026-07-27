@@ -19,7 +19,7 @@ logging.basicConfig(filename=LOG_DIR / "StoreLens.log", level=logging.INFO, form
 class Backend(QObject):
     messageChanged=Signal();errorRaised=Signal(str);mappingReady=Signal(str);validationReady=Signal(str);detailReady=Signal(str);repairReady=Signal(str);healthReady=Signal(str);statsReady=Signal(str);tableReady=Signal(str);singleReviewReady=Signal(str);creatorReady=Signal(str)
     def __init__(self):
-        super().__init__();self._message="Ready";self.master=self.upload=self.data=self.result=None;self.single_review=None;self.single_review_path="";self.records=[];self.repair_audit=None;self.mapping_store=MappingStore();self.key_fields=[]
+        super().__init__();self._message="Ready";self.master=self.upload=self.data=self.result=None;self.single_review=None;self.single_review_path="";self.single_review_width=0;self.records=[];self.repair_audit=None;self.mapping_store=MappingStore();self.key_fields=[]
     @Property(str,notify=messageChanged)
     def message(self):return self._message
     def say(self,text):self._message=str(text);self.messageChanged.emit()
@@ -100,7 +100,7 @@ class Backend(QObject):
     @Slot(str)
     def reviewSingleFile(self,path):
         try:
-            local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
+            local=self._local(path);self.single_review=read_table(local);self.single_review_path=local;self.single_review_width=0;self.singleReviewReady.emit(json.dumps(self._single_report(),default=str));self.say("Single-file analysis complete")
         except Exception as e:self.fail(e)
     @Slot(int)
     def normalizeSingleNielsen(self,width):
@@ -108,14 +108,18 @@ class Backend(QObject):
             if self.single_review is None:raise ValueError("Analyze a file first.")
             mapping=map_columns(self.single_review.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
             if not column:raise ValueError("Nielsen Store Code column could not be detected.")
-            report=self._single_report(width);self.singleReviewReady.emit(json.dumps(report,default=str));self.say(f"Previewing Nielsen padding to width {width}; export applies this reviewed transformation")
+            self.single_review_width=int(width);report=self._single_report(width);self.singleReviewReady.emit(json.dumps(report,default=str));self.say(f"Previewing Nielsen padding to width {width}; source remains unchanged")
         except Exception as e:self.fail(e)
     @Slot(str,str)
     def exportSingleReview(self,src,dst):
         try:
             local=self._local(src)
             if self.single_review is None or self.single_review_path!=local:self.single_review=read_table(local);self.single_review_path=local
-            dest=Path(self._local(dst));dest=dest if dest.suffix.lower()==".csv" else dest.with_suffix(".csv");self.single_review.to_csv(dest,index=False,encoding="utf-8-sig");self.say("Reviewed copy exported")
+            output=self.single_review.copy()
+            if self.single_review_width:
+                mapping=map_columns(output.columns);column=mapping.get("Nielsen Store Code",{}).get("column","")
+                if column:output[column]=output[column].map(lambda v:normalize_nielsen(v,self.single_review_width))
+            dest=Path(self._local(dst));dest=dest if dest.suffix.lower()==".csv" else dest.with_suffix(".csv");output.to_csv(dest,index=False,encoding="utf-8-sig");self.say("Reviewed copy exported")
         except Exception as e:self.fail(e)
     @Slot(result=str)
     def clipboardText(self):
