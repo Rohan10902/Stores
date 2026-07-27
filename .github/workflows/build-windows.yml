@@ -1,161 +1,104 @@
-name: Build Store Data Assistant 7.2.0
+name: Build StoreLens 7.2.1 Testing
 
 on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths:
-      - "app.py"
-      - "requirements.txt"
-      - "core/**"
-      - "qml/**"
-      - "tests/**"
-      - ".github/workflows/build-windows.yml"
   push:
-    branches: [main]
-    paths:
-      - "app.py"
-      - "requirements.txt"
-      - "core/**"
-      - "qml/**"
-      - "tests/**"
-      - ".github/workflows/build-windows.yml"
+    branches: [main, chatgpt/7.2.1-final-branding]
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Test, package and smoke-test Windows application
+    name: Test, package and recovery-smoke-test Windows application
     runs-on: windows-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 25
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
-
       - name: Install dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
       - name: Verify project structure
         shell: pwsh
         run: |
-          $required = @(
-            "app.py",
-            "requirements.txt",
-            "qml/Main.qml",
-            "qml/pages/SingleReviewPage.qml",
-            "qml/pages/CreateStorePage.qml",
-            "core/common.py",
-            "core/store_validator.py",
-            "core/file_creator.py",
-            "tests/test_production_core.py"
-          )
-          foreach ($path in $required) {
-            if (!(Test-Path $path)) { throw "$path is missing" }
-          }
-          Write-Host "Project structure OK."
-
+          $required=@("app.py","launcher.py","requirements.txt","qml/Main.qml","qml/pages/SingleReviewPage.qml","qml/pages/RepairPage.qml","qml/pages/CreateStorePage.qml","core/common.py","core/csv_repair.py","core/store_validator.py","core/file_creator.py","tests/test_production_core.py")
+          foreach($path in $required){if(!(Test-Path $path)){throw "$path is missing"}}
       - name: Check Python syntax
         shell: pwsh
-        run: python -m compileall -q app.py core tests
-
+        run: python -m compileall -q app.py launcher.py core tests
       - name: Smoke-test core imports
         shell: pwsh
-        run: |
-          python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
-
+        run: python -c "import core.common, core.store_validator, core.csv_repair, core.health, core.explorer, core.file_creator; print('Core imports OK')"
       - name: Run regression tests
         shell: pwsh
         run: python -m unittest discover -s tests -p "test_*.py" -v
-
-      - name: Headless QML startup test
+      - name: Headless source QML startup test
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: |
-          $p = Start-Process -FilePath "python" -ArgumentList "app.py" -PassThru -NoNewWindow
-          Start-Sleep -Seconds 5
-          if ($p.HasExited) {
-            $log = Join-Path $env:LOCALAPPDATA "StoreDataAssistant\logs\StoreDataAssistant.log"
-            if (Test-Path $log) { Get-Content $log -Tail 200 }
-            throw "Source application exited during headless QML startup. Exit code: $($p.ExitCode)"
-          }
+          $p=Start-Process -FilePath "python" -ArgumentList "app.py" -PassThru -NoNewWindow
+          Start-Sleep -Seconds 6
+          if($p.HasExited){throw "Source application exited during QML startup. Exit code: $($p.ExitCode)"}
           Stop-Process -Id $p.Id -Force
-          Write-Host "Source QML application survived headless startup."
-
-      - name: Build Store Data Assistant
+      - name: Build StoreLens core
         shell: pwsh
         run: |
-          pyinstaller `
-            --noconfirm `
-            --clean `
-            --onefile `
-            --windowed `
-            --name "StoreDataAssistant" `
-            --collect-all PySide6 `
-            --collect-all shiboken6 `
-            --hidden-import PySide6.QtQuickControls2 `
-            --hidden-import PySide6.QtWidgets `
-            --add-data "qml;qml" `
-            app.py
-
-      - name: Verify Windows executable
+          pyinstaller --noconfirm --clean --onefile --windowed --name "StoreLensCore" --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
+      - name: Build StoreLens recovery launcher
+        shell: pwsh
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name "StoreLens" launcher.py
+      - name: Verify package files
         shell: pwsh
         run: |
-          if (!(Test-Path "dist/StoreDataAssistant.exe")) {
-            throw "StoreDataAssistant.exe was not created."
-          }
-          $file = Get-Item "dist/StoreDataAssistant.exe"
-          if ($file.Length -lt 1MB) { throw "Executable is unexpectedly small." }
-          Write-Host "Store Data Assistant 7.2.0 build complete"
-          Write-Host "File:" $file.FullName
-          Write-Host "Size:" $file.Length "bytes"
-
-      - name: Launch packaged EXE smoke test
+          foreach($file in @("dist/StoreLens.exe","dist/StoreLensCore.exe")){if(!(Test-Path $file)){throw "$file was not created"};if((Get-Item $file).Length -lt 1MB){throw "$file is unexpectedly small"}}
+      - name: Packaged core startup smoke test
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: |
-          $exe = (Resolve-Path "dist/StoreDataAssistant.exe").Path
-          $process = Start-Process -FilePath $exe -PassThru
+          $p=Start-Process -FilePath (Resolve-Path "dist/StoreLensCore.exe").Path -PassThru
           Start-Sleep -Seconds 12
-          if ($process.HasExited) {
-            $log = Join-Path $env:LOCALAPPDATA "StoreDataAssistant\logs\StoreDataAssistant.log"
-            if (Test-Path $log) {
-              Write-Host "--- StoreDataAssistant.log ---"
-              Get-Content $log -Tail 200
-            }
-            throw "Packaged EXE exited during startup. Exit code: $($process.ExitCode)"
-          }
-          Stop-Process -Id $process.Id -Force
-          Write-Host "Packaged EXE survived headless startup smoke test."
-
-      - name: Generate SHA-256 checksum
+          if($p.HasExited){throw "Packaged core exited during startup. Exit code: $($p.ExitCode)"}
+          Stop-Process -Id $p.Id -Force
+      - name: Recovery launcher startup smoke test
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          STORELENS_CI_STARTUP_TEST: "1"
+        run: |
+          $launcher=Start-Process -FilePath (Resolve-Path "dist/StoreLens.exe").Path -PassThru
+          if(-not $launcher.WaitForExit(30000)){Stop-Process -Id $launcher.Id -Force;throw "Recovery launcher did not confirm startup in time"}
+          if($launcher.ExitCode -ne 0){throw "Recovery launcher failed with exit code $($launcher.ExitCode)"}
+          Get-Process StoreLensCore -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: Generate SHA-256 checksums
         shell: pwsh
         run: |
-          $hash = (Get-FileHash "dist/StoreDataAssistant.exe" -Algorithm SHA256).Hash.ToLower()
-          "$hash  StoreDataAssistant.exe" | Set-Content -Encoding ascii "dist/StoreDataAssistant.exe.sha256"
-          Get-Content "dist/StoreDataAssistant.exe.sha256"
-
-      - name: Upload Windows production candidate
+          $lines=@()
+          foreach($name in @("StoreLens.exe","StoreLensCore.exe")){$hash=(Get-FileHash "dist/$name" -Algorithm SHA256).Hash.ToLower();$lines += "$hash  $name"}
+          $lines | Set-Content -Encoding ascii "dist/StoreLens-7.2.1-testing.sha256"
+          Get-Content "dist/StoreLens-7.2.1-testing.sha256"
+      - name: Upload StoreLens testing candidate
         uses: actions/upload-artifact@v4
         with:
-          name: StoreDataAssistant-7.2.0-Windows
+          name: StoreLens-7.2.1-Windows-Testing
           path: |
-            dist/StoreDataAssistant.exe
-            dist/StoreDataAssistant.exe.sha256
+            dist/StoreLens.exe
+            dist/StoreLensCore.exe
+            dist/StoreLens-7.2.1-testing.sha256
           if-no-files-found: error
           retention-days: 30
