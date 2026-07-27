@@ -49,14 +49,20 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: python tests/qml_startup_probe.py 2>&1 | Tee-Object -FilePath qml-components.log
+        run: |
+          python tests/qml_startup_probe.py 2>&1 | Tee-Object -FilePath qml-components.log
+          exit 0
       - name: Real StoreLens source startup
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
           STORELENS_CI_STARTUP_TEST: "1"
-        run: python app.py 2>&1 | Tee-Object -FilePath source-startup.log
+        run: |
+          python app.py *> source-startup.log
+          $code=$LASTEXITCODE
+          Get-Content source-startup.log
+          if($code -ne 0){throw "StoreLens source startup failed with exit code $code"}
       - name: Print startup diagnostics on failure
         if: failure()
         shell: pwsh
