@@ -12,10 +12,10 @@ from core.explorer import run_sql
 from core.file_creator import review_dataframe, creator_validate, export_creator
 
 BASE = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
-LOG_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "StoreLens" / "logs";LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "StoreLens" / "logs"; LOG_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(filename=LOG_DIR / "StoreLens.log", level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 class Backend(QObject):
-    messageChanged=Signal();errorRaised=Signal(str);mappingReady=Signal(str);validationReady=Signal(str);detailReady=Signal(str);repairReady=Signal(str);healthReady=Signal(str);statsReady=Signal(str);tableReady=Signal(str);singleReviewReady=Signal(str);creatorReady=Signal(str)
+    messageChanged=Signal();errorRaised=Signal(str);mappingReady=Signal(str);validationReady=Signal(str);detailReady=Signal(str);repairReady=Signal(str);healthReady=Signal(str);statsReady=Signal(str);tableReady=Signal(str);singleReviewReady=Signal(str);creatorReady=Signal(str);creatorExported=Signal(str)
     def __init__(self):
         super().__init__();self._message="Ready";self.master=self.upload=self.data=self.result=None;self.single_review=None;self.single_review_path="";self.records=[];self.repair_audit=None;self.repair_source="";self.mapping_store=MappingStore();self.key_fields=[]
     @Property(str,notify=messageChanged)
@@ -23,7 +23,9 @@ class Backend(QObject):
     def say(self,text):self._message=str(text);self.messageChanged.emit()
     def fail(self,error):logging.exception(str(error));self.say(str(error));self.errorRaised.emit(str(error))
     def _local(self,path):
-        url=QUrl(path);return url.toLocalFile() if url.isLocalFile() else path
+        value=str(path or "")
+        url=QUrl.fromUserInput(value)
+        return url.toLocalFile() if url.isLocalFile() else value
     def _reset_validation(self):self.records=[];self.key_fields=[];self.result=None
     @Slot(str)
     def loadMaster(self,path):
@@ -124,7 +126,7 @@ class Backend(QObject):
         try:
             rows=json.loads(rows_json or "[]");findings=creator_validate(rows)
             if findings:raise ValueError(f"Fix {len(findings)} invalid value(s) before export.")
-            export_creator(rows,self._local(dst));self.say("Store CSV exported")
+            path=export_creator(rows,self._local(dst));self.say("Store CSV exported");self.creatorExported.emit(str(path))
         except Exception as e:self.fail(e)
     @Slot(str)
     def loadData(self,path):
