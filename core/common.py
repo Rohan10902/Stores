@@ -41,7 +41,6 @@ def _unique_headers(header):
     return out
 
 def _read_delimited_ragged(p, ext):
-    """Read delimited text without discarding rows, including quoted multiline fields."""
     text=Path(p).read_text(encoding="utf-8-sig",errors="replace")
     if not text:return pd.DataFrame()
     if ext==".tsv":delim="\t"
@@ -105,4 +104,6 @@ def date_ok(x):
     try: pd.to_datetime(norm_value(x),errors="raise"); return True
     except Exception: return False
 
-def binary_ok(x): return norm_value(x).lower() in ("","0","1","0.0","1.0","true","false")
+def binary_ok(x):
+    """Store Builder boolean contract: blank is allowed; populated values must be true/false."""
+    return norm_value(x).lower() in ("","true","false")
