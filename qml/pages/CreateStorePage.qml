@@ -11,6 +11,7 @@ Item {
     property int selectedCol: 0
     property int validationCount: 0
     property bool dirty: false
+    property var findingRows: ({})
 
     ListModel { id: grid }
     ListModel { id: validation }
@@ -26,47 +27,51 @@ Item {
             o["c" + i] = ""
         return o
     }
+
     function addBlank(mark) {
         grid.append(blank())
         if (mark !== false)
             dirty = true
     }
+
     function rowHasData(r) {
+        if (r < 0 || r >= grid.count)
+            return false
+        var item = grid.get(r)
         for (var c = 0; c < headers.length; ++c) {
-            if (String(grid.get(r)["c" + c] || "").trim() !== "")
+            if (String(item["c" + c] || "").trim() !== "")
                 return true
         }
         return false
     }
+
     function includedCount() {
         var n = 0
-        for (var r = 0; r < grid.count; ++r) {
-            if (grid.get(r).included && rowHasData(r))
-                ++n
-        }
+        for (var r = 0; r < grid.count; ++r)
+            if (grid.get(r).included && rowHasData(r)) ++n
         return n
     }
+
     function populatedCount() {
         var n = 0
-        for (var r = 0; r < grid.count; ++r) {
-            if (rowHasData(r))
-                ++n
-        }
+        for (var r = 0; r < grid.count; ++r)
+            if (rowHasData(r)) ++n
         return n
     }
+
     function selectedCount() {
         var n = 0
-        for (var r = 0; r < grid.count; ++r) {
-            if (grid.get(r).included)
-                ++n
-        }
+        for (var r = 0; r < grid.count; ++r)
+            if (grid.get(r).included) ++n
         return n
     }
+
     function setAllIncluded(v) {
         for (var r = 0; r < grid.count; ++r)
             grid.setProperty(r, "included", v)
         dirty = true
     }
+
     function deleteCheckedRows() {
         for (var r = grid.count - 1; r >= 0; --r) {
             if (grid.get(r).included)
@@ -79,93 +84,87 @@ Item {
         selectedRow = Math.max(0, Math.min(selectedRow, grid.count - 1))
         validation.clear()
         validationCount = 0
+        findingRows = ({})
         dirty = true
     }
+
     function rowsJson() {
         var rows = []
         for (var r = 0; r < grid.count; ++r) {
-            if (!grid.get(r).included || !rowHasData(r))
+            var item = grid.get(r)
+            if (!item.included || !rowHasData(r))
                 continue
             var row = {}
             for (var c = 0; c < headers.length; ++c)
-                row[headers[c]] = grid.get(r)["c" + c] || ""
+                row[headers[c]] = item["c" + c] || ""
             rows.push(row)
         }
         return JSON.stringify(rows)
     }
+
     function pasteText(t) {
         if (!t)
             return
-        var lines = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
+        var lines = String(t).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
         if (lines.length && lines[lines.length - 1] === "")
             lines.pop()
+        if (!lines.length)
+            return
+
+        var start = selectedRow
         for (var r = 0; r < lines.length; ++r) {
-            var vals
-            if (lines[r].indexOf("\t") >= 0)
-                vals = lines[r].split("\t")
-            else
-                vals = lines[r].split(",")
-            while (grid.count <= selectedRow + r)
+            var vals = lines[r].indexOf("\t") >= 0 ? lines[r].split("\t") : lines[r].split(",")
+            var targetRow = start + r
+            while (grid.count <= targetRow)
                 addBlank(false)
-            grid.setProperty(selectedRow + r, "included", true)
+            grid.setProperty(targetRow, "included", true)
             for (var c = 0; c < vals.length && selectedCol + c < headers.length; ++c)
-                grid.setProperty(selectedRow + r, "c" + (selectedCol + c), vals[c])
+                grid.setProperty(targetRow, "c" + (selectedCol + c), vals[c])
         }
         dirty = true
         backend.say("Pasted " + lines.length + " row(s). Extra rows were created automatically.")
     }
+
     function clearAll() {
         grid.clear()
         for (var i = 0; i < 10; ++i)
             addBlank(false)
         validation.clear()
         validationCount = 0
+        findingRows = ({})
         dirty = false
     }
+
     function rowHasFinding(rr) {
-        for (var i = 0; i < validation.count; ++i) {
-            if (Number(validation.get(i).row) === rr + 1)
-                return true
-        }
-        return false
+        return !!findingRows[String(rr + 1)]
     }
+
     function rowBackground(rr) {
-        if (rowHasFinding(rr))
-            return "#3a211b"
-        if (rr % 2)
-            return "#0d1b2e"
-        return "#0b1829"
+        if (rowHasFinding(rr)) return "#3a211b"
+        return rr % 2 ? "#0d1b2e" : "#0b1829"
     }
+
     function cellBackground(rr, cc) {
-        if (!grid.get(rr).included)
-            return "#151b25"
-        if (rowHasFinding(rr))
-            return "#301b1d"
-        if (selectedRow === rr && selectedCol === cc)
-            return "#17375f"
-        if (rr % 2)
-            return "#0d1b2e"
-        return "#0b1829"
+        if (!grid.get(rr).included) return "#151b25"
+        if (rowHasFinding(rr)) return "#301b1d"
+        if (selectedRow === rr && selectedCol === cc) return "#17375f"
+        return rr % 2 ? "#0d1b2e" : "#0b1829"
     }
+
     function rowBorder(rr) {
-        if (selectedRow === rr)
-            return "#60a5fa"
-        return "#29415f"
+        return selectedRow === rr ? "#60a5fa" : "#29415f"
     }
+
     function cellBorder(rr, cc) {
-        if (selectedRow === rr && selectedCol === cc)
-            return "#60a5fa"
-        return "#29415f"
+        return selectedRow === rr && selectedCol === cc ? "#60a5fa" : "#29415f"
     }
+
     function cellBorderWidth(rr, cc) {
-        if (selectedRow === rr && selectedCol === cc)
-            return 2
-        return 1
+        return selectedRow === rr && selectedCol === cc ? 2 : 1
     }
+
     function cellTextColor(rr) {
-        if (grid.get(rr).included)
-            return "#f8fafc"
-        return "#64748b"
+        return grid.get(rr).included ? "#f8fafc" : "#64748b"
     }
 
     FileDialog {
@@ -179,12 +178,16 @@ Item {
         target: backend
         function onCreatorReady(payload) {
             var d = JSON.parse(payload)
-            validationCount = d.count
+            validationCount = Number(d.count || 0)
             validation.clear()
+            var map = ({})
             for (var i = 0; i < d.findings.length; ++i) {
                 var x = d.findings[i]
-                validation.append({row: String(x.row), field: String(x.field), message: String(x.message)})
+                var rowNumber = String(x.row)
+                map[rowNumber] = true
+                validation.append({row: rowNumber, field: String(x.field), message: String(x.message)})
             }
+            findingRows = map
         }
         function onCreatorExported(path) {
             dirty = false
@@ -274,8 +277,10 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 8
                 contentWidth: 84 + headers.length * 155
-                contentHeight: headerRow.height + grid.count * 38
+                contentHeight: headerRow.height + Math.max(rowList.height, 1)
                 clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.HorizontalFlick
 
                 Row {
                     id: headerRow
@@ -300,53 +305,63 @@ Item {
                     }
                 }
 
-                Column {
+                ListView {
+                    id: rowList
+                    x: 0
                     y: headerRow.height
-                    Repeater {
-                        model: grid
-                        delegate: Row {
-                            id: dataRow
-                            required property int index
-                            property int rr: index
+                    width: flick.width
+                    height: flick.height - headerRow.height
+                    contentWidth: flick.contentWidth
+                    model: grid
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    cacheBuffer: 120
+                    reuseItems: true
+                    delegate: Row {
+                        id: dataRow
+                        required property int index
+                        property int rr: index
+                        width: flick.contentWidth
+                        height: 38
+
+                        Rectangle {
+                            width: 84
                             height: 38
-                            Rectangle {
-                                width: 84
-                                height: 38
-                                color: page.rowBackground(dataRow.rr)
-                                border.color: page.rowBorder(dataRow.rr)
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
-                                    CheckBox {
-                                        checked: grid.get(dataRow.rr).included
-                                        onToggled: { grid.setProperty(dataRow.rr, "included", checked); dirty = true }
-                                        ToolTip.visible: hovered
-                                        ToolTip.text: checked ? "Included in validation and export" : "Excluded from validation and export"
-                                    }
-                                    Text { text: String(dataRow.rr + 1); color: "#94a3b8"; Layout.fillWidth: true }
+                            color: page.rowBackground(dataRow.rr)
+                            border.color: page.rowBorder(dataRow.rr)
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 0
+                                CheckBox {
+                                    checked: grid.get(dataRow.rr).included
+                                    onToggled: { grid.setProperty(dataRow.rr, "included", checked); dirty = true }
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: checked ? "Included in validation and export" : "Excluded from validation and export"
                                 }
+                                Text { text: String(dataRow.rr + 1); color: "#94a3b8"; Layout.fillWidth: true }
                             }
-                            Repeater {
-                                model: headers.length
-                                delegate: TextField {
-                                    required property int index
-                                    property int cc: index
-                                    width: 155
-                                    height: 38
-                                    padding: 6
-                                    text: grid.get(dataRow.rr)["c" + cc] || ""
-                                    selectByMouse: true
-                                    background: Rectangle { color: page.cellBackground(dataRow.rr, cc); border.width: page.cellBorderWidth(dataRow.rr, cc); border.color: page.cellBorder(dataRow.rr, cc) }
-                                    color: page.cellTextColor(dataRow.rr)
-                                    onActiveFocusChanged: { if (activeFocus) { selectedRow = dataRow.rr; selectedCol = cc } }
-                                    onEditingFinished: { grid.setProperty(dataRow.rr, "c" + cc, text); dirty = true }
-                                }
+                        }
+
+                        Repeater {
+                            model: headers.length
+                            delegate: TextField {
+                                required property int index
+                                property int cc: index
+                                width: 155
+                                height: 38
+                                padding: 6
+                                text: grid.get(dataRow.rr)["c" + cc] || ""
+                                selectByMouse: true
+                                background: Rectangle { color: page.cellBackground(dataRow.rr, cc); border.width: page.cellBorderWidth(dataRow.rr, cc); border.color: page.cellBorder(dataRow.rr, cc) }
+                                color: page.cellTextColor(dataRow.rr)
+                                onActiveFocusChanged: { if (activeFocus) { selectedRow = dataRow.rr; selectedCol = cc } }
+                                onEditingFinished: { grid.setProperty(dataRow.rr, "c" + cc, text); dirty = true }
                             }
                         }
                     }
+                    ScrollBar.vertical: ScrollBar {}
                 }
-                ScrollBar.horizontal: ScrollBar {}
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.horizontal: ScrollBar { flickable: flick }
             }
         }
 
