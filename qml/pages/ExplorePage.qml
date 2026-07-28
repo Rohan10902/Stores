@@ -3,15 +3,285 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import "../components"
+
 Item {
- property string src:"";property var cols:[];property var resultCols:[];property var numericCols:[];property var textCols:[];property var dateCols:[];property var booleanCols:[]
- ListModel{id:tableRows}ListModel{id:suggestions}
- function qi(name){return '"'+String(name).replace(/"/g,'""')+'"'}function quotedColumns(){var out=[];for(var i=0;i<cols.length;++i)out.push(qi(cols[i]));return out.join(", ")}function addSuggestion(title,description,query){suggestions.append({title:title,description:description,query:query})}
- function buildSuggestions(profile){suggestions.clear();numericCols=[];textCols=[];dateCols=[];booleanCols=[];suggestionList.currentIndex=-1;var columns=profile.columnStats||[];for(var i=0;i<columns.length;i++){var c=columns[i],typ=String(c.type).toLowerCase();if(typ==="numeric")numericCols.push(c.column);else if(typ==="date")dateCols.push(c.column);else if(typ==="boolean")booleanCols.push(c.column);else textCols.push(c.column)}addSuggestion("Show first 100 records","Safe starting view of this dataset","SELECT * FROM data LIMIT 100");if(cols.length>0){addSuggestion("Find exact duplicate rows","Find complete duplicate records in this file","SELECT * FROM data QUALIFY COUNT(*) OVER (PARTITION BY "+quotedColumns()+") > 1 LIMIT 100");var missing=[];for(var m=0;m<cols.length;m++)missing.push(qi(cols[m])+" IS NULL OR TRIM(CAST("+qi(cols[m])+" AS VARCHAR)) = ''");addSuggestion("Rows with missing values","Records containing any blank or null field","SELECT * FROM data WHERE "+missing.join(" OR ")+" LIMIT 100")}for(var t=0;t<textCols.length;t++){var tc=textCols[t];addSuggestion("Count by "+tc,"Most common values in "+tc,"SELECT "+qi(tc)+", COUNT(*) AS record_count FROM data GROUP BY "+qi(tc)+" ORDER BY record_count DESC LIMIT 50");addSuggestion("Duplicates in "+tc,"Values repeated more than once","SELECT "+qi(tc)+", COUNT(*) AS occurrences FROM data WHERE "+qi(tc)+" IS NOT NULL GROUP BY "+qi(tc)+" HAVING COUNT(*) > 1 ORDER BY occurrences DESC LIMIT 50")}for(var n=0;n<numericCols.length;n++){var nc=numericCols[n];addSuggestion("Summary of "+nc,"Count, sum, average, minimum and maximum","SELECT COUNT("+qi(nc)+") AS count_value, SUM("+qi(nc)+") AS total, AVG("+qi(nc)+") AS average, MIN("+qi(nc)+") AS minimum, MAX("+qi(nc)+") AS maximum FROM data");addSuggestion("Top 10 by "+nc,"Highest values in "+nc,"SELECT * FROM data WHERE "+qi(nc)+" IS NOT NULL ORDER BY "+qi(nc)+" DESC LIMIT 10");addSuggestion("Bottom 10 by "+nc,"Lowest values in "+nc,"SELECT * FROM data WHERE "+qi(nc)+" IS NOT NULL ORDER BY "+qi(nc)+" ASC LIMIT 10")}for(var d=0;d<dateCols.length;d++){var dc=dateCols[d];addSuggestion("Latest by "+dc,"Most recent records using "+dc,"SELECT * FROM data WHERE "+qi(dc)+" IS NOT NULL ORDER BY "+qi(dc)+" DESC LIMIT 25");addSuggestion("Date range of "+dc,"Earliest and latest date in this file","SELECT MIN("+qi(dc)+") AS earliest, MAX("+qi(dc)+") AS latest FROM data")}for(var b=0;b<booleanCols.length;b++){var bc=booleanCols[b];addSuggestion("Count by "+bc,"Distribution of true/false values","SELECT "+qi(bc)+", COUNT(*) AS record_count FROM data GROUP BY "+qi(bc)+" ORDER BY record_count DESC")}sql.text=suggestions.count>0?suggestions.get(0).query:"SELECT * FROM data LIMIT 100"}
- FileDialog{id:fd;nameFilters:["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"];onAccepted:{suggestions.clear();tableRows.clear();cols=[];resultCols=[];info.text="Loading...";sql.text="SELECT * FROM data LIMIT 100";src=selectedFile.toString();backend.loadData(src)}}
- Connections{target:backend;function onHealthReady(p){var d=JSON.parse(p);cols=d.columnNames||[];searchCol.model=["All columns"].concat(cols);searchCol.currentIndex=0;buildSuggestions(d)}function onTableReady(p){var d=JSON.parse(p);resultCols=d.columns||[];tableRows.clear();var rows=d.rows||[];for(var i=0;i<rows.length;i++)tableRows.append({rowJson:JSON.stringify(rows[i])});info.text=String(d.total||0)+" row(s) — "+String(d.displayed||rows.length)+" displayed"+(d.truncated?" (preview capped at 1,000)":"")}}
- ColumnLayout{anchors.fill:parent;anchors.margins:22;spacing:10;PageTitle{text:"Explore & Analyze"}RowLayout{Layout.fillWidth:true;Text{text:src||"No dataset loaded";color:"#94a3b8";Layout.fillWidth:true;elide:Text.ElideMiddle}PrimaryButton{text:"Load Dataset";onClicked:fd.open()}}
-  Card{Layout.fillWidth:true;implicitHeight:suggestions.count>0?300:150;ColumnLayout{anchors.fill:parent;anchors.margins:10;spacing:8;RowLayout{TextField{id:search;placeholderText:"Search records...";Layout.fillWidth:true}ComboBox{id:searchCol;Layout.preferredWidth:240}PrimaryButton{text:"Search";enabled:src!=="";onClicked:backend.search(search.text,searchCol.currentIndex<=0?"":searchCol.currentText)}}RowLayout{TextArea{id:sql;text:"SELECT * FROM data LIMIT 100";color:"#f8fafc";Layout.fillWidth:true;Layout.preferredHeight:65;background:Rectangle{color:"#071321";border.width:1;border.color:"#263850";radius:6}}PrimaryButton{text:"Run SQL";enabled:src!=="";onClicked:backend.sql(sql.text)}}RowLayout{visible:suggestions.count>0;Layout.fillWidth:true;Text{text:"Suggested Queries ("+suggestions.count+")";color:"#f8fafc";font.bold:true}Text{text:"Rebuilt for the currently loaded dataset.";color:"#94a3b8";Layout.fillWidth:true}AppButton{text:"Run Selected";enabled:suggestionList.currentIndex>=0;onClicked:{if(suggestionList.currentIndex>=0){sql.text=suggestions.get(suggestionList.currentIndex).query;backend.sql(sql.text)}}}}ListView{id:suggestionList;visible:suggestions.count>0;Layout.fillWidth:true;Layout.preferredHeight:105;orientation:ListView.Horizontal;spacing:8;clip:true;model:suggestions;delegate:Rectangle{required property int index;required property string title;required property string description;required property string query;width:245;height:88;radius:6;color:suggestionList.currentIndex===index?"#17375f":"#0d1b2e";border.color:"#29415f";MouseArea{anchors.fill:parent;onClicked:{suggestionList.currentIndex=index;sql.text=query}}Column{anchors.fill:parent;anchors.margins:8;spacing:4;Text{width:parent.width;text:title;color:"#bfdbfe";font.bold:true;elide:Text.ElideRight}Text{width:parent.width;text:description;color:"#94a3b8";font.pixelSize:10;wrapMode:Text.WordWrap;maximumLineCount:3;elide:Text.ElideRight}}}ScrollBar.horizontal:ScrollBar{policy:ScrollBar.AlwaysOn}}}}
-  Card{Layout.fillWidth:true;Layout.fillHeight:true;ColumnLayout{anchors.fill:parent;anchors.margins:9;RowLayout{Text{text:"Result Table";color:"#f8fafc";font.bold:true}Item{Layout.fillWidth:true}Text{id:info;text:"0 rows";color:"#94a3b8"}}Flickable{id:flick;Layout.fillWidth:true;Layout.fillHeight:true;clip:true;contentWidth:Math.max(width,resultCols.length*180);contentHeight:tableColumn.height;Column{id:tableColumn;width:flick.contentWidth;Row{height:resultCols.length?34:0;Repeater{model:resultCols;delegate:Rectangle{required property var modelData;width:180;height:34;color:"#132238";border.width:1;border.color:"#29415f";Text{anchors.fill:parent;anchors.margins:6;text:String(modelData);color:"#bfdbfe";font.bold:true;elide:Text.ElideRight}}}}Repeater{model:tableRows;delegate:Rectangle{required property int index;required property string rowJson;property var cells:JSON.parse(rowJson);width:tableColumn.width;height:32;color:index%2?"#0d1b2e":"#0b1829";Row{anchors.fill:parent;Repeater{model:cells;delegate:Rectangle{required property var modelData;width:180;height:32;color:"transparent";border.width:1;border.color:"#17283d";Text{anchors.fill:parent;anchors.margins:5;text:modelData===null?"":String(modelData);color:"#f8fafc";font.pixelSize:10;elide:Text.ElideRight}}}}}}}ScrollBar.vertical:ScrollBar{};ScrollBar.horizontal:ScrollBar{}}}}
- }
+    property string src: ""
+    property var cols: []
+    property var resultCols: []
+    property var numericCols: []
+    property var textCols: []
+    property var dateCols: []
+    property var booleanCols: []
+
+    ListModel { id: tableRows }
+    ListModel { id: suggestions }
+
+    function qi(name) {
+        return '"' + String(name).replace(/"/g, '""') + '"'
+    }
+
+    function quotedColumns() {
+        var out = []
+        for (var i = 0; i < cols.length; ++i)
+            out.push(qi(cols[i]))
+        return out.join(", ")
+    }
+
+    function addSuggestion(title, description, query) {
+        suggestions.append({ title: title, description: description, query: query })
+    }
+
+    function buildSuggestions(profile) {
+        suggestions.clear()
+        numericCols = []
+        textCols = []
+        dateCols = []
+        booleanCols = []
+        suggestionList.currentIndex = -1
+
+        var columns = profile.columnStats || []
+        for (var i = 0; i < columns.length; ++i) {
+            var c = columns[i]
+            var typ = String(c.type).toLowerCase()
+            if (typ === "numeric")
+                numericCols.push(c.column)
+            else if (typ === "date")
+                dateCols.push(c.column)
+            else if (typ === "boolean")
+                booleanCols.push(c.column)
+            else
+                textCols.push(c.column)
+        }
+
+        addSuggestion("Show first 100 records", "Safe starting view of this dataset", "SELECT * FROM data LIMIT 100")
+
+        if (cols.length > 0) {
+            addSuggestion("Find exact duplicate rows", "Find complete duplicate records in this file", "SELECT * FROM data QUALIFY COUNT(*) OVER (PARTITION BY " + quotedColumns() + ") > 1 LIMIT 100")
+            var missing = []
+            for (var m = 0; m < cols.length; ++m)
+                missing.push(qi(cols[m]) + " IS NULL OR TRIM(CAST(" + qi(cols[m]) + " AS VARCHAR)) = ''")
+            addSuggestion("Rows with missing values", "Records containing any blank or null field", "SELECT * FROM data WHERE " + missing.join(" OR ") + " LIMIT 100")
+        }
+
+        for (var t = 0; t < textCols.length; ++t) {
+            var tc = textCols[t]
+            addSuggestion("Count by " + tc, "Most common values in " + tc, "SELECT " + qi(tc) + ", COUNT(*) AS record_count FROM data GROUP BY " + qi(tc) + " ORDER BY record_count DESC LIMIT 50")
+            addSuggestion("Duplicates in " + tc, "Values repeated more than once", "SELECT " + qi(tc) + ", COUNT(*) AS occurrences FROM data WHERE " + qi(tc) + " IS NOT NULL GROUP BY " + qi(tc) + " HAVING COUNT(*) > 1 ORDER BY occurrences DESC LIMIT 50")
+        }
+
+        for (var n = 0; n < numericCols.length; ++n) {
+            var nc = numericCols[n]
+            addSuggestion("Summary of " + nc, "Count, sum, average, minimum and maximum", "SELECT COUNT(" + qi(nc) + ") AS count_value, SUM(" + qi(nc) + ") AS total, AVG(" + qi(nc) + ") AS average, MIN(" + qi(nc) + ") AS minimum, MAX(" + qi(nc) + ") AS maximum FROM data")
+            addSuggestion("Top 10 by " + nc, "Highest values in " + nc, "SELECT * FROM data WHERE " + qi(nc) + " IS NOT NULL ORDER BY " + qi(nc) + " DESC LIMIT 10")
+            addSuggestion("Bottom 10 by " + nc, "Lowest values in " + nc, "SELECT * FROM data WHERE " + qi(nc) + " IS NOT NULL ORDER BY " + qi(nc) + " ASC LIMIT 10")
+        }
+
+        for (var d = 0; d < dateCols.length; ++d) {
+            var dc = dateCols[d]
+            addSuggestion("Latest by " + dc, "Most recent records using " + dc, "SELECT * FROM data WHERE " + qi(dc) + " IS NOT NULL ORDER BY " + qi(dc) + " DESC LIMIT 25")
+            addSuggestion("Date range of " + dc, "Earliest and latest date in this file", "SELECT MIN(" + qi(dc) + ") AS earliest, MAX(" + qi(dc) + ") AS latest FROM data")
+        }
+
+        for (var b = 0; b < booleanCols.length; ++b) {
+            var bc = booleanCols[b]
+            addSuggestion("Count by " + bc, "Distribution of true/false values", "SELECT " + qi(bc) + ", COUNT(*) AS record_count FROM data GROUP BY " + qi(bc) + " ORDER BY record_count DESC")
+        }
+
+        sql.text = suggestions.count > 0 ? suggestions.get(0).query : "SELECT * FROM data LIMIT 100"
+    }
+
+    FileDialog {
+        id: fd
+        nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
+        onAccepted: {
+            suggestions.clear()
+            tableRows.clear()
+            cols = []
+            resultCols = []
+            info.text = "Loading..."
+            sql.text = "SELECT * FROM data LIMIT 100"
+            src = selectedFile.toString()
+            backend.loadData(src)
+        }
+    }
+
+    Connections {
+        target: backend
+        function onHealthReady(p) {
+            var d = JSON.parse(p)
+            cols = d.columnNames || []
+            searchCol.model = ["All columns"].concat(cols)
+            searchCol.currentIndex = 0
+            buildSuggestions(d)
+        }
+        function onTableReady(p) {
+            var d = JSON.parse(p)
+            resultCols = d.columns || []
+            tableRows.clear()
+            var rows = d.rows || []
+            for (var i = 0; i < rows.length; ++i)
+                tableRows.append({ rowJson: JSON.stringify(rows[i]) })
+            info.text = String(d.total || 0) + " row(s) — " + String(d.displayed || rows.length) + " displayed" + (d.truncated ? " (preview capped at 1,000)" : "")
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 22
+        spacing: 10
+
+        PageTitle { text: "Explore & Analyze" }
+        RowLayout {
+            Layout.fillWidth: true
+            Text { text: src || "No dataset loaded"; color: "#94a3b8"; Layout.fillWidth: true; elide: Text.ElideMiddle }
+            PrimaryButton { text: "Load Dataset"; onClicked: fd.open() }
+        }
+
+        Card {
+            Layout.fillWidth: true
+            implicitHeight: suggestions.count > 0 ? 300 : 150
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 8
+                RowLayout {
+                    TextField { id: search; placeholderText: "Search records..."; Layout.fillWidth: true }
+                    ComboBox { id: searchCol; Layout.preferredWidth: 240 }
+                    PrimaryButton { text: "Search"; enabled: src !== ""; onClicked: backend.search(search.text, searchCol.currentIndex <= 0 ? "" : searchCol.currentText) }
+                }
+                RowLayout {
+                    TextArea {
+                        id: sql
+                        text: "SELECT * FROM data LIMIT 100"
+                        color: "#f8fafc"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 65
+                        background: Rectangle { color: "#071321"; border.width: 1; border.color: "#263850"; radius: 6 }
+                    }
+                    PrimaryButton { text: "Run SQL"; enabled: src !== ""; onClicked: backend.sql(sql.text) }
+                }
+                RowLayout {
+                    visible: suggestions.count > 0
+                    Layout.fillWidth: true
+                    Text { text: "Suggested Queries (" + suggestions.count + ")"; color: "#f8fafc"; font.bold: true }
+                    Text { text: "Rebuilt for the currently loaded dataset."; color: "#94a3b8"; Layout.fillWidth: true }
+                    AppButton {
+                        text: "Run Selected"
+                        enabled: suggestionList.currentIndex >= 0
+                        onClicked: {
+                            if (suggestionList.currentIndex >= 0) {
+                                sql.text = suggestions.get(suggestionList.currentIndex).query
+                                backend.sql(sql.text)
+                            }
+                        }
+                    }
+                }
+                ListView {
+                    id: suggestionList
+                    visible: suggestions.count > 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 105
+                    orientation: ListView.Horizontal
+                    spacing: 8
+                    clip: true
+                    model: suggestions
+                    delegate: Rectangle {
+                        required property int index
+                        required property string title
+                        required property string description
+                        required property string query
+                        width: 245
+                        height: 88
+                        radius: 6
+                        color: suggestionList.currentIndex === index ? "#17375f" : "#0d1b2e"
+                        border.color: "#29415f"
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                suggestionList.currentIndex = index
+                                sql.text = query
+                            }
+                        }
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            spacing: 4
+                            Text { width: parent.width; text: title; color: "#bfdbfe"; font.bold: true; elide: Text.ElideRight }
+                            Text { width: parent.width; text: description; color: "#94a3b8"; font.pixelSize: 10; wrapMode: Text.WordWrap; maximumLineCount: 3; elide: Text.ElideRight }
+                        }
+                    }
+                    ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AlwaysOn }
+                }
+            }
+        }
+
+        Card {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 9
+                RowLayout {
+                    Text { text: "Result Table"; color: "#f8fafc"; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    Text { id: info; text: "0 rows"; color: "#94a3b8" }
+                }
+                Flickable {
+                    id: flick
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    contentWidth: Math.max(width, resultCols.length * 180)
+                    contentHeight: tableColumn.height
+                    Column {
+                        id: tableColumn
+                        width: flick.contentWidth
+                        Row {
+                            height: resultCols.length ? 34 : 0
+                            Repeater {
+                                model: resultCols
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    width: 180
+                                    height: 34
+                                    color: "#132238"
+                                    border.width: 1
+                                    border.color: "#29415f"
+                                    Text { anchors.fill: parent; anchors.margins: 6; text: String(modelData); color: "#bfdbfe"; font.bold: true; elide: Text.ElideRight }
+                                }
+                            }
+                        }
+                        Repeater {
+                            model: tableRows
+                            delegate: Rectangle {
+                                required property int index
+                                required property string rowJson
+                                property var cells: JSON.parse(rowJson)
+                                width: tableColumn.width
+                                height: 32
+                                color: index % 2 ? "#0d1b2e" : "#0b1829"
+                                Row {
+                                    anchors.fill: parent
+                                    Repeater {
+                                        model: cells
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            width: 180
+                                            height: 32
+                                            color: "transparent"
+                                            border.width: 1
+                                            border.color: "#17283d"
+                                            Text { anchors.fill: parent; anchors.margins: 5; text: modelData === null ? "" : String(modelData); color: "#f8fafc"; font.pixelSize: 10; elide: Text.ElideRight }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ScrollBar.vertical: ScrollBar { }
+                    ScrollBar.horizontal: ScrollBar { }
+                }
+            }
+        }
+    }
 }
