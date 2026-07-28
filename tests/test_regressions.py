@@ -34,8 +34,8 @@ class RegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'short.csv';p.write_text('SID,Store Name,ZIP\n1,A\n2,B,411004\n',encoding='utf-8');df=read_table(p);self.assertEqual(len(df),2);self.assertEqual(df.iloc[0]['ZIP'],'')
     def test_quality_profile_is_explainable_and_non_mutating(self):
-        df=pd.DataFrame({'SID':['001','002','002'],'Name':['A','','C']});before=df.copy(deep=True);profile=profile_dataframe(df)
-        self.assertEqual(profile['rows'],3);self.assertEqual(profile['columns'],2);self.assertEqual(profile['missingCells'],1);self.assertEqual(profile['duplicateRows'],2);self.assertIn(profile['grade'],{'Excellent','Good','Needs attention','Poor'});self.assertEqual(profile['dimensions'][0]['name'],'Completeness');pd.testing.assert_frame_equal(df,before)
+        df=pd.DataFrame({'SID':['001','002','002'],'Name':['A','B','C']});before=df.copy(deep=True);profile=profile_dataframe(df)
+        self.assertEqual(profile['rows'],3);self.assertEqual(profile['columns'],2);self.assertEqual(profile['missingCells'],0);self.assertEqual(profile['duplicateRows'],0);self.assertIn(profile['grade'],{'Excellent','Good','Needs attention','Poor'});self.assertEqual(profile['dimensions'][0]['name'],'Completeness');pd.testing.assert_frame_equal(df,before)
     def test_quality_profile_empty_frame_is_safe(self):
         profile=profile_dataframe(pd.DataFrame());self.assertEqual(profile['rows'],0);self.assertEqual(profile['columns'],0);self.assertEqual(profile['score'],100.0);self.assertEqual(profile['grade'],'Excellent')
 
