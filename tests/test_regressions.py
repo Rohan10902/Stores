@@ -17,17 +17,18 @@ class RegressionTests(unittest.TestCase):
         df=pd.DataFrame({'SID':['','2','3'],'Store Name':['A','B','C'],'Nielsen Store Code':['0001','0002','999999']});report=review_dataframe(df);self.assertEqual(report['suggestedNielsenWidth'],4);self.assertGreaterEqual(report['issueCount'],2);self.assertGreaterEqual(report['findingCount'],2)
     def test_builder_requires_sid_and_store_name(self):
         findings=creator_validate([{'Banner':'X'}]);fields={x['field'] for x in findings};self.assertIn('SID',fields);self.assertIn('Store Name',fields)
-    def test_builder_requires_strict_boolean_values(self):
-        row={'Store Name':'A','SID':'001','Active / Inactive':'true','Is Census':'true','Is Exceptions':'false','Trip Received':'2026-07-01','Last Trip':'2026-07-02'}
+    def test_builder_requires_zero_one_boolean_values(self):
+        row={'Store Name':'A','SID':'001','Active / Inactive':'1','Is Census':'1','Is Exceptions':'0','Trip Received':'2026-07-01','Last Trip':'2026-07-02'}
         self.assertEqual(creator_validate([row]),[])
-        row['Active / Inactive']='false';row['Is Census']='false';row['Is Exceptions']='true'
+        row['Active / Inactive']='0';row['Is Census']='0';row['Is Exceptions']='1'
         self.assertEqual(creator_validate([row]),[])
-        row['Active / Inactive']='Active';self.assertTrue(any(x['field']=='Active / Inactive' for x in creator_validate([row])))
+        for value in ('Active','Inactive','Yes','No','true','false','True','False','1.0','2'):
+            self.assertFalse(binary_ok(value), value)
     def test_builder_handles_100_valid_records_without_findings(self):
         rows=[]
         for i in range(100):
             n=i+1
-            rows.append({'Store Name':f'Store {n:03d}','SID':f'{100000+n}','Banner':'Test Banner','Nielsen Store Code':f'{100000000+n}','Trip Received':'2026-07-01','Last Trip':'2026-07-02','Address 1':f'{n} Main Street','ZIP':f'{10000+n:05d}','Active / Inactive':'true','Is Census':'true' if n % 2 else 'false','Is Exceptions':'false','Updated By':'Test'})
+            rows.append({'Store Name':f'Store {n:03d}','SID':f'{100000+n}','Banner':'Test Banner','Nielsen Store Code':f'{100000000+n}','Trip Received':'2026-07-01','Last Trip':'2026-07-02','Address 1':f'{n} Main Street','ZIP':f'{10000+n:05d}','Active / Inactive':'1','Is Census':'1' if n % 2 else '0','Is Exceptions':'0','Updated By':'Test'})
         self.assertEqual(creator_validate(rows),[])
     def test_absorb_only_empty_and_undo(self):
         with tempfile.TemporaryDirectory() as d:
@@ -38,9 +39,11 @@ class RegressionTests(unittest.TestCase):
     def test_column_mapping_prefers_exact_names(self):
         mapping=map_columns(['Store Name','Store ID','Postal Code','Random']);self.assertEqual(mapping['Store Name']['column'],'Store Name');self.assertEqual(mapping['ZIP']['column'],'Postal Code')
     def test_empty_date_and_boolean_values_are_allowed(self):
-        self.assertTrue(date_ok(''));self.assertTrue(binary_ok(''));self.assertTrue(binary_ok('true'));self.assertTrue(binary_ok('false'))
+        self.assertTrue(date_ok(''));self.assertTrue(binary_ok(''));self.assertTrue(binary_ok('0'));self.assertTrue(binary_ok('1'))
     def test_invalid_date_and_boolean_values_are_rejected(self):
-        self.assertFalse(date_ok('not-a-date'));self.assertFalse(binary_ok('maybe'));self.assertFalse(binary_ok('yes'));self.assertFalse(binary_ok('1'))
+        self.assertFalse(date_ok('not-a-date'))
+        for value in ('maybe','yes','no','true','false','Active','Inactive','2','1.0'):
+            self.assertFalse(binary_ok(value), value)
     def test_short_csv_rows_are_padded_without_losing_records(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'short.csv';p.write_text('SID,Store Name,ZIP\n1,A\n2,B,411004\n',encoding='utf-8');df=read_table(p);self.assertEqual(len(df),2);self.assertEqual(df.iloc[0]['ZIP'],'')
