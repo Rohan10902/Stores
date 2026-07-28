@@ -1,9 +1,4 @@
-"""Pure, side-effect-free dataset quality scoring helpers.
-
-This module intentionally has no UI, file writes, or mutation of caller-owned
-DataFrames. It is safe to use from review/health screens as a shared quality
-engine without changing existing workflows.
-"""
+"""Pure, side-effect-free dataset quality scoring helpers."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -39,33 +34,27 @@ def _dimension(name: str, bad: int, total: int, weight: float, description: str)
 
 
 def profile_dataframe(df: pd.DataFrame) -> dict[str, Any]:
-    """Return a non-mutating quality profile for *df*.
+    """Return an explainable quality profile without mutating *df*.
 
-    The score is intentionally conservative and explainable. It measures
-    completeness, uniqueness, validity, and consistency from information that
-    can be inferred without guessing business rules. Domain-specific checks
-    can be layered on later.
+    Only facts that can be inferred safely are scored here. Domain-specific
+    validity rules belong to the existing validator/repair layers and can be
+    incorporated later without changing this API.
     """
     if not isinstance(df, pd.DataFrame):
         raise TypeError("df must be a pandas DataFrame")
 
-    frame = df.copy(deep=False)
-    rows = len(frame)
-    columns = len(frame.columns)
+    rows = len(df)
+    columns = len(df.columns)
     cells = rows * columns
+    missing_cells = int(sum(_is_blank(df[c]).sum() for c in df.columns)) if columns else 0
+    duplicate_rows = int(df.duplicated(keep=False).sum()) if rows else 0
 
-    missing_cells = int(sum(_is_blank(frame[c]).sum() for c in frame.columns)) if columns else 0
-    duplicate_rows = int(frame.duplicated(keep=False).sum()) if rows else 0
-
-    validity_bad = 0
     column_stats: list[dict[str, Any]] = []
-    for column in frame.columns:
-        s = frame[column]
+    for column in df.columns:
+        s = df[column]
         blank = int(_is_blank(s).sum())
         nonblank = s[~_is_blank(s)]
         unique = int(nonblank.nunique(dropna=True))
-        duplicate_values = max(0, len(nonblank) - unique)
-        validity_bad += duplicate_values
         column_stats.append(
             {
                 "column": str(column),
@@ -79,10 +68,10 @@ def profile_dataframe(df: pd.DataFrame) -> dict[str, Any]:
         )
 
     dimensions = [
-        _dimension("Completeness", missing_cells, cells, 0.40, "Percentage of populated cells."),
+        _dimension("Completeness", missing_cells, cells, 0.55, "Percentage of populated cells."),
         _dimension("Uniqueness", duplicate_rows, rows, 0.25, "Penalty for complete duplicate records."),
-        _dimension("Consistency", validity_bad, max(1, rows * max(1, columns)), 0.20, "Penalty for repeated values across populated fields."),
-        _dimension("Validity", 0, max(1, cells), 0.15, "No domain-specific invalid values are assumed without a schema rule."),
+        _dimension("Consistency", 0, max(1, rows), 0.10, "No consistency penalty is assumed without a declared schema rule."),
+        _dimension("Validity", 0, max(1, cells), 0.10, "No domain-specific invalid values are assumed without a schema rule."),
     ]
 
     score = round(sum(d.score * d.weight for d in dimensions), 1)
