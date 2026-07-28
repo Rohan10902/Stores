@@ -20,7 +20,8 @@ ALIASES = {
 "Is Exceptions":["is exceptions","is exception","exceptions","exception flag"],
 "Updated By":["updated by","last updated","last updated timestamp","updated timestamp","modified timestamp"]
 }
-def norm_name(x): return re.sub(r"[^a-z0-9]+"," ",str(x or "").lower()).strip()
+
+def norm_name(x): return re.sub(r"[^a-z0-9]+", " ", str(x or "").lower()).strip()
 def norm_value(x):
     if pd.isna(x): return ""
     if isinstance(x,float) and x.is_integer(): return str(int(x))
@@ -60,8 +61,7 @@ def _read_delimited_ragged(p, ext):
 def _json_records(obj):
     if isinstance(obj,list):return obj
     if not isinstance(obj,dict):return obj
-    vals=list(obj.values())
-    lists=[v for v in vals if isinstance(v,list)]
+    vals=list(obj.values()); lists=[v for v in vals if isinstance(v,list)]
     if len(vals)==1 and lists:return lists[0]
     if len(lists)==1:return lists[0]
     return obj
@@ -86,6 +86,7 @@ def read_table(p):
     if ext==".xml": return pd.read_xml(p)
     if ext in (".csv",".txt",".tsv"): return _read_delimited_ragged(p,ext)
     raise ValueError(f"Unsupported file type: {ext}")
+
 def map_columns(cols):
     out={}; used=set()
     for f in STORE_FIELDS:
@@ -98,8 +99,10 @@ def map_columns(cols):
         if best>=.72: used.add(best_col); out[f]={"column":str(best_col),"confidence":round(best*100,1)}
         else: out[f]={"column":"","confidence":round(best*100,1)}
     return out
+
 def date_ok(x):
     if not norm_value(x): return True
     try: pd.to_datetime(norm_value(x),errors="raise"); return True
     except Exception: return False
-def binary_ok(x): return norm_value(x).lower() in ("","0","1","0.0","1.0","true","false","yes","no")
+
+def binary_ok(x): return norm_value(x).lower() in ("","0","1","0.0","1.0","true","false")
