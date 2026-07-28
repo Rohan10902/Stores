@@ -105,5 +105,6 @@ def date_ok(x):
     except Exception: return False
 
 def binary_ok(x):
-    """Store Builder boolean contract: blank is allowed; populated values must be true/false."""
-    return norm_value(x).lower() in ("","true","false")
+    """Store Builder boolean contract: blank is allowed; populated values must be exactly numeric 0 or 1."""
+    value=norm_value(x)
+    return value in ("","0","1")
