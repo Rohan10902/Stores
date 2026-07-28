@@ -58,9 +58,7 @@ def join_shifted_rows(audit,issue_index):
     if not ri or not rj or rj!=ri+1:raise ValueError("No adjacent broken-line candidate is available for this record.")
     first=dict(audit["logical"][ri]);second=dict(audit["logical"][rj]);joined=list(first["values"])+list(second["values"])
     if len(joined)!=audit["expected"]:raise ValueError("The candidate no longer matches the expected schema.")
-    audit.setdefault("undoStack",[]).append({"action":"JOIN","snapshot":inspect_snapshot(audit)})
-    audit["logical"][ri]={"start":first["start"],"end":second["end"],"values":joined,"raw":first.get("raw","")+"\n"+second.get("raw","")};audit["logical"].pop(rj)
-    audit["issues"]=[x for idx,x in enumerate(audit["issues"]) if idx==issue_index or not (x.get("recordIndex")==rj and x.get("kind")=="MISSING_FIELDS")];issue=audit["issues"][issue_index];issue.update({"status":"AUTO FIXED","decision":"Rows joined by user","problem":"Broken record reconstructed","diagnosis":f"Rows {first['start']} and {second['start']} were joined into one {audit['expected']}-field record.","actualColumns":audit["expected"],"difference":0,"confidence":"HIGH","kind":"JOINED_ROWS"});issue.pop("joinCandidateRecordIndex",None);issue.pop("joinCandidateLine",None);issue.pop("joinCandidateValues",None)
+    audit.setdefault("undoStack",[]).append({"action":"JOIN","snapshot":inspect_snapshot(audit)});audit["logical"][ri]={"start":first["start"],"end":second["end"],"values":joined,"raw":first.get("raw","")+"\n"+second.get("raw","")};audit["logical"].pop(rj);audit["issues"]=[x for idx,x in enumerate(audit["issues"]) if idx==issue_index or not (x.get("recordIndex")==rj and x.get("kind")=="MISSING_FIELDS")];issue=audit["issues"][issue_index];issue.update({"status":"AUTO FIXED","decision":"Rows joined by user","problem":"Broken record reconstructed","diagnosis":f"Rows {first['start']} and {second['start']} were joined into one {audit['expected']}-field record.","actualColumns":audit["expected"],"difference":0,"confidence":"HIGH","kind":"JOINED_ROWS"});issue.pop("joinCandidateRecordIndex",None);issue.pop("joinCandidateLine",None);issue.pop("joinCandidateValues",None)
     for x in audit["issues"]:
         if x.get("recordIndex",0)>rj:x["recordIndex"]-=1
     return _recount(audit)
@@ -130,13 +128,9 @@ def undo_last_created_action(audit):
     if not snap:raise ValueError("This older action cannot be safely undone.")
     audit.clear();audit.update(snap);audit["undoStack"]=stack;return _recount(audit)
 def save_repaired(audit,dst):
+    """Export only the declared schema. Unresolved overflow is retained in the audit UI, never appended as new CSV columns."""
     with open(dst,"w",newline="",encoding="utf-8-sig") as f:
         w=csv.writer(f,delimiter=audit["delimiter"])
-        for idx,rec in enumerate(audit["logical"]):
-            vals=list(rec["values"])
-            if idx==0:w.writerow(vals[:audit["expected"]]);continue
-            extras=[]
-            issue=next((x for x in audit["issues"] if x.get("recordIndex")==idx and x.get("kind")=="EXTRA_FIELDS"),None)
-            if issue:extras=[c["detected"] for c in issue["columns"] if c["field"].startswith("PRESERVED EXTRA") and c.get("state")=="UNRESOLVED"]
-            w.writerow(vals[:audit["expected"]]+extras)
+        for rec in audit["logical"]:
+            w.writerow(list(rec["values"])[:audit["expected"]])
     return True
