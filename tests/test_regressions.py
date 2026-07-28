@@ -27,9 +27,9 @@ class RegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'x.csv';p.write_text('SID,Store Name,ZIP\n1,,411004,City Bazaar\n',encoding='utf-8');audit=inspect_csv(p);self.assertEqual(len(audit['issues']),1);apply_mapping(audit,0,3,'Store Name');self.assertEqual(audit['logical'][1]['values'][1],'City Bazaar');undo_last_created_action(audit);self.assertEqual(audit['logical'][1]['values'][1],'')
 
-    def test_keep_unresolved_is_exportable_and_preserved(self):
+    def test_keep_unresolved_is_exportable_without_overflow_columns(self):
         with tempfile.TemporaryDirectory() as d:
-            p=Path(d)/'x.csv';out=Path(d)/'out.csv';p.write_text('SID,Store Name\n1,A,EXTRA\n',encoding='utf-8');audit=inspect_csv(p);keep_issue_as_is(audit,0);self.assertEqual(unresolved_extras(audit),[]);save_repaired(audit,out);self.assertIn('EXTRA',out.read_text(encoding='utf-8-sig'))
+            p=Path(d)/'x.csv';out=Path(d)/'out.csv';p.write_text('SID,Store Name\n1,A,EXTRA\n',encoding='utf-8');audit=inspect_csv(p);keep_issue_as_is(audit,0);self.assertEqual(unresolved_extras(audit),[]);save_repaired(audit,out);rows=list(csv.reader(out.read_text(encoding='utf-8-sig').splitlines()));self.assertTrue(all(len(r)==2 for r in rows));self.assertNotIn('EXTRA',out.read_text(encoding='utf-8-sig'))
 
     def test_column_mapping_prefers_exact_names(self):
         mapping=map_columns(['Store Name','Store ID','Postal Code','Random'])
