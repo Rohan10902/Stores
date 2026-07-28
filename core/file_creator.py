@@ -59,7 +59,9 @@ def review_dataframe(df):
         for f in STORE_FIELDS:
             if f not in df.columns:continue
             v=norm_value(r.get(f,""))
-            if f in ("Active / Inactive","Is Census","Is Exceptions") and not binary_ok(v):item["issues"].append(f"{f}: invalid boolean value '{v}'")
+            if f=="Active / Inactive":
+                if v and v.lower() not in ("active","inactive") and not binary_ok(v):item["issues"].append(f"{f}: invalid value '{v}'")
+            elif f in ("Is Census","Is Exceptions") and not binary_ok(v):item["issues"].append(f"{f}: invalid boolean value '{v}'")
             elif f in ("Trip Received","Last Trip") and not date_ok(v):item["issues"].append(f"{f}: invalid date '{v}'")
         if "Nielsen Store Code" in df.columns:
             code=norm_value(r.get("Nielsen Store Code",""))
@@ -75,7 +77,10 @@ def creator_validate(rows):
         for f in ("SID","Store Name"):
             v=norm_value(row.get(f,""))
             if not v:findings.append({"row":i+1,"field":f,"value":v,"message":"Required value"})
-        for f in ("Active / Inactive","Is Census","Is Exceptions"):
+        active=norm_value(row.get("Active / Inactive",""))
+        if active and active.lower() not in ("active","inactive") and not binary_ok(active):
+            findings.append({"row":i+1,"field":"Active / Inactive","value":active,"message":"Expected Active/Inactive or 1/0, true/false, yes/no"})
+        for f in ("Is Census","Is Exceptions"):
             v=norm_value(row.get(f,""))
             if not binary_ok(v):findings.append({"row":i+1,"field":f,"value":v,"message":"Expected 1/0, true/false, or yes/no"})
         for f in ("Trip Received","Last Trip"):
