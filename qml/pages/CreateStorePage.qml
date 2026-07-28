@@ -172,10 +172,7 @@ Item {
         id: saveDlg
         fileMode: FileDialog.SaveFile
         nameFilters: ["CSV (*.csv)"]
-        onAccepted: {
-            backend.exportCreator(rowsJson(), selectedFile.toString())
-            dirty = false
-        }
+        onAccepted: backend.exportCreator(rowsJson(), selectedFile.toString())
     }
 
     Connections {
@@ -188,6 +185,10 @@ Item {
                 var x = d.findings[i]
                 validation.append({row: String(x.row), field: String(x.field), message: String(x.message)})
             }
+        }
+        function onCreatorExported(path) {
+            dirty = false
+            backend.say("Store CSV exported successfully: " + path)
         }
     }
 
@@ -241,27 +242,11 @@ Item {
                 AppButton { text: "Clear"; onClicked: clearAll() }
                 Item { Layout.fillWidth: true }
                 Column {
-                    Text {
-                        text: populatedCount() + " entered  •  " + includedCount() + " included"
-                        color: "#f8fafc"
-                        font.bold: true
-                    }
-                    Text {
-                        text: grid.count + " rows available — expands automatically"
-                        color: "#94a3b8"
-                        font.pixelSize: 9
-                    }
+                    Text { text: populatedCount() + " entered  •  " + includedCount() + " included"; color: "#f8fafc"; font.bold: true }
+                    Text { text: grid.count + " rows available — expands automatically"; color: "#94a3b8"; font.pixelSize: 9 }
                 }
-                AppButton {
-                    text: "Validate"
-                    enabled: includedCount() > 0
-                    onClicked: backend.validateCreator(rowsJson())
-                }
-                PrimaryButton {
-                    text: "Export CSV"
-                    enabled: includedCount() > 0
-                    onClicked: saveDlg.open()
-                }
+                AppButton { text: "Validate"; enabled: includedCount() > 0; onClicked: backend.validateCreator(rowsJson()) }
+                PrimaryButton { text: "Export CSV"; enabled: includedCount() > 0; onClicked: saveDlg.open() }
             }
         }
 
@@ -300,12 +285,7 @@ Item {
                         height: 40
                         color: "#10233d"
                         border.color: "#3b5575"
-                        Text {
-                            anchors.centerIn: parent
-                            text: "USE / ROW"
-                            color: "#bfdbfe"
-                            font.bold: true
-                        }
+                        Text { anchors.centerIn: parent; text: "USE / ROW"; color: "#bfdbfe"; font.bold: true }
                     }
                     Repeater {
                         model: headers
@@ -315,15 +295,7 @@ Item {
                             height: 40
                             color: "#10233d"
                             border.color: "#3b5575"
-                            Text {
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                text: modelData
-                                color: "#bfdbfe"
-                                font.bold: true
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
+                            Text { anchors.fill: parent; anchors.margins: 6; text: modelData; color: "#bfdbfe"; font.bold: true; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                         }
                     }
                 }
@@ -337,7 +309,6 @@ Item {
                             required property int index
                             property int rr: index
                             height: 38
-
                             Rectangle {
                                 width: 84
                                 height: 38
@@ -348,21 +319,13 @@ Item {
                                     spacing: 0
                                     CheckBox {
                                         checked: grid.get(dataRow.rr).included
-                                        onToggled: {
-                                            grid.setProperty(dataRow.rr, "included", checked)
-                                            dirty = true
-                                        }
+                                        onToggled: { grid.setProperty(dataRow.rr, "included", checked); dirty = true }
                                         ToolTip.visible: hovered
                                         ToolTip.text: checked ? "Included in validation and export" : "Excluded from validation and export"
                                     }
-                                    Text {
-                                        text: String(dataRow.rr + 1)
-                                        color: "#94a3b8"
-                                        Layout.fillWidth: true
-                                    }
+                                    Text { text: String(dataRow.rr + 1); color: "#94a3b8"; Layout.fillWidth: true }
                                 }
                             }
-
                             Repeater {
                                 model: headers.length
                                 delegate: TextField {
@@ -373,22 +336,10 @@ Item {
                                     padding: 6
                                     text: grid.get(dataRow.rr)["c" + cc] || ""
                                     selectByMouse: true
-                                    background: Rectangle {
-                                        color: page.cellBackground(dataRow.rr, cc)
-                                        border.width: page.cellBorderWidth(dataRow.rr, cc)
-                                        border.color: page.cellBorder(dataRow.rr, cc)
-                                    }
+                                    background: Rectangle { color: page.cellBackground(dataRow.rr, cc); border.width: page.cellBorderWidth(dataRow.rr, cc); border.color: page.cellBorder(dataRow.rr, cc) }
                                     color: page.cellTextColor(dataRow.rr)
-                                    onActiveFocusChanged: {
-                                        if (activeFocus) {
-                                            selectedRow = dataRow.rr
-                                            selectedCol = cc
-                                        }
-                                    }
-                                    onEditingFinished: {
-                                        grid.setProperty(dataRow.rr, "c" + cc, text)
-                                        dirty = true
-                                    }
+                                    onActiveFocusChanged: { if (activeFocus) { selectedRow = dataRow.rr; selectedCol = cc } }
+                                    onEditingFinished: { grid.setProperty(dataRow.rr, "c" + cc, text); dirty = true }
                                 }
                             }
                         }
