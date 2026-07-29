@@ -656,6 +656,7 @@ Item {
                         model: headers
                         delegate: Rectangle {
                             required property string modelData
+                            required property int index
                             width: 155
                             height: 40
                             color: page.colSelected(index) ? "#17375f" : "#10233d"
