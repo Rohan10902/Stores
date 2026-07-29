@@ -443,7 +443,6 @@ Item {
     FileDialog {
         id: importDlg
         fileMode: FileDialog.OpenFile
-        selectMultiple: false
         nameFilters: ["All files (*)","CSV (*.csv)","TSV (*.tsv)","Excel (*.xlsx *.xls *.xlsm)","JSON (*.json)","XML (*.xml)"]
         onAccepted: {
             var path = selectedFile ? selectedFile.toString() : (selectedFiles && selectedFiles.length ? selectedFiles[0].toString() : "")
@@ -679,7 +678,7 @@ Item {
                 AppButton { text: "Clear"; onClicked: clearAll() }
                 AppButton { text: "Select Rows"; checkable: true; checked: selectingRows; onClicked: selectingRows = checked }
                 AppButton { text: "Select Columns"; checkable: true; checked: selectingCols; onClicked: selectingCols = checked }
-                AppButton { text: "Move Col ◀"; enabled: headers.length > 1; onClicked: { if (selectedCol > 0) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.splice(selectedCol-1,0,hv); backend.say('Moving column'); /* trigger reorder via Connections logic by emitting a synthetic payload? We'll do client-side */ setHeaders(nh) } } }
+                AppButton { text: "Move Col ◀"; enabled: headers.length > 1; onClicked: { if (selectedCol > 0) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.splice(selectedCol-1,0,hv); setHeaders(nh) } } }
                 AppButton { text: "Move Col ▶"; enabled: headers.length > 1; onClicked: { if (selectedCol < headers.length-1) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.splice(selectedCol+1,0,hv); setHeaders(nh) } } }
                 AppButton { text: "First"; enabled: headers.length > 1; onClicked: { if (selectedCol > 0) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.splice(0,0,hv); setHeaders(nh) } } }
                 AppButton { text: "Last"; enabled: headers.length > 1; onClicked: { if (selectedCol < headers.length-1) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.push(hv); setHeaders(nh) } } }
