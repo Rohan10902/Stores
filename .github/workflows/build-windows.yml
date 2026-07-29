@@ -18,34 +18,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Install
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
-      # One-time migration for the existing production source. Once the
-      # committed QML contains the required Repeater index property this is a
-      # no-op. The resulting source change is committed to main so CI never
-      # relies on an in-run mutation as the final fix.
       - name: Apply permanent QML runtime fix if needed
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $path = "qml/pages/CreateStorePage.qml"
           $text = Get-Content -Raw -Encoding UTF8 $path
-          $old = 'required property string modelData`r`n                            width: 155'
-          $new = 'required property string modelData`r`n                            required property int index`r`n                            width: 155'
-          if ($text.Contains($old)) {
-            $text = $text.Replace($old, $new)
+          $pattern = 'required property string modelData\s*\r?\n\s*width: 155'
+          if ($text -match $pattern -and $text -notmatch 'required property int index\s*\r?\n\s*width: 155') {
+            $replacement = "required property string modelData`r`n                            required property int index`r`n                            width: 155"
+            $text = [regex]::Replace($text, $pattern, $replacement, 1)
             [IO.File]::WriteAllText((Resolve-Path $path), $text, (New-Object Text.UTF8Encoding($false)))
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -53,7 +45,6 @@ jobs:
             git commit -m "Fix Store Builder header delegate index"
             git push origin HEAD:main
           }
-
       - name: Verify entire Python source
         shell: pwsh
         run: |
@@ -62,7 +53,6 @@ jobs:
           if (!(Test-Path "tests")) { throw "Production CI requires the committed tests directory." }
           python -m unittest discover -s tests -p "test_*.py" -v
           if ($LASTEXITCODE -ne 0) { throw "Regression tests failed: $LASTEXITCODE" }
-
       - name: Verify every QML file parses
         shell: pwsh
         env:
@@ -87,7 +77,6 @@ jobs:
               else: print(f"QML_OK {p}")
           if failed: raise SystemExit("QML parse failures: "+", ".join(failed))
           '@ | python -
-
       - name: Verify StoreLens UI startup
         shell: pwsh
         env:
@@ -98,17 +87,12 @@ jobs:
           python app.py 2>&1 | Tee-Object -FilePath source-startup.log
           $exitCode = $LASTEXITCODE
           $log = Get-Content -Raw source-startup.log
-          if ($log -match '(?im)(ReferenceError|TypeError|SyntaxError|QQmlApplicationEngine.*failed|QML.*Error)') {
-            Get-Content source-startup.log
-            throw "Source startup emitted a QML/runtime error."
-          }
+          if ($log -match '(?im)(ReferenceError|TypeError|SyntaxError|QQmlApplicationEngine.*failed|QML.*Error)') { Get-Content source-startup.log; throw "Source startup emitted a QML/runtime error." }
           if ($exitCode -ne 0) { Get-Content source-startup.log; throw "Source startup failed: $exitCode" }
           if ($log -notmatch 'STORELENS_STARTUP_OK') { Get-Content source-startup.log; throw "STORELENS_STARTUP_OK marker was not emitted." }
-
       - name: Build StoreLens.exe
         shell: pwsh
         run: pyinstaller --noconfirm --clean --onefile --windowed --name StoreLens --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
-
       - name: Verify packaged StoreLens.exe
         shell: pwsh
         env:
@@ -127,13 +111,11 @@ jobs:
           if($log -match '(?im)(ReferenceError|TypeError|SyntaxError|QQmlApplicationEngine.*failed|QML.*Error)'){throw "Packaged startup emitted a QML/runtime error."}
           if($p.ExitCode -ne 0){throw "Packaged startup failed: $($p.ExitCode)"}
           if($log -notmatch 'STORELENS_STARTUP_OK'){throw "Packaged startup marker was not emitted."}
-
       - name: Create checksum
         shell: pwsh
         run: |
           $hash=(Get-FileHash "dist/StoreLens.exe" -Algorithm SHA256).Hash.ToLower()
           "$hash  StoreLens.exe" | Set-Content -Encoding ascii "dist/StoreLens.sha256"
-
       - name: Publish testing build
         uses: actions/upload-artifact@v4
         with:
