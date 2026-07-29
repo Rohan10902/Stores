@@ -457,27 +457,70 @@ Item {
                 Layout.fillWidth: true
                 Text { text: "Value:"; color: "#f8fafc" }
                 TextField { id: bulkValue; Layout.fillWidth: true; placeholderText: "Value to apply" }
-                Button { text: "Set Value"; onClicked: { applyBulkValue(bulkValue.text); bulkDialog.close() } }
+                Button {
+                    text: "Set Value"
+                    onClicked: {
+                        applyBulkValue(bulkValue.text)
+                        bulkDialog.close()
+                    }
+                }
             }
 
             RowLayout {
                 Layout.fillWidth: true
                 Text { text: "Zero-pad width:"; color: "#f8fafc" }
                 SpinBox { id: padWidth; from: 1; to: 100; value: 8 }
-                Button { text: "Pad SID / Nielsen"; onClicked: { padZeros(padWidth.value); bulkDialog.close() } }
+                Button {
+                    text: "Pad SID / Nielsen"
+                    onClicked: {
+                        padZeros(padWidth.value)
+                        bulkDialog.close()
+                    }
+                }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Button { text: "Fill Down"; onClicked: { fillDown(); bulkDialog.close() } }
-                Button { text: "Trim Whitespace"; onClicked: { trimValues(); bulkDialog.close() } }
-                Button { text: "Normalize 0/1"; onClicked: { normalizeBooleans(); bulkDialog.close() } }
+                Button {
+                    text: "Fill Down"
+                    onClicked: {
+                        fillDown()
+                        bulkDialog.close()
+                    }
+                }
+                Button {
+                    text: "Trim Whitespace"
+                    onClicked: {
+                        trimValues()
+                        bulkDialog.close()
+                    }
+                }
+                Button {
+                    text: "Normalize 0/1"
+                    onClicked: {
+                        normalizeBooleans()
+                        bulkDialog.close()
+                    }
+                }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Button { text: "Clear Values"; onClicked: { clearSelectedValues(); bulkDialog.close() } }
-                Button { text: "Undo Last Bulk Action"; enabled: undoStack.length > 0; onClicked: { undoBulk(); bulkDialog.close() } }
+                Button {
+                    text: "Clear Values"
+                    onClicked: {
+                        clearSelectedValues()
+                        bulkDialog.close()
+                    }
+                }
+                Button {
+                    text: "Undo Last Bulk Action"
+                    enabled: undoStack.length > 0
+                    onClicked: {
+                        undoBulk()
+                        bulkDialog.close()
+                    }
+                }
             }
 
             Text {
