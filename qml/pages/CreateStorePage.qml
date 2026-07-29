@@ -57,6 +57,7 @@ Item {
         for (var r = 0; r < grid.count; ++r) {
             if (grid.get(r).included && rowHasData(r))
                 ++n
+
         }
         return n
     }
@@ -66,6 +67,7 @@ Item {
         for (var r = 0; r < grid.count; ++r) {
             if (rowHasData(r))
                 ++n
+
         }
         return n
     }
@@ -75,6 +77,7 @@ Item {
         for (var r = 0; r < grid.count; ++r) {
             if (grid.get(r).included)
                 ++n
+
         }
         return n
     }
@@ -437,6 +440,19 @@ Item {
         onAccepted: backend.exportCreator(rowsJson(), selectedFile.toString())
     }
 
+    FileDialog {
+        id: importDlg
+        fileMode: FileDialog.OpenFile
+        selectMultiple: false
+        nameFilters: ["All files (*)","CSV (*.csv)","TSV (*.tsv)","Excel (*.xlsx *.xls *.xlsm)","JSON (*.json)","XML (*.xml)"]
+        onAccepted: {
+            var path = selectedFile ? selectedFile.toString() : (selectedFiles && selectedFiles.length ? selectedFiles[0].toString() : "")
+            if (path) {
+                backend.loadCreatorFile(path)
+            }
+        }
+    }
+
     Dialog {
         id: bulkDialog
         modal: true
@@ -551,6 +567,67 @@ Item {
             dirty = false
             backend.say("Store CSV exported successfully: " + path)
         }
+        function onCreatorLoaded(payload) {
+            try {
+                var obj = JSON.parse(payload)
+                if (obj.headers && obj.headers.length) {
+                    // snapshot current selected header name
+                    var prevSelectedHeader = headers[selectedCol] || null
+                    var oldHeaders = headers.slice()
+                    // build maps of existing rows so we can preserve values
+                    var existing = []
+                    for (var rr = 0; rr < grid.count; ++rr) {
+                        var it = grid.get(rr)
+                        var m = {}
+                        for (var hh = 0; hh < oldHeaders.length; ++hh)
+                            m[oldHeaders[hh]] = it['c' + hh] || ""
+                        existing.push({ included: !!it.included, map: m })
+                    }
+
+                    // set new headers
+                    headers = obj.headers.slice()
+
+                    // repopulate grid using existing maps where header names match
+                    grid.clear()
+                    for (var i = 0; i < existing.length; ++i) {
+                        var e = existing[i]
+                        var rowobj = { included: e.included }
+                        for (var j = 0; j < headers.length; ++j)
+                            rowobj['c' + j] = e.map[headers[j]] !== undefined ? e.map[headers[j]] : ""
+                        grid.append(rowobj)
+                    }
+
+                    // if file provided rows, overwrite with those rows
+                    if (obj.rows && obj.rows.length) {
+                        grid.clear()
+                        for (var ri = 0; ri < obj.rows.length; ++ri) {
+                            var rsrc = obj.rows[ri]
+                            var newrow = { included: true }
+                            for (var ci = 0; ci < headers.length; ++ci)
+                                newrow['c' + ci] = rsrc[headers[ci]] !== undefined ? String(rsrc[headers[ci]]) : ""
+                            grid.append(newrow)
+                        }
+                    }
+
+                    // ensure minimum blank rows
+                    for (var k = Math.max(0, 10 - grid.count); k > 0; --k)
+                        addBlank(false)
+
+                    // restore selectedCol near previous header name if possible
+                    if (prevSelectedHeader) {
+                        var idx = headers.indexOf(prevSelectedHeader)
+                        selectedCol = idx >= 0 ? idx : 0
+                    }
+
+                    dirty = true
+                    backend.say("Imported " + (obj.rows ? obj.rows.length : 0) + " rows and " + headers.length + " columns.")
+                } else {
+                    backend.say("Imported file had no headers.")
+                }
+            } catch (e) {
+                backend.say("Failed to parse imported payload: " + e)
+            }
+        }
     }
 
     ColumnLayout {
@@ -594,6 +671,7 @@ Item {
                     ToolTip.visible: hovered
                     ToolTip.text: "Paste rows from Excel, Google Sheets, CSV or TSV"
                 }
+                AppButton { text: "Import File"; onClicked: importDlg.open(); ToolTip.text: "Open a file and load into the grid" }
                 AppButton { text: "+ Add Row"; onClicked: addBlank(true) }
                 AppButton { text: "Select All"; onClicked: setAllIncluded(true) }
                 AppButton { text: "Deselect All"; onClicked: setAllIncluded(false) }
@@ -601,7 +679,11 @@ Item {
                 AppButton { text: "Clear"; onClicked: clearAll() }
                 AppButton { text: "Select Rows"; checkable: true; checked: selectingRows; onClicked: selectingRows = checked }
                 AppButton { text: "Select Columns"; checkable: true; checked: selectingCols; onClicked: selectingCols = checked }
-                AppButton { text: "Bulk Actions"; enabled: selectedRowIndices().length > 0 || selectedColIndices().length > 0; onClicked: bulkDialog.open() }
+                AppButton { text: "Move Col ◀"; enabled: headers.length > 1; onClicked: { if (selectedCol > 0) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.splice(selectedCol-1,0,hv); backend.say('Moving column'); /* trigger reorder via Connections logic by emitting a synthetic payload? We'll do client-side */ setHeaders(nh) } } }
+                AppButton { text: "Move Col ▶"; enabled: headers.length > 1; onClicked: { if (selectedCol < headers.length-1) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.splice(selectedCol+1,0,hv); setHeaders(nh) } } }
+                AppButton { text: "First"; enabled: headers.length > 1; onClicked: { if (selectedCol > 0) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.splice(0,0,hv); setHeaders(nh) } } }
+                AppButton { text: "Last"; enabled: headers.length > 1; onClicked: { if (selectedCol < headers.length-1) { var nh = headers.slice(); var hv = nh.splice(selectedCol,1)[0]; nh.push(hv); setHeaders(nh) } } }
+                AppButton { text: "Bulk Actions"; enabled: effectiveRows().length > 0; onClicked: bulkDialog.open() }
                 Item { Layout.fillWidth: true }
                 Column {
                     Text { text: populatedCount() + " entered  •  " + includedCount() + " included"; color: "#f8fafc"; font.bold: true }
@@ -797,4 +879,44 @@ Item {
             }
         }
     }
+
+    // Helper: setHeaders(newHeaders) will preserve existing row values by header name where possible
+    function setHeaders(newHeaders) {
+        var oldHeaders = headers.slice()
+        var existing = []
+        for (var rr = 0; rr < grid.count; ++rr) {
+            var it = grid.get(rr)
+            var map = {}
+            for (var hh = 0; hh < oldHeaders.length; ++hh)
+                map[oldHeaders[hh]] = it['c' + hh] || ""
+            existing.push({ included: !!it.included, map: map })
+        }
+        headers = newHeaders.slice()
+        grid.clear()
+        for (var i = 0; i < existing.length; ++i) {
+            var e = existing[i]
+            var rowobj = { included: e.included }
+            for (var j = 0; j < headers.length; ++j)
+                rowobj['c' + j] = e.map[headers[j]] !== undefined ? e.map[headers[j]] : ""
+            grid.append(rowobj)
+        }
+        for (var k = Math.max(0, 10 - grid.count); k > 0; --k)
+            addBlank(false)
+        dirty = true
+    }
+
+    function loadRows(rowsArray) {
+        grid.clear()
+        for (var ri = 0; ri < rowsArray.length; ++ri) {
+            var rsrc = rowsArray[ri]
+            var newrow = { included: true }
+            for (var ci = 0; ci < headers.length; ++ci)
+                newrow['c' + ci] = rsrc[headers[ci]] !== undefined ? String(rsrc[headers[ci]]) : ""
+            grid.append(newrow)
+        }
+        for (var k2 = Math.max(0, 10 - grid.count); k2 > 0; --k2)
+            addBlank(false)
+        dirty = true
+    }
+
 }
