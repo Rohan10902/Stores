@@ -1,68 +1,68 @@
-// FIX: Limit paste to prevent massive DOM lockup
-    function pasteText(t) {
-        if (!t)
-            return
-        var lines = String(t).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
-        
-        if (lines.length > 5000) {
-            backend.say("Paste limit exceeded (5000 rows max). Please import large files directly.")
-            return
-        }
-        
-        if (lines.length && lines[lines.length - 1] === "")
-            lines.pop()
-        if (!lines.length)
-            return
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "../components"
 
-        var start = selectedRow
-        for (var r = 0; r < lines.length; ++r) {
-            var vals = lines[r].indexOf("\t") >= 0 ? lines[r].split("\t") : lines[r].split(",")
-            var targetRow = start + r
-            while (grid.count <= targetRow)
-                addBlank(false)
-            grid.setProperty(targetRow, "included", true)
-            for (var c = 0; c < vals.length && selectedCol + c < headers.length; ++c)
-                grid.setProperty(targetRow, "c" + (selectedCol + c), vals[c])
-        }
-        dirty = true
-        backend.say("Pasted " + lines.length + " row(s). Extra rows were created automatically.")
-    }
+Item {
+    signal navigate(int p)
 
-    // FIX: Hard cap the padding width to prevent memory exhaustion
-    function padZeros(width) {
-        var w = parseInt(width)
-        if (!w || w < 1 || w > 100) {
-            backend.say("Padding width must be between 1 and 100.")
-            return
-        }
-        var cs = selectedColIndices()
-        if (!cs.length)
-            cs = [selectedCol]
-        var changes = []
-        var rs = effectiveRows()
-        for (var i = 0; i < rs.length; ++i) {
-            for (var j = 0; j < cs.length; ++j) {
-                var c = cs[j]
-                if (c !== 1 && c !== 3) {
-                    backend.say("Zero padding is only available for SID and Nielsen Store Code.")
-                    return
-                }
-                var before = String(grid.get(rs[i])["c" + c] || "").trim()
-                if (!before || !/^\d+$/.test(before))
-                    continue
-                var after = before.length >= w ? before : before.padStart(w, "0")
-                if (after !== before) {
-                    changes.push({ row: rs[i], col: c, before: before })
-                    grid.setProperty(rs[i], "c" + c, after)
+    ScrollView {
+        anchors.fill: parent
+        contentWidth: availableWidth
+
+        ColumnLayout {
+            width: parent.width
+            spacing: 14
+
+            Item { implicitHeight: 18 }
+
+            PageTitle { 
+                text: "StoreLens Workspace"
+                Layout.leftMargin: 25 
+            }
+
+            Text {
+                text: "StoreLens 7.2.1 workspace with comparison, standalone review, CSV repair, fixed-schema file creation, statistics and local analysis."
+                color: "#94a3b8"
+                Layout.leftMargin: 25
+                Layout.rightMargin: 25
+                wrapMode: Text.WordWrap
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 25
+                Layout.rightMargin: 25
+                columns: 2
+                columnSpacing: 12
+                rowSpacing: 12
+
+                Repeater {
+                    model: [
+                        ["Compare & Validate", "Master vs Uploaded key-based comparison.", 1],
+                        ["Review One File", "Analyze one dataset without a Master and review Nielsen code formatting.", 2],
+                        ["Repair CSV / Text", "Inspect broken records and save a reviewed copy.", 3],
+                        ["Create Store File", "Paste tabular values into the fixed Store schema and export CSV.", 4],
+                        ["Data Health & Statistics", "Quality score and on-demand statistics.", 5],
+                        ["Explore & Analyze", "Search and read-only SQL with table output.", 6]
+                    ]
+                    delegate: Card {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        implicitHeight: 140
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 15
+
+                            Text { text: modelData[0]; color: "#f8fafc"; font.pixelSize: 16; font.bold: true }
+                            Text { text: modelData[1]; color: "#94a3b8"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            Item { Layout.fillHeight: true }
+                            PrimaryButton { text: "Open"; onClicked: navigate(modelData[2]) }
+                        }
+                    }
                 }
             }
         }
-        if (changes.length) {
-            pushUndo(changes, "Zero padding to width " + w)
-            dirty = true
-            lastBulkSummary = "Padded " + changes.length + " identifier(s) to width " + w + "."
-            backend.say(lastBulkSummary)
-        } else {
-            backend.say("No numeric identifiers needed padding.")
-        }
     }
+}
