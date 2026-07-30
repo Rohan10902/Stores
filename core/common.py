@@ -5,27 +5,30 @@ from difflib import SequenceMatcher
 
 STORE_FIELDS = ["Store Name","SID","Banner","Nielsen Store Code","Trip Received","Last Trip","Address 1","Address 2","Address 3","ZIP","Active / Inactive","Is Census","Is Exceptions","Updated By"]
 ALIASES = {
-"Store Name":["store name","outlet name","shop name","location name"],
-"SID":["sid","store id","store identifier","location id"],
-"Banner":["banner","retail banner","brand","chain"],
-"Nielsen Store Code":["nielsen store code","nielsen code","nielsen id","nielsen store"],
-"Trip Received":["trip received","trip received date","received date"],
-"Last Trip":["last trip","last trip date","previous trip date"],
-"Address 1":["address 1","address1","street address","address line 1"],
-"Address 2":["address 2","address2","address line 2"],
-"Address 3":["address 3","address3","address line 3"],
-"ZIP":["zip","zip code","postal code","postcode","pin","pincode"],
-"Active / Inactive":["active inactive","active / inactive","active flag","store active"],
-"Is Census":["is census","census","census flag"],
-"Is Exceptions":["is exceptions","is exception","exceptions","exception flag"],
-"Updated By":["updated by","last updated","last updated timestamp","updated timestamp","modified timestamp"]
+    "Store Name":["store name","outlet name","shop name","location name"],
+    "SID":["sid","store id","store identifier","location id"],
+    "Banner":["banner","retail banner","brand","chain"],
+    "Nielsen Store Code":["nielsen store code","nielsen code","nielsen id","nielsen store"],
+    "Trip Received":["trip received","trip received date","received date"],
+    "Last Trip":["last trip","last trip date","previous trip date"],
+    "Address 1":["address 1","address1","street address","address line 1"],
+    "Address 2":["address 2","address2","address line 2"],
+    "Address 3":["address 3","address3","address line 3"],
+    "ZIP":["zip","zip code","postal code","postcode","pin","pincode"],
+    "Active / Inactive":["active inactive","active / inactive","active flag","store active"],
+    "Is Census":["is census","census","census flag"],
+    "Is Exceptions":["is exceptions","is exception","exceptions","exception flag"],
+    "Updated By":["updated by","last updated","last updated timestamp","updated timestamp","modified timestamp"]
 }
 
-def norm_name(x): return re.sub(r"[^a-z0-9]+", " ", str(x or "").lower()).strip()
+def norm_name(x): 
+    return re.sub(r"[^a-z0-9]+", " ", str(x or "").lower()).strip()
+
 def norm_value(x):
     if pd.isna(x): return ""
     if isinstance(x,float) and x.is_integer(): return str(int(x))
     return str(x).strip()
+
 def json_value(x):
     if pd.isna(x): return ""
     if isinstance(x,pd.Timestamp): return x.isoformat(sep=" ")
@@ -41,21 +44,39 @@ def _unique_headers(header):
     return out
 
 def _read_delimited_ragged(p, ext):
-    text=Path(p).read_text(encoding="utf-8-sig",errors="replace")
-    if not text:return pd.DataFrame()
-    if ext==".tsv":delim="\t"
-    else:
-        try:delim=csv.Sniffer().sniff(text[:8192],delimiters=",;\t|").delimiter
-        except csv.Error:
-            first=text.splitlines()[0] if text.splitlines() else ""
-            delim="," if "," in first else "\t" if "\t" in first else ","
-    rows=list(csv.reader(io.StringIO(text,newline=""),delimiter=delim))
-    if not rows:return pd.DataFrame()
-    header=_unique_headers(rows[0]);data=rows[1:]
-    width=max([len(header)]+[len(r) for r in data])
-    columns=header+[f"EXTRA {i+1}" for i in range(width-len(header))]
-    padded=[r+[""]*(width-len(r)) for r in data]
-    return pd.DataFrame(padded,columns=columns,dtype=object)
+    # FIX: Use iterative file reading instead of loading the entire file into RAM at once
+    with open(p, "r", encoding="utf-8-sig", errors="replace") as f:
+        chunk = f.read(8192)
+        f.seek(0)
+        if not chunk: return pd.DataFrame()
+        
+        if ext==".tsv":
+            delim="\t"
+        else:
+            try:delim=csv.Sniffer().sniff(chunk,delimiters=",;\t|").delimiter
+            except csv.Error:
+                first=chunk.splitlines()[0] if chunk.splitlines() else ""
+                delim="," if "," in first else "\t" if "\t" in first else ","
+                
+        reader=csv.reader(f,delimiter=delim)
+        try:
+            first_row = next(reader)
+        except StopIteration:
+            return pd.DataFrame()
+            
+        header=_unique_headers(first_row)
+        data = []
+        max_width = len(header)
+        
+        for row in reader:
+            data.append(row)
+            if len(row) > max_width:
+                max_width = len(row)
+                
+        width=max_width
+        columns=header+[f"EXTRA {i+1}" for i in range(width-len(header))]
+        padded=[r+[""]*(width-len(r)) for r in data]
+        return pd.DataFrame(padded,columns=columns,dtype=object)
 
 def _json_records(obj):
     if isinstance(obj,list):return obj
