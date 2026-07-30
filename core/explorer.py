@@ -39,8 +39,8 @@ def run_sql(df,q):
     if _DENY.search(q): raise ValueError("Only read-only SQL is allowed.")
     typed,_=prepare_for_sql(df)
     
-    # FIX: Restrict memory allocation to prevent OOM crash from cartesian joins
-    con=duckdb.connect(database=":memory:", config={'memory_limit': '2GB', 'access_mode': 'READ_ONLY'})
+    # FIX: Kept memory limit to prevent OOM, removed the incompatible READ_ONLY mode
+    con=duckdb.connect(database=":memory:", config={'memory_limit': '2GB'})
     try:
         con.register("data",typed)
         return con.execute(q).fetchdf()
