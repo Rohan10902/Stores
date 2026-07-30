@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 import traceback
 from pathlib import Path
@@ -97,7 +98,6 @@ class Backend(QObject):
         try:
             dst_path = self._local(dst)
             rows = json.loads(rows_json)
-            # Use pandas or standard csv export logic here
             Path(dst_path).write_text(rows_json, encoding="utf-8")
             self.say(f"Exported successfully to {Path(dst_path).name}")
         except Exception as e:
@@ -350,7 +350,6 @@ class Backend(QObject):
             df = read_table(self._local(path))
             res = review_dataframe(df)
             
-            # Send sample preview rows back as part of response
             res["previewRows"] = df.head(100).fillna("").to_dict(orient="records")
             res["previewColumns"] = [str(c) for c in df.columns]
             
@@ -363,11 +362,11 @@ class Backend(QObject):
     def exportSingleReview(self, src, dst):
         try:
             df = read_table(self._local(src))
-            # Just saving a copy as requested by UI
             df.to_csv(self._local(dst), index=False, encoding="utf-8-sig")
             self.say("Reviewed copy exported.")
         except Exception as e:
             self.fail(e)
+
 
 def main():
     app = QGuiApplication(sys.argv)
@@ -380,6 +379,15 @@ def main():
     if not engine.rootObjects():
         print("Failed to load QML root objects")
         return 1
+
+    # --- CI STARTUP PROBE CHECK ---
+    # Intercepts the CI test to emit the marker and exit without hanging
+    if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
+        print("STORELENS_STARTUP_OK")
+        sys.stdout.flush()
+        return 0
+    # ------------------------------
+
     return app.exec()
 
 if __name__ == "__main__":
