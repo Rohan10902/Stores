@@ -5,7 +5,7 @@ import traceback
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property
+from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property, QRunnable, QThreadPool
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -23,6 +23,30 @@ from core.file_creator import review_dataframe, creator_validate
 
 BASE = Path(__file__).resolve().parent
 
+# --- THREADING CLASSES ---
+class WorkerSignals(QObject):
+    """Defines the signals available from a running worker thread."""
+    finished = Signal(object)
+    error = Signal(Exception)
+
+class Worker(QRunnable):
+    """Worker thread to run long-running Python functions without freezing the UI."""
+    def __init__(self, fn, *args, **kwargs):
+        super().__init__()
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+    @Slot()
+    def run(self):
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+            self.signals.finished.emit(result)
+        except Exception as e:
+            self.signals.error.emit(e)
+
+# --- BACKEND CLASS ---
 class Backend(QObject):
     # --- SIGNALS ---
     messageChanged = Signal()
@@ -50,6 +74,7 @@ class Backend(QObject):
     def __init__(self):
         super().__init__()
         self._message = "Ready"
+        self.threadpool = QThreadPool.globalInstance()
         
         # State containers
         self._df = None
@@ -83,6 +108,14 @@ class Backend(QObject):
         if not path: return ""
         return QUrl(path).toLocalFile() if path.startswith("file://") else path
 
+    # --- ASYNC HELPER ---
+    def _run_async(self, func, callback_success, *args):
+        """Helper to run a function in the background and call a success function when done."""
+        worker = Worker(func, *args)
+        worker.signals.finished.connect(callback_success)
+        worker.signals.error.connect(self.fail)
+        self.threadpool.start(worker)
+
     # --- UTILS & CLIPBOARD ---
     @Slot(result=str)
     def clipboardText(self):
@@ -95,69 +128,78 @@ class Backend(QObject):
     # --- STORE BUILDER (CreateStorePage) ---
     @Slot(str, str)
     def exportCreator(self, rows_json, dst):
-        try:
+        self.say("Exporting...")
+        def task():
             dst_path = self._local(dst)
-            rows = json.loads(rows_json)
             Path(dst_path).write_text(rows_json, encoding="utf-8")
-            self.say(f"Exported successfully to {Path(dst_path).name}")
-        except Exception as e:
-            self.fail(e)
+            return Path(dst_path).name
+        self._run_async(task, lambda name: self.say(f"Exported successfully to {name}"))
 
     @Slot(str)
     def validateCreator(self, rows_json):
-        try:
+        self.say("Validating rows...")
+        def task():
             rows = json.loads(rows_json)
             findings = creator_validate(rows)
-            payload = json.dumps({"count": len(findings), "findings": findings})
+            return json.dumps({"count": len(findings), "findings": findings}), len(findings)
+        
+        def on_complete(result):
+            payload, count = result
             self.creatorReady.emit(payload)
-            self.say(f"Validation complete: {len(findings)} findings.")
-        except Exception as e:
-            self.fail(e)
+            self.say(f"Validation complete: {count} findings.")
+            
+        self._run_async(task, on_complete)
 
     @Slot(str)
     def loadCreatorFile(self, path):
-        try:
+        self.say("Importing file...")
+        def task():
             local = self._local(path)
             df = read_table(local)
             headers = [str(c) for c in df.columns]
             rows = [{headers[i]: json_value(v) for i, v in enumerate(row)} 
                     for row in df.itertuples(index=False, name=None)]
             payload = json.dumps({"headers": headers, "rows": rows}, default=str)
+            return payload, len(rows), Path(local).name
+            
+        def on_complete(result):
+            payload, count, name = result
             self.creatorLoaded.emit(payload)
-            self.say(f"Imported {len(rows)} row(s) from {Path(local).name}")
-        except Exception as e:
-            self.fail(e)
+            self.say(f"Imported {count} row(s) from {name}")
+            
+        self._run_async(task, on_complete)
 
     # --- EXPLORE & HEALTH (ExplorePage, HealthPage) ---
     @Slot(str)
     def loadData(self, path):
-        try:
+        self.say("Loading dataset (this may take a moment)...")
+        def task():
             local = self._local(path)
-            self.say("Loading data...")
-            self._df = read_table(local)
-            
-            # Emit Health Profile
-            prof = profile(self._df)
-            self.healthReady.emit(json.dumps(prof))
-            
-            # Emit first 1000 rows for preview
-            df_view = self._df.head(1000).fillna("")
+            df = read_table(local)
+            prof = profile(df)
+            df_view = df.head(1000).fillna("")
             table_data = {
                 "columns": [str(c) for c in df_view.columns],
                 "rows": df_view.values.tolist(),
-                "total": len(self._df),
+                "total": len(df),
                 "displayed": len(df_view),
-                "truncated": len(self._df) > 1000
+                "truncated": len(df) > 1000
             }
-            self.tableReady.emit(json.dumps(table_data))
+            return df, json.dumps(prof), json.dumps(table_data)
+
+        def on_complete(result):
+            self._df, prof_json, table_json = result
+            self.healthReady.emit(prof_json)
+            self.tableReady.emit(table_json)
             self.say(f"Loaded {len(self._df)} rows.")
-        except Exception as e:
-            self.fail(e)
+
+        self._run_async(task, on_complete)
 
     @Slot(str, str)
     def search(self, query, col):
         if self._df is None: return
-        try:
+        self.say("Searching...")
+        def task():
             if not query:
                 res_df = self._df
             else:
@@ -168,52 +210,66 @@ class Backend(QObject):
                     res_df = self._df[mask]
             
             view = res_df.head(1000).fillna("")
-            self.tableReady.emit(json.dumps({
+            return json.dumps({
                 "columns": [str(c) for c in view.columns],
                 "rows": view.values.tolist(),
                 "total": len(res_df),
                 "displayed": len(view)
-            }))
-            self.say(f"Search found {len(res_df)} matches.")
-        except Exception as e:
-            self.fail(e)
+            }), len(res_df)
+
+        def on_complete(result):
+            table_json, count = result
+            self.tableReady.emit(table_json)
+            self.say(f"Search found {count} matches.")
+
+        self._run_async(task, on_complete)
 
     @Slot(str)
     def sql(self, query):
         if self._df is None: return
-        try:
-            self.say("Executing SQL...")
+        self.say("Executing SQL...")
+        def task():
             res_df = run_sql(self._df, query)
             view = res_df.head(1000).fillna("")
-            self.tableReady.emit(json.dumps({
+            return json.dumps({
                 "columns": [str(c) for c in view.columns],
                 "rows": view.values.tolist(),
                 "total": len(res_df),
                 "displayed": len(view)
-            }))
+            })
+            
+        def on_complete(payload):
+            self.tableReady.emit(payload)
             self.say("Query completed.")
-        except Exception as e:
-            self.fail(e)
+            
+        self._run_async(task, on_complete)
 
     @Slot(str, str, str)
     def stats(self, col, op, group):
         if self._df is None: return
-        try:
-            res = statistic(self._df, col, op, group)
-            self.statsReady.emit(json.dumps(res))
+        self.say("Generating statistics...")
+        def task():
+            return json.dumps(statistic(self._df, col, op, group))
+            
+        def on_complete(payload):
+            self.statsReady.emit(payload)
             self.say("Statistics generated.")
-        except Exception as e:
-            self.fail(e)
+            
+        self._run_async(task, on_complete)
 
     # --- RECORD REPAIR (RepairPage) ---
     @Slot(str)
     def inspectRepair(self, path):
-        try:
-            self._audit = inspect_csv(self._local(path))
+        self.say("Inspecting CSV...")
+        def task():
+            return inspect_csv(self._local(path))
+            
+        def on_complete(audit_data):
+            self._audit = audit_data
             self.repairReady.emit(json.dumps(self._audit))
             self.say(f"Inspection complete: {len(self._audit.get('issues', []))} issues found.")
-        except Exception as e:
-            self.fail(e)
+            
+        self._run_async(task, on_complete)
 
     @Slot()
     def undoRepairAction(self):
@@ -279,48 +335,51 @@ class Backend(QObject):
 
     @Slot(str, str)
     def repair(self, src, dst):
-        try:
+        self.say("Saving repaired file...")
+        def task():
             save_repaired(self._audit, self._local(dst))
-            self.say("Repaired CSV saved successfully.")
-        except Exception as e:
-            self.fail(e)
+        self._run_async(task, lambda _: self.say("Repaired CSV saved successfully."))
 
     # --- COMPARE & VALIDATE (ComparePage) ---
     @Slot(str)
     def loadMaster(self, path):
-        try:
-            self._master_df = read_table(self._local(path))
-            self.say(f"Master file loaded ({len(self._master_df)} rows)")
-        except Exception as e:
-            self.fail(e)
+        self.say("Loading Master file...")
+        def task():
+            return read_table(self._local(path))
+        def on_complete(df):
+            self._master_df = df
+            self.say(f"Master file loaded ({len(df)} rows)")
+        self._run_async(task, on_complete)
 
     @Slot(str)
     def loadUpload(self, path):
-        try:
-            self._upload_df = read_table(self._local(path))
-            self.say(f"Upload file loaded ({len(self._upload_df)} rows)")
-        except Exception as e:
-            self.fail(e)
+        self.say("Loading Upload file...")
+        def task():
+            return read_table(self._local(path))
+        def on_complete(df):
+            self._upload_df = df
+            self.say(f"Upload file loaded ({len(df)} rows)")
+        self._run_async(task, on_complete)
 
     @Slot()
     def detect(self):
         if self._master_df is None or self._upload_df is None:
             return self.fail("Both Master and Upload files must be loaded.")
-        try:
-            keys = suggest_keys(self._master_df, self._upload_df)
+        self.say("Auto-detecting matching keys...")
+        def task():
+            return suggest_keys(self._master_df, self._upload_df)
+        def on_complete(keys):
             self.mappingReady.emit(json.dumps({"suggestedKeys": list(keys)}))
             self.say(f"Auto-detected keys: {', '.join(keys)}")
-        except Exception as e:
-            self.fail(e)
+        self._run_async(task, on_complete)
 
     @Slot(str)
     def validate(self, keys_json):
-        try:
+        self.say("Comparing datasets...")
+        def task():
             keys = json.loads(keys_json)
             mm, um, records, k = compare(self._master_df, self._upload_df, keys)
-            self._compare_records = records
             insights = validation_insights(records)
-            
             payload = {
                 "total": len(self._upload_df),
                 "correct": sum(1 for r in records if r["status"] == "CORRECT"),
@@ -330,10 +389,15 @@ class Backend(QObject):
                 "rows": records,
                 "insights": insights.get("groups", [])
             }
-            self.validationReady.emit(json.dumps(payload))
+            return records, json.dumps(payload)
+            
+        def on_complete(result):
+            records, payload = result
+            self._compare_records = records
+            self.validationReady.emit(payload)
             self.say("Validation comparison complete.")
-        except Exception as e:
-            self.fail(e)
+            
+        self._run_async(task, on_complete)
 
     @Slot(int, bool)
     def detail(self, index, diff_only):
@@ -346,26 +410,28 @@ class Backend(QObject):
     # --- SINGLE REVIEW (SingleReviewPage) ---
     @Slot(str)
     def reviewSingleFile(self, path):
-        try:
+        self.say("Analyzing file...")
+        def task():
             df = read_table(self._local(path))
             res = review_dataframe(df)
-            
             res["previewRows"] = df.head(100).fillna("").to_dict(orient="records")
             res["previewColumns"] = [str(c) for c in df.columns]
+            return json.dumps(res), len(df)
             
-            self.singleReviewReady.emit(json.dumps(res))
-            self.say(f"Analyzed {len(df)} records.")
-        except Exception as e:
-            self.fail(e)
+        def on_complete(result):
+            payload, count = result
+            self.singleReviewReady.emit(payload)
+            self.say(f"Analyzed {count} records.")
+            
+        self._run_async(task, on_complete)
 
     @Slot(str, str)
     def exportSingleReview(self, src, dst):
-        try:
+        self.say("Exporting copy...")
+        def task():
             df = read_table(self._local(src))
             df.to_csv(self._local(dst), index=False, encoding="utf-8-sig")
-            self.say("Reviewed copy exported.")
-        except Exception as e:
-            self.fail(e)
+        self._run_async(task, lambda _: self.say("Reviewed copy exported."))
 
 
 def main():
@@ -381,7 +447,6 @@ def main():
         return 1
 
     # --- CI STARTUP PROBE CHECK ---
-    # Intercepts the CI test to emit the marker and exit without hanging
     if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
         print("STORELENS_STARTUP_OK")
         sys.stdout.flush()
