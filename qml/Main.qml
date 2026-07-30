@@ -76,7 +76,7 @@ Window {
 
                         contentItem: Text {
                             text: modelData.name
-                            color: "#f8fafc" // FIX: Explicitly set high-contrast text color
+                            color: "#f8fafc"
                             font.pixelSize: 13
                             font.bold: stackView.currentIndex === modelData.index
                             verticalAlignment: Text.AlignVCenter
@@ -143,7 +143,7 @@ Window {
                     Layout.fillHeight: true
                     currentIndex: 0
 
-                    ComparePage { onNavigate: (p) => stackView.currentIndex = p }
+                    ComparePage { }
                     SingleReviewPage { }
                     RepairPage { }
                     CreateStorePage { }
