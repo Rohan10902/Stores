@@ -5,7 +5,10 @@ import duckdb
 _DENY=re.compile(r"\b(insert|update|delete|drop|alter|create|attach|detach|copy|install|load|pragma|replace|vacuum|call|export|import)\b",re.I)
 _TRUE={"true","yes","y"}; _FALSE={"false","no","n"}
 _IDENTIFIER=re.compile(r"(^|\b)(sid|id|code|zip|postal|postcode|pincode|pin)(\b|$)",re.I)
-def _blank(s): return s.isna() | s.astype(str).str.strip().eq("")
+
+def _blank(s): 
+    return s.isna() | s.astype(str).str.strip().eq("")
+
 def _typed(s,name=""):
     blank=_blank(s);clean=s[~blank]
     if clean.empty:return s.map(lambda _: None),"VARCHAR"
@@ -24,14 +27,22 @@ def _typed(s,name=""):
         d=pd.to_datetime(text,errors="coerce")
         if d.notna().all(): return pd.to_datetime(s.where(~blank,None),errors="coerce"),"TIMESTAMP"
     return s.map(lambda v: None if pd.isna(v) or str(v).strip()=="" else str(v)),"VARCHAR"
+
 def prepare_for_sql(df):
     typed=pd.DataFrame(index=df.index);schema={}
     for c in df.columns:typed[c],schema[str(c)]=_typed(df[c],str(c))
     return typed,schema
+
 def run_sql(df,q):
     q=q.strip()
     if not re.match(r"^(select|with)\b",q,re.I): raise ValueError("Only read-only SELECT/WITH SQL is allowed.")
     if _DENY.search(q): raise ValueError("Only read-only SQL is allowed.")
-    typed,_=prepare_for_sql(df);con=duckdb.connect(database=":memory:")
-    try:con.register("data",typed);return con.execute(q).fetchdf()
-    finally:con.close()
+    typed,_=prepare_for_sql(df)
+    
+    # FIX: Restrict memory allocation to prevent OOM crash from cartesian joins
+    con=duckdb.connect(database=":memory:", config={'memory_limit': '2GB', 'access_mode': 'READ_ONLY'})
+    try:
+        con.register("data",typed)
+        return con.execute(q).fetchdf()
+    finally:
+        con.close()
