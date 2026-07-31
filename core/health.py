@@ -108,8 +108,8 @@ def export_html_report(df, output_path):
     <div class="cards">
         <div class="card"><div class="metric">{prof['health_score']}/100</div><div>Health Score</div></div>
         <div class="card"><div class="metric">{prof['completeness']}%</div><div>Completeness</div></div>
-        <div class="card"><div class="metric">{prof['rows']}</div><div>Total Rows</div></div>
-        <div class="card"><div class="metric">{prof['duplicates']}</div><div>Duplicates</div></div>
+        <div class="card"><div class="metric">{prof['rows']:,}</div><div>Total Rows</div></div>
+        <div class="card"><div class="metric">{prof['duplicates']:,}</div><div>Duplicates</div></div>
     </div>
     <h2>Column Quality Analysis</h2>
     <table>
