@@ -1,7 +1,20 @@
 from collections import Counter, defaultdict
+from difflib import SequenceMatcher
 from .common import STORE_FIELDS, map_columns, norm_value, date_ok, binary_ok
 
-DEFAULT_KEYS = ["SID", "Nielsen Store Code"]
+try:
+    from rapidfuzz import fuzz
+    HAS_RAPIDFUZZ = True
+except ImportError:
+    HAS_RAPIDFUZZ = False
+
+def string_similarity(a, b):
+    sa, sb = str(a or "").strip().lower(), str(b or "").strip().lower()
+    if not sa or not sb:
+        return 100.0 if sa == sb else 0.0
+    if HAS_RAPIDFUZZ:
+        return round(float(fuzz.token_sort_ratio(sa, sb)), 1)
+    return round(SequenceMatcher(None, sa, sb).ratio() * 100.0, 1)
 
 def _get(row, mapping, field):
     c = mapping.get(field, {}).get("column", "")
@@ -17,7 +30,7 @@ def suggest_keys(master, uploaded):
         raise ValueError("SID could not be detected in one or both files.")
     candidates = [["SID"]]
     if "Nielsen Store Code" in available:
-        candidates.append(["SID","Nielsen Store Code"])
+        candidates.append(["SID", "Nielsen Store Code"])
 
     def unique(df, mp, fields):
         keys = [_key(r, mp, fields) for _, r in df.iterrows()]
@@ -32,10 +45,7 @@ def suggest_keys(master, uploaded):
 def compare(master, uploaded, key_fields=None):
     mm, um = map_columns(master.columns), map_columns(uploaded.columns)
     key_fields = key_fields or suggest_keys(master, uploaded)
-    for f in key_fields:
-        if not mm.get(f,{}).get("column") or not um.get(f,{}).get("column"):
-            raise ValueError(f"Matching field '{f}' could not be detected in both files.")
-            
+    
     master_groups = defaultdict(list)
     upload_groups = defaultdict(list)
     for ix, r in master.iterrows():
@@ -49,7 +59,6 @@ def compare(master, uploaded, key_fields=None):
         key_tuple = _key(r, um, key_fields)
         key_str = " | ".join([_get(r, um, k) for k in key_fields if _get(r, um, k)]) or "No Key"
         masters = master_groups.get(key_tuple, [])
-        uploads = upload_groups.get(key_tuple, [])
         sid = _get(r, um, "SID")
         store = _get(r, um, "Store Name")
         problems = []
@@ -64,13 +73,15 @@ def compare(master, uploaded, key_fields=None):
                 a, b = _get(mr, mm, f), _get(r, um, f)
                 master_dict[f] = a
                 upload_dict[f] = b
+                
+                sim = string_similarity(a, b)
                 is_diff = (a.casefold() != b.casefold())
                 diffs_dict[f] = is_diff
-                sev = "REVIEW" if is_diff else "OK"
-                res = "DIFFERENT" if is_diff else "MATCH"
+                
+                res = "MATCH" if not is_diff else f"DIFFERENT ({sim}% match)"
                 if is_diff:
-                    problems.append(f"{f}: mismatch")
-                details.append({"field": f, "master": a, "uploaded": b, "result": res, "severity": sev})
+                    problems.append(f"{f}: mismatch ({sim}% similarity)")
+                details.append({"field": f, "master": a, "uploaded": b, "result": res, "severity": "REVIEW" if is_diff else "OK"})
         else:
             for f in STORE_FIELDS:
                 u_val = _get(r, um, f)
@@ -79,25 +90,14 @@ def compare(master, uploaded, key_fields=None):
                 diffs_dict[f] = True
                 details.append({"field": f, "master": "", "uploaded": u_val, "result": "MISSING MASTER", "severity": "ERROR"})
 
-        if not masters:
-            status = "ERROR"
-            msg = "Matching identity not found in Master file."
-        elif any(d["severity"] == "ERROR" for d in details):
-            status = "ERROR"
-            msg = "; ".join(problems)
-        elif any(d["severity"] == "REVIEW" for d in details):
-            status = "REVIEW"
-            msg = "; ".join(problems)
-        else:
-            status = "CORRECT"
-            msg = "Exact match with Master record."
+        status = "CORRECT" if masters and not problems else ("REVIEW" if masters else "ERROR")
+        msg = "Exact match with Master." if status == "CORRECT" else ("; ".join(problems) if masters else "Store key not found in Master file.")
 
         records.append({
             "row": row_no,
             "key": key_str,
             "status": status,
             "message": msg,
-            "problem": msg,
             "master": master_dict,
             "upload": upload_dict,
             "diffs": diffs_dict,
@@ -107,9 +107,5 @@ def compare(master, uploaded, key_fields=None):
     return mm, um, records, key_fields
 
 def validation_insights(records):
-    groups = Counter()
-    for r in records:
-        if r["status"] in ("ERROR", "REVIEW"):
-            groups[r["status"]] += 1
-    attention = sum(groups.values())
+    attention = sum(1 for r in records if r["status"] in ("ERROR", "REVIEW"))
     return {"groups": [], "attention": attention}
