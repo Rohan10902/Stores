@@ -18,37 +18,24 @@ def infer_type(s, name=""):
         return "date"
     return "text"
 
-OPS = {
-    "numeric": ["Quick Summary", "Count", "Distinct Count", "Blank Count", "Sum", "Average", "Minimum", "Maximum", "Median"],
-    "date": ["Count", "Distinct Count", "Blank Count", "Earliest Date", "Latest Date", "Date Range"],
-    "boolean": ["Count", "Distinct Count", "Blank Count", "Most Common Value", "Least Common Value", "Frequency Distribution"],
-    "text": ["Count", "Distinct Count", "Blank Count", "Most Common Value", "Least Common Value", "Frequency Distribution"],
-    "empty": ["Count", "Distinct Count", "Blank Count"]
-}
-
 def profile(df):
     rows, cols = df.shape
-    stats = []
-    types = {}
-    blanks = 0
     column_details = []
+    blanks = 0
 
     for c in df.columns:
         s = df[c]
         typ = infer_type(s, str(c))
-        types[str(c)] = typ
         b = int(_blank(s).sum())
         blanks += b
         clean = s[~_blank(s)]
-        non_blank_cnt = len(clean)
-        unique_cnt = int(clean.astype(str).nunique()) if len(clean) else 0
         
         column_details.append({
             "column": str(c),
             "type": typ.upper(),
-            "non_blank": str(non_blank_cnt),
+            "non_blank": str(len(clean)),
             "blank": str(b),
-            "unique": str(unique_cnt)
+            "unique": str(int(clean.astype(str).nunique())) if len(clean) else "0"
         })
 
     total_cells = max(1, rows * cols)
@@ -61,11 +48,8 @@ def profile(df):
         "columns": cols,
         "completeness": completeness,
         "duplicates": dup,
-        "duplicateRows": dup,
         "health_score": score,
-        "score": score,
-        "column_details": column_details,
-        "columnStats": stats
+        "column_details": column_details
     }
 
 def statistic(df, col, op, group=""):
@@ -75,23 +59,36 @@ def statistic(df, col, op, group=""):
     results = []
     try:
         clean = df[col][~_blank(df[col])]
-        if op == "Quick Summary":
+        
+        if op in ("Summary", "Quick Summary"):
             results.append({"metric": "Total Records", "result": str(len(df))})
-            results.append({"metric": "Valid Values", "result": str(len(clean))})
-            results.append({"metric": "Blank Count", "result": str(int(_blank(df[col]).sum()))})
-            results.append({"metric": "Unique Count", "result": str(int(clean.nunique())) if len(clean) else "0"})
+            results.append({"metric": "Populated Values", "result": str(len(clean))})
+            results.append({"metric": "Blank Cell Count", "result": str(int(_blank(df[col]).sum()))})
+            results.append({"metric": "Unique Values", "result": str(int(clean.nunique())) if len(clean) else "0"})
             nums = pd.to_numeric(clean, errors="coerce").dropna()
             if len(nums):
-                results.append({"metric": "Mean", "result": f"{nums.mean():.2f}"})
-                results.append({"metric": "Min", "result": str(nums.min())})
-                results.append({"metric": "Max", "result": str(nums.max())})
-        elif op == "Frequency Distribution":
-            vc = clean.astype(str).value_counts().head(10)
-            for val, cnt in vc.items():
+                results.append({"metric": "Numeric Average (Mean)", "result": f"{nums.mean():.2f}"})
+                results.append({"metric": "Minimum Value", "result": str(nums.min())})
+                results.append({"metric": "Maximum Value", "result": str(nums.max())})
+        elif op in ("Frequency", "Frequency Distribution"):
+            counts = clean.astype(str).value_counts().head(10)
+            for val, cnt in counts.items():
                 results.append({"metric": str(val), "result": f"{cnt} row(s)"})
+        elif op == "Average":
+            nums = pd.to_numeric(clean, errors="coerce").dropna()
+            results.append({"metric": f"Mean of {col}", "result": f"{nums.mean():.2f}" if len(nums) else "No numeric data"})
+        elif op in ("Outliers", "IQR Outliers"):
+            nums = pd.to_numeric(clean, errors="coerce").dropna()
+            if len(nums):
+                q1, q3 = nums.quantile(0.25), nums.quantile(0.75)
+                iqr = q3 - q1
+                outliers = nums[(nums < (q1 - 1.5 * iqr)) | (nums > (q3 + 1.5 * iqr))]
+                results.append({"metric": "Detected Outliers (IQR)", "result": str(len(outliers))})
+            else:
+                results.append({"metric": "Detected Outliers (IQR)", "result": "0"})
         else:
             results.append({"metric": f"{op} ({col})", "result": str(len(clean))})
     except Exception as e:
-        results.append({"metric": "Error", "result": str(e)})
+        results.append({"metric": "Calculation Exception", "result": str(e)})
 
     return {"results": results, "rows": results}
