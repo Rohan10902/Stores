@@ -31,47 +31,84 @@ Item {
 
     Connections {
         target: backend
+
+        // Dynamically update ComboBox models when backend returns auto-detected keys
         function onMappingReady(payload) {
-            var d = JSON.parse(payload)
-            if (d.suggestedKeys && d.suggestedKeys.length > 0) {
-                keyCombo1.currentIndex = keyCombo1.find(d.suggestedKeys[0])
-                if (d.suggestedKeys.length > 1) {
-                    keyCombo2.currentIndex = keyCombo2.find(d.suggestedKeys[1])
+            try {
+                var d = JSON.parse(payload)
+                if (d.suggestedKeys && d.suggestedKeys.length > 0) {
+                    var keys = d.suggestedKeys
+                    
+                    // Assign dynamic models
+                    keyCombo1.model = keys
+                    keyCombo1.currentIndex = 0
+
+                    keyCombo2.model = ["None"].concat(keys)
+                    if (keys.length > 1) {
+                        keyCombo2.currentIndex = 2 // Select second key
+                    } else {
+                        keyCombo2.currentIndex = 0 // "None"
+                    }
                 }
+            } catch (e) {
+                console.log("Error parsing mapping payload: " + e)
             }
         }
+
         function onValidationReady(payload) {
-            var d = JSON.parse(payload)
-            totalCount.text = d.total || 0
-            correctCount.text = d.correct || 0
-            reviewCount.text = d.review || 0
-            errorCount.text = d.errors || 0
-            resultsModel.clear()
-            var rows = d.rows || []
-            for (var i = 0; i < rows.length; ++i) {
-                resultsModel.append(rows[i])
+            try {
+                var d = JSON.parse(payload)
+                totalCount.text = d.total || 0
+                correctCount.text = d.correct || 0
+                reviewCount.text = d.review || 0
+                errorCount.text = d.errors || 0
+                
+                resultsModel.clear()
+                var rows = d.rows || []
+                for (var i = 0; i < rows.length; ++i) {
+                    resultsModel.append(rows[i])
+                }
+            } catch (e) {
+                console.log("Error parsing validation payload: " + e)
             }
         }
+
         function onDetailReady(payload) {
-            var rec = JSON.parse(payload)
-            detailModel.clear()
-            var diffs = rec.diffs || {}
-            var masterVals = rec.master || {}
-            var uploadVals = rec.upload || {}
-            for (var k in masterVals) {
-                detailModel.append({
-                    field: k,
-                    masterVal: String(masterVals[k] !== undefined ? masterVals[k] : ""),
-                    uploadVal: String(uploadVals[k] !== undefined ? uploadVals[k] : ""),
-                    status: diffs[k] ? "DIFFERENT" : "MATCH"
-                })
+            try {
+                var rec = JSON.parse(payload)
+                detailModel.clear()
+                
+                var diffs = rec.diffs || {}
+                var masterVals = rec.master || {}
+                var uploadVals = rec.upload || {}
+                
+                // Combine keys from both master and upload
+                var allKeys = {}
+                for (var k1 in masterVals) allKeys[k1] = true
+                for (var k2 in uploadVals) allKeys[k2] = true
+                
+                for (var k in allKeys) {
+                    var mV = masterVals[k] !== undefined ? String(masterVals[k]) : ""
+                    var uV = uploadVals[k] !== undefined ? String(uploadVals[k]) : ""
+                    var isDiff = !!diffs[k] || (mV.toLowerCase() !== uV.toLowerCase())
+                    
+                    if (!diffsOnlyCheck.checked || isDiff) {
+                        detailModel.append({
+                            field: k,
+                            masterVal: mV,
+                            uploadVal: uV,
+                            status: isDiff ? "DIFFERENT" : "MATCH"
+                        })
+                    }
+                }
+            } catch (e) {
+                console.log("Error parsing detail payload: " + e)
             }
         }
     }
 
     ListModel { id: resultsModel }
     ListModel { id: detailModel }
-    ListModel { id: keysModel }
 
     ColumnLayout {
         anchors.fill: parent
@@ -80,6 +117,7 @@ Item {
 
         PageTitle { text: "Compare & Validate" }
 
+        // Top Controls Header Card
         Card {
             Layout.fillWidth: true
             implicitHeight: 180
@@ -125,28 +163,42 @@ Item {
                     Layout.fillWidth: true
                     spacing: 8
                     Text { text: "Match by"; color: "#94a3b8" }
+                    
                     ComboBox {
                         id: keyCombo1
                         Layout.preferredWidth: 180
                         model: ["SID", "Nielsen Store Code", "Store Name", "ZIP"]
                     }
+                    
                     Text { text: "+"; color: "#94a3b8" }
+                    
                     ComboBox {
                         id: keyCombo2
                         Layout.preferredWidth: 180
-                        model: ["Nielsen Store Code", "SID", "Store Name", "ZIP", "None"]
+                        model: ["None", "Nielsen Store Code", "SID", "Store Name", "ZIP"]
                     }
+                    
                     Item { Layout.fillWidth: true }
+                    
                     AppButton {
                         text: "Detect Columns"
                         onClicked: backend.detect()
                     }
+                    
                     PrimaryButton {
                         text: "Validate"
                         onClicked: {
-                            var keys = [keyCombo1.currentText]
-                            if (keyCombo2.currentText !== "None")
+                            var keys = []
+                            if (keyCombo1.currentText && keyCombo1.currentText.length > 0) {
+                                keys.push(keyCombo1.currentText)
+                            }
+                            if (keyCombo2.currentText && keyCombo2.currentText !== "None") {
                                 keys.push(keyCombo2.currentText)
+                            }
+                            if (keys.length === 0) {
+                                backend.say("Please select at least one matching key.")
+                                return
+                            }
                             backend.validate(JSON.stringify(keys))
                         }
                     }
@@ -154,6 +206,7 @@ Item {
             }
         }
 
+        // Summary Metric Cards
         GridLayout {
             Layout.fillWidth: true
             columns: 4
@@ -193,69 +246,117 @@ Item {
             }
         }
 
+        // Main Validation Results List
         Card {
             Layout.fillWidth: true
             Layout.fillHeight: true
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 10
-                Text { text: "Validation Results — row order does not affect matching"; color: "#f8fafc"; font.bold: true }
+
+                Text {
+                    text: "Validation Results — row order does not affect matching"
+                    color: "#f8fafc"
+                    font.bold: true
+                }
 
                 ListView {
+                    id: resultsListView
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     model: resultsModel
                     clip: true
+
                     delegate: Rectangle {
                         width: ListView.view.width
                         height: 32
                         color: index % 2 ? "#0d1b2e" : "#0b1829"
                         border.color: "#1e293b"
+
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 6
-                            Text { text: model.status || ""; color: model.status === "CORRECT" ? "#4ade80" : "#f59e0b"; font.bold: true; width: 90 }
-                            Text { text: "Key: " + (model.key || ""); color: "#f8fafc"; width: 140 }
-                            Text { text: model.message || ""; color: "#94a3b8"; Layout.fillWidth: true }
+                            
+                            Text {
+                                text: model.status || ""
+                                color: model.status === "CORRECT" ? "#4ade80" : (model.status === "REVIEW" ? "#f59e0b" : "#ef4444")
+                                font.bold: true
+                                width: 90
+                            }
+                            Text {
+                                text: "Key: " + (model.key || "N/A")
+                                color: "#f8fafc"
+                                font.bold: true
+                                width: 220
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                text: model.message || model.problem || ""
+                                color: "#94a3b8"
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
                         }
+
                         MouseArea {
                             anchors.fill: parent
-                            onClicked: backend.detail(index, false)
+                            onClicked: backend.detail(index, diffsOnlyCheck.checked)
                         }
                     }
                 }
             }
         }
 
+        // Side-by-Side Record Difference Inspector
         Card {
             Layout.fillWidth: true
             Layout.preferredHeight: 180
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 10
+
                 RowLayout {
                     Layout.fillWidth: true
                     Text { text: "Error-aware Comparison Inspector"; color: "#f8fafc"; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    CheckBox { id: diffsOnlyCheck; text: "Differences only"; checked: false }
+                    CheckBox {
+                        id: diffsOnlyCheck
+                        text: "Differences only"
+                        checked: false
+                        onToggled: {
+                            if (resultsListView.currentIndex >= 0) {
+                                backend.detail(resultsListView.currentIndex, checked)
+                            }
+                        }
+                    }
                 }
+
                 ListView {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     model: detailModel
                     clip: true
+
                     delegate: Rectangle {
                         width: ListView.view.width
                         height: 28
                         color: "#0b1829"
                         border.color: "#1e293b"
+
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 4
-                            Text { text: model.field || ""; color: "#f8fafc"; width: 150 }
-                            Text { text: model.masterVal || ""; color: "#94a3b8"; width: 220 }
-                            Text { text: model.uploadVal || ""; color: "#60a5fa"; width: 220 }
-                            Text { text: model.status || ""; color: model.status === "MATCH" ? "#4ade80" : "#ef4444"; Layout.fillWidth: true }
+                            Text { text: model.field || ""; color: "#f8fafc"; width: 150; font.bold: true }
+                            Text { text: model.masterVal || "(empty)"; color: "#94a3b8"; width: 220; elide: Text.ElideRight }
+                            Text { text: model.uploadVal || "(empty)"; color: "#60a5fa"; width: 220; elide: Text.ElideRight }
+                            Text {
+                                text: model.status || ""
+                                color: model.status === "MATCH" ? "#4ade80" : "#ef4444"
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
                         }
                     }
                 }
