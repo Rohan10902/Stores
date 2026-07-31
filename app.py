@@ -5,15 +5,13 @@ import traceback
 from pathlib import Path
 import pandas as pd
 
-# Use QApplication instead of QGuiApplication to support native Windows File Dialogs
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property, QRunnable, QThreadPool, Qt
 from PySide6.QtQml import QQmlApplicationEngine
 
-# Import core modules
 from core.common import read_table, json_value
 from core.explorer import run_sql
-from core.health import profile, statistic
+from core.health import profile, statistic, export_html_report
 from core.csv_repair import (
     inspect_csv, join_shifted_rows, apply_mapping, keep_unresolved,
     keep_issue_as_is, create_record_from_extras, delete_created_record,
@@ -24,15 +22,12 @@ from core.file_creator import review_dataframe, creator_validate
 
 BASE = Path(__file__).resolve().parent
 
-# --- THREADING CLASSES ---
 class WorkerSignals(QObject):
-    """Defines thread-safe signals for background tasks."""
     finished = Signal(object)
     error = Signal(object)
 
 
 class Worker(QRunnable):
-    """Worker thread that executes heavy tasks off the main thread."""
     def __init__(self, fn, *args, **kwargs):
         super().__init__()
         self.fn = fn
@@ -46,48 +41,34 @@ class Worker(QRunnable):
             result = self.fn(*self.args, **self.kwargs)
             self.signals.finished.emit(result)
         except Exception as e:
-            # Emit error signal safely to main thread handler
             self.signals.error.emit(e)
 
 
-# --- BACKEND CLASS ---
 class Backend(QObject):
-    # --- SIGNALS ---
     messageChanged = Signal()
+    toastSignal = Signal(str, str, str)
     
-    # Store Builder Signals
     creatorReady = Signal(str)
     creatorLoaded = Signal(str)
-    
-    # Explore & Health Signals
     healthReady = Signal(str)
     tableReady = Signal(str)
     statsReady = Signal(str)
-    
-    # Repair Signals
     repairReady = Signal(str)
-    
-    # Compare & Validate Signals
     mappingReady = Signal(str)
     validationReady = Signal(str)
     detailReady = Signal(str)
-    
-    # Single Review Signals
     singleReviewReady = Signal(str)
 
     def __init__(self):
         super().__init__()
         self._message = "Ready"
         self.threadpool = QThreadPool.globalInstance()
-        
-        # State containers
         self._df = None
         self._master_df = None
         self._upload_df = None
         self._compare_records = []
         self._audit = {}
 
-    # --- UI MESSAGE PROPERTY ---
     @Property(str, notify=messageChanged)
     def message(self):
         return self._message
@@ -100,36 +81,31 @@ class Backend(QObject):
     @Slot(str)
     def say(self, text):
         self.message = str(text)
-        print(text)
 
-    # CRITICAL FIX: @Slot(object) ensures error handling is marshaled back to the Main GUI thread safely
+    @Slot(str, str, str)
+    def notify(self, title, msg, ntype="info"):
+        self.toastSignal.emit(title, msg, ntype)
+
     @Slot(object)
     def fail(self, e):
         err = f"Error: {str(e)}"
         self.message = err
-        print("Backend error:", e)
+        self.notify("Error Encountered", str(e), "error")
         traceback.print_exc()
 
     def _local(self, path):
-        if not path:
-            return ""
+        if not path: return ""
         p = str(path).strip()
-        if p.startswith("file:///"):
-            return p[8:]
-        elif p.startswith("file://"):
-            return p[7:]
+        if p.startswith("file:///"): return p[8:]
+        elif p.startswith("file://"): return p[7:]
         return p
 
-    # --- ASYNC HELPER ---
     def _run_async(self, func, callback_success, *args):
-        """Helper to run a function in the background and safely receive results on the GUI thread."""
         worker = Worker(func, *args)
-        # QueuedConnection forces cross-thread execution back onto the GUI event loop
         worker.signals.finished.connect(callback_success, Qt.QueuedConnection)
         worker.signals.error.connect(self.fail, Qt.QueuedConnection)
         self.threadpool.start(worker)
 
-    # --- UTILS & CLIPBOARD ---
     @Slot(result=str)
     def clipboardText(self):
         try:
@@ -137,7 +113,6 @@ class Backend(QObject):
         except Exception:
             return ""
 
-    # --- STORE BUILDER (CreateStorePage) ---
     @Slot(str, str)
     def exportCreator(self, rows_json, dst):
         self.say("Exporting...")
@@ -145,11 +120,10 @@ class Backend(QObject):
             dst_path = self._local(dst)
             Path(dst_path).write_text(rows_json, encoding="utf-8")
             return Path(dst_path).name
-        self._run_async(task, lambda name: self.say(f"Exported successfully to {name}"))
+        self._run_async(task, lambda name: self.notify("Export Complete", f"Saved to {name}", "success"))
 
     @Slot(str)
     def validateCreator(self, rows_json):
-        self.say("Validating rows...")
         def task():
             rows = json.loads(rows_json)
             findings = creator_validate(rows)
@@ -158,33 +132,29 @@ class Backend(QObject):
         def on_complete(result):
             payload, count = result
             self.creatorReady.emit(payload)
-            self.say(f"Validation complete: {count} findings.")
+            self.notify("Validation Complete", f"Found {count} item(s) requiring review.", "warning" if count else "success")
             
         self._run_async(task, on_complete)
 
     @Slot(str)
     def loadCreatorFile(self, path):
-        self.say("Importing file...")
         def task():
             local = self._local(path)
             df = read_table(local)
             headers = [str(c) for c in df.columns]
             rows = [{headers[i]: json_value(v) for i, v in enumerate(row)}
                     for row in df.itertuples(index=False, name=None)]
-            payload = json.dumps({"headers": headers, "rows": rows}, default=str)
-            return payload, len(rows), Path(local).name
+            return json.dumps({"headers": headers, "rows": rows}, default=str), len(rows), Path(local).name
             
         def on_complete(result):
             payload, count, name = result
             self.creatorLoaded.emit(payload)
-            self.say(f"Imported {count} row(s) from {name}")
+            self.notify("File Loaded", f"Imported {count} rows from {name}", "success")
             
         self._run_async(task, on_complete)
 
-    # --- EXPLORE & HEALTH (ExplorePage, HealthPage) ---
     @Slot(str)
     def loadData(self, path):
-        self.say("Loading dataset...")
         def task():
             local = self._local(path)
             df = read_table(local)
@@ -203,32 +173,35 @@ class Backend(QObject):
             self._df, prof_json, table_json = result
             self.healthReady.emit(prof_json)
             self.tableReady.emit(table_json)
-            self.say(f"Loaded {len(self._df)} rows.")
+            self.notify("Dataset Active", f"Loaded {len(self._df)} rows into workspace.", "info")
 
         self._run_async(task, on_complete)
 
+    @Slot(str)
+    def exportHealthReport(self, dst_path):
+        if self._df is None:
+            return self.notify("Export Failed", "No dataset active.", "warning")
+        def task():
+            return export_html_report(self._df, self._local(dst_path))
+        self._run_async(task, lambda path: self.notify("Report Generated", f"Executive HTML report saved to {Path(path).name}", "success"))
+
     @Slot(str, str)
     def search(self, query, col):
-        if self._df is None:
-            return
-        self.say("Searching...")
+        if self._df is None: return
         def task():
-            if not query:
-                res_df = self._df
-            else:
-                if col and col != "All columns" and col in self._df.columns:
-                    res_df = self._df[self._df[col].astype(str).str.contains(query, case=False, na=False)]
+            df = self._df
+            if query:
+                if col and col != "All columns" and col in df.columns:
+                    df = df[df[col].astype(str).str.contains(query, case=False, na=False)]
                 else:
-                    mask = self._df.astype(str).apply(lambda x: x.str.contains(query, case=False, na=False)).any(axis=1)
-                    res_df = self._df[mask]
-                    
-            view = res_df.head(1000).fillna("")
+                    mask = df.astype(str).apply(lambda x: x.str.contains(query, case=False, na=False)).any(axis=1)
+                    df = df[mask]
+            view = df.head(1000).fillna("")
             return json.dumps({
                 "columns": [str(c) for c in view.columns],
                 "rows": view.head(100).to_dict(orient="records"),
-                "total": len(res_df),
-                "displayed": len(view)
-            }), len(res_df)
+                "total": len(df)
+            }), len(df)
 
         def on_complete(result):
             table_json, count = result
@@ -239,51 +212,32 @@ class Backend(QObject):
 
     @Slot(str)
     def sql(self, query):
-        if self._df is None:
-            return
-        self.say("Executing SQL...")
+        if self._df is None: return
         def task():
             res_df = run_sql(self._df, query)
             view = res_df.head(1000).fillna("")
             return json.dumps({
                 "columns": [str(c) for c in view.columns],
                 "rows": view.head(100).to_dict(orient="records"),
-                "total": len(res_df),
-                "displayed": len(view)
+                "total": len(res_df)
             })
-            
-        def on_complete(payload):
-            self.tableReady.emit(payload)
-            self.say("Query completed.")
-            
-        self._run_async(task, on_complete)
+        self._run_async(task, lambda payload: self.tableReady.emit(payload))
 
     @Slot(str, str, str)
     def stats(self, col, op, group):
-        if self._df is None:
-            return
-        self.say("Generating statistics...")
+        if self._df is None: return
         def task():
             return json.dumps(statistic(self._df, col, op, group))
-            
-        def on_complete(payload):
-            self.statsReady.emit(payload)
-            self.say("Statistics generated.")
-            
-        self._run_async(task, on_complete)
+        self._run_async(task, lambda payload: self.statsReady.emit(payload))
 
-    # --- RECORD REPAIR (RepairPage) ---
     @Slot(str)
     def inspectRepair(self, path):
-        self.say("Inspecting CSV...")
         def task():
             return inspect_csv(self._local(path))
-            
         def on_complete(audit_data):
             self._audit = audit_data
             self.repairReady.emit(json.dumps(self._audit))
-            self.say(f"Inspection complete: {len(self._audit.get('issues', []))} issues found.")
-            
+            self.notify("Repair Scan Ready", f"Detected {len(self._audit.get('issues', []))} potential issue(s).", "info")
         self._run_async(task, on_complete)
 
     @Slot()
@@ -291,7 +245,7 @@ class Backend(QObject):
         try:
             self._audit = undo_last_created_action(self._audit)
             self.repairReady.emit(json.dumps(self._audit))
-            self.say("Undid last repair action.")
+            self.notify("Action Undone", "Reverted last repair change.", "info")
         except Exception as e:
             self.fail(e)
 
@@ -300,7 +254,6 @@ class Backend(QObject):
         try:
             self._audit = join_shifted_rows(self._audit, index)
             self.repairReady.emit(json.dumps(self._audit))
-            self.say("Rows joined successfully.")
         except Exception as e:
             self.fail(e)
 
@@ -309,7 +262,6 @@ class Backend(QObject):
         try:
             self._audit = apply_mapping(self._audit, issue_index, col_index, target)
             self.repairReady.emit(json.dumps(self._audit))
-            self.say("Mapping applied.")
         except Exception as e:
             self.fail(e)
 
@@ -335,7 +287,6 @@ class Backend(QObject):
             mapping = json.loads(mapping_json)
             self._audit = create_record_from_extras(self._audit, issue_index, mapping)
             self.repairReady.emit(json.dumps(self._audit))
-            self.say("New record created from overflow.")
         except Exception as e:
             self.fail(e)
 
@@ -344,53 +295,43 @@ class Backend(QObject):
         try:
             self._audit = delete_created_record(self._audit, record_id)
             self.repairReady.emit(json.dumps(self._audit))
-            self.say("Record deleted.")
         except Exception as e:
             self.fail(e)
 
     @Slot(str, str)
     def repair(self, src, dst):
-        self.say("Saving repaired file...")
         def task():
             save_repaired(self._audit, self._local(dst))
-        self._run_async(task, lambda _: self.say("Repaired CSV saved successfully."))
+        self._run_async(task, lambda _: self.notify("Repaired File Saved", "Exported copy successfully.", "success"))
 
-    # --- COMPARE & VALIDATE (ComparePage) ---
     @Slot(str)
     def loadMaster(self, path):
-        self.say("Loading Master file...")
-        def task():
-            return read_table(self._local(path))
+        def task(): return read_table(self._local(path))
         def on_complete(df):
             self._master_df = df
-            self.say(f"Master file loaded ({len(df)} rows)")
+            self.notify("Master Active", f"Loaded {len(df)} master stores.", "info")
         self._run_async(task, on_complete)
 
     @Slot(str)
     def loadUpload(self, path):
-        self.say("Loading Upload file...")
-        def task():
-            return read_table(self._local(path))
+        def task(): return read_table(self._local(path))
         def on_complete(df):
             self._upload_df = df
-            self.say(f"Upload file loaded ({len(df)} rows)")
+            self.notify("Upload Active", f"Loaded {len(df)} uploaded stores.", "info")
         self._run_async(task, on_complete)
 
     @Slot()
     def detect(self):
         if self._master_df is None or self._upload_df is None:
             return self.fail("Both Master and Upload files must be loaded.")
-        self.say("Auto-detecting matching keys...")
-        def task():
-            return suggest_keys(self._master_df, self._upload_df)
+        def task(): return suggest_keys(self._master_df, self._upload_df)
         def on_complete(keys):
             self.mappingReady.emit(json.dumps({"suggestedKeys": list(keys)}))
-            self.say(f"Auto-detected keys: {', '.join(keys)}")
+            self.notify("Auto-Detection Complete", f"Identified matching key(s): {', '.join(keys)}", "info")
         self._run_async(task, on_complete)
 
     @Slot(str)
     def validate(self, keys_json):
-        self.say("Comparing datasets...")
         def task():
             keys = json.loads(keys_json)
             mm, um, records, k = compare(self._master_df, self._upload_df, keys)
@@ -401,8 +342,7 @@ class Backend(QObject):
                 "review": sum(1 for r in records if r["status"] == "REVIEW"),
                 "errors": sum(1 for r in records if r["status"] == "ERROR"),
                 "attention": insights.get("attention", 0),
-                "rows": records,
-                "insights": insights.get("groups", [])
+                "rows": records
             }
             return records, json.dumps(payload)
             
@@ -410,7 +350,7 @@ class Backend(QObject):
             records, payload = result
             self._compare_records = records
             self.validationReady.emit(payload)
-            self.say("Validation comparison complete.")
+            self.notify("Comparison Complete", "Validation inspection ready.", "success")
             
         self._run_async(task, on_complete)
 
@@ -418,19 +358,15 @@ class Backend(QObject):
     def detail(self, index, diff_only):
         try:
             if 0 <= index < len(self._compare_records):
-                rec = self._compare_records[index]
-                self.detailReady.emit(json.dumps(rec))
+                self.detailReady.emit(json.dumps(self._compare_records[index]))
         except Exception as e:
             self.fail(e)
 
-    # --- SINGLE REVIEW (SingleReviewPage) ---
     @Slot(str)
     def reviewSingleFile(self, path):
-        self.say("Analyzing file...")
         def task():
             df = read_table(self._local(path))
             res = review_dataframe(df)
-            
             payload = {
                 "totalRecords": res.get("recordCount", len(df)),
                 "attentionCount": res.get("issueCount", 0),
@@ -443,17 +379,16 @@ class Backend(QObject):
         def on_complete(result):
             payload, count = result
             self.singleReviewReady.emit(payload)
-            self.say(f"Analyzed {count} records.")
+            self.notify("Analysis Ready", f"Reviewed {count} store records.", "info")
 
         self._run_async(task, on_complete)
 
     @Slot(str, str)
     def exportSingleReview(self, src, dst):
-        self.say("Exporting copy...")
         def task():
             df = read_table(self._local(src))
             df.to_csv(self._local(dst), index=False, encoding="utf-8-sig")
-        self._run_async(task, lambda _: self.say("Reviewed copy exported."))
+        self._run_async(task, lambda _: self.notify("Export Complete", "Exported reviewed copy.", "success"))
 
 
 def main():
@@ -464,16 +399,8 @@ def main():
     engine.rootContext().setContextProperty("backend", backend)
     engine.load(QUrl.fromLocalFile(str(BASE / "qml" / "Main.qml")))
     
-    if not engine.rootObjects():
-        print("Failed to load QML root objects")
-        return 1
-        
-    # --- CI STARTUP PROBE CHECK ---
-    if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
-        print("STORELENS_STARTUP_OK")
-        sys.stdout.flush()
-        return 0
-    # ------------------------------
+    if not engine.rootObjects(): return 1
+    if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1": return 0
     
     return app.exec()
 
