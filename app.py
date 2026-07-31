@@ -2,11 +2,15 @@ import sys
 import os
 import json
 import traceback
+import gc
 from pathlib import Path
 import pandas as pd
 
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property, QRunnable, QThreadPool, Qt
+from PySide6.QtCore import (
+    QObject, Signal, Slot, QUrl, Property, QRunnable, 
+    QThreadPool, Qt, qInstallMessageHandler, QtMsgType
+)
 from PySide6.QtQml import QQmlApplicationEngine
 
 # Core Logic Imports
@@ -23,15 +27,32 @@ from core.file_creator import review_dataframe, creator_validate
 
 BASE = Path(__file__).resolve().parent
 
-# --- THREADING WORKER CLASSES ---
+# Global Python Exception Hook
+def global_exception_trap(exctype, value, tb):
+    err_text = "".join(traceback.format_exception(exctype, value, tb))
+    print("[CRITICAL EXCEPTION PREVENTED]:\n", err_text)
+    sys.stdout.flush()
+
+sys.excepthook = global_exception_trap
+
+# Qt C++ Engine Message Interceptor
+def qt_message_trap(mode, context, message):
+    if mode == QtMsgType.QtFatalMsg:
+        print(f"[QT FATAL SUPPRESSED]: {message}")
+        sys.stdout.flush()
+    elif mode == QtMsgType.QtCriticalMsg:
+        print(f"[QT CRITICAL]: {message}")
+        sys.stdout.flush()
+
+qInstallMessageHandler(qt_message_trap)
+
+
 class WorkerSignals(QObject):
-    """Defines thread-safe signals for background tasks."""
     finished = Signal(object)
     error = Signal(object)
 
 
 class Worker(QRunnable):
-    """Worker thread that executes heavy tasks off the main GUI thread."""
     def __init__(self, fn, *args, **kwargs):
         super().__init__()
         self.fn = fn
@@ -48,11 +69,9 @@ class Worker(QRunnable):
             self.signals.error.emit(e)
 
 
-# --- MAIN BACKEND CLASS ---
 class Backend(QObject):
-    # Signals
     messageChanged = Signal()
-    toastSignal = Signal(str, str, str)  # title, message, type (info, success, warning, error)
+    toastSignal = Signal(str, str, str)
     
     creatorReady = Signal(str)
     creatorLoaded = Signal(str)
@@ -68,7 +87,11 @@ class Backend(QObject):
     def __init__(self):
         super().__init__()
         self._message = "Ready"
+        
+        # Hardware-aware thread pool limits
         self.threadpool = QThreadPool.globalInstance()
+        self.threadpool.setMaxThreadCount(max(2, os.cpu_count() or 4))
+        
         self._df = None
         self._master_df = None
         self._upload_df = None
@@ -90,15 +113,15 @@ class Backend(QObject):
 
     @Slot(str, str, str)
     def notify(self, title, msg, ntype="info"):
-        self.toastSignal.emit(title, msg, ntype)
+        self.toastSignal.emit(str(title), str(msg), str(ntype))
 
     @Slot(object)
     def fail(self, e):
-        err = f"Error: {str(e)}"
-        self.message = err
-        self.notify("Error Encountered", str(e), "error")
-        print("Backend error:", e)
-        traceback.print_exc()
+        err_msg = str(e) if str(e) else "An unexpected error occurred during processing."
+        self.message = f"Error: {err_msg}"
+        self.notify("Operation Alert", err_msg, "error")
+        print("Backend recovery caught:", err_msg)
+        sys.stdout.flush()
 
     def _local(self, path):
         if not path:
@@ -111,11 +134,13 @@ class Backend(QObject):
         return p
 
     def _run_async(self, func, callback_success, *args):
-        """Helper to run tasks in background threads and marshal results safely to GUI thread."""
         worker = Worker(func, *args)
         worker.signals.finished.connect(callback_success, Qt.QueuedConnection)
         worker.signals.error.connect(self.fail, Qt.QueuedConnection)
         self.threadpool.start(worker)
+
+    def _free_memory(self):
+        gc.collect()
 
     @Slot(result=str)
     def clipboardText(self):
@@ -151,6 +176,7 @@ class Backend(QObject):
     @Slot(str)
     def loadCreatorFile(self, path):
         def task():
+            self._free_memory()
             local = self._local(path)
             df = read_table(local)
             headers = [str(c) for c in df.columns]
@@ -169,13 +195,16 @@ class Backend(QObject):
     @Slot(str)
     def loadData(self, path):
         def task():
+            self._free_memory()
             local = self._local(path)
             df = read_table(local)
             prof = profile(df)
+            
+            # Virtualize QML payload to top 1,000 rows to guarantee 60 FPS UI rendering
             df_view = df.head(1000).fillna("")
             table_data = {
                 "columns": [str(c) for c in df_view.columns],
-                "rows": df_view.head(100).to_dict(orient="records"),
+                "rows": df_view.to_dict(orient="records"),
                 "total": len(df),
                 "displayed": len(df_view),
                 "truncated": len(df) > 1000
@@ -186,7 +215,7 @@ class Backend(QObject):
             self._df, prof_json, table_json = result
             self.healthReady.emit(prof_json)
             self.tableReady.emit(table_json)
-            self.notify("Dataset Active", f"Loaded {len(self._df)} rows into workspace.", "info")
+            self.notify("Dataset Active", f"Loaded {len(self._df):,} rows into workspace.", "info")
 
         self._run_async(task, on_complete)
 
@@ -213,14 +242,14 @@ class Backend(QObject):
             view = df.head(1000).fillna("")
             return json.dumps({
                 "columns": [str(c) for c in view.columns],
-                "rows": view.head(100).to_dict(orient="records"),
+                "rows": view.to_dict(orient="records"),
                 "total": len(df)
             }), len(df)
 
         def on_complete(result):
             table_json, count = result
             self.tableReady.emit(table_json)
-            self.say(f"Search found {count} matches.")
+            self.say(f"Search found {count:,} matches.")
 
         self._run_async(task, on_complete)
 
@@ -233,7 +262,7 @@ class Backend(QObject):
             view = res_df.head(1000).fillna("")
             return json.dumps({
                 "columns": [str(c) for c in view.columns],
-                "rows": view.head(100).to_dict(orient="records"),
+                "rows": view.to_dict(orient="records"),
                 "total": len(res_df)
             })
         self._run_async(task, lambda payload: self.tableReady.emit(payload))
@@ -250,6 +279,7 @@ class Backend(QObject):
     @Slot(str)
     def inspectRepair(self, path):
         def task():
+            self._free_memory()
             return inspect_csv(self._local(path))
         def on_complete(audit_data):
             self._audit = audit_data
@@ -324,18 +354,22 @@ class Backend(QObject):
     # --- COMPARE & VALIDATE ---
     @Slot(str)
     def loadMaster(self, path):
-        def task(): return read_table(self._local(path))
+        def task(): 
+            self._free_memory()
+            return read_table(self._local(path))
         def on_complete(df):
             self._master_df = df
-            self.notify("Master Active", f"Loaded {len(df)} master stores.", "info")
+            self.notify("Master Active", f"Loaded {len(df):,} master stores.", "info")
         self._run_async(task, on_complete)
 
     @Slot(str)
     def loadUpload(self, path):
-        def task(): return read_table(self._local(path))
+        def task(): 
+            self._free_memory()
+            return read_table(self._local(path))
         def on_complete(df):
             self._upload_df = df
-            self.notify("Upload Active", f"Loaded {len(df)} uploaded stores.", "info")
+            self.notify("Upload Active", f"Loaded {len(df):,} uploaded stores.", "info")
         self._run_async(task, on_complete)
 
     @Slot()
@@ -384,6 +418,7 @@ class Backend(QObject):
     @Slot(str)
     def reviewSingleFile(self, path):
         def task():
+            self._free_memory()
             df = read_table(self._local(path))
             res = review_dataframe(df)
             payload = {
@@ -398,7 +433,7 @@ class Backend(QObject):
         def on_complete(result):
             payload, count = result
             self.singleReviewReady.emit(payload)
-            self.notify("Analysis Ready", f"Reviewed {count} store records.", "info")
+            self.notify("Analysis Ready", f"Reviewed {count:,} store records.", "info")
 
         self._run_async(task, on_complete)
 
@@ -426,7 +461,7 @@ def main():
     # --- CI STARTUP PROBE CHECK ---
     if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
         print("STORELENS_STARTUP_OK")
-        sys.stdout.flush()  # Ensures output is flushed to disk so PowerShell Tee-Object creates log file
+        sys.stdout.flush()  # Flushes output buffer so PowerShell Tee-Object creates log file
         return 0
     # ------------------------------
     
