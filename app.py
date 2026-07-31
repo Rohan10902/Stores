@@ -5,8 +5,9 @@ import traceback
 from pathlib import Path
 import pandas as pd
 
-from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property, QRunnable, QThreadPool
-from PySide6.QtGui import QGuiApplication
+# Use QApplication instead of QGuiApplication to support native Windows File Dialogs
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property, QRunnable, QThreadPool, Qt
 from PySide6.QtQml import QQmlApplicationEngine
 
 # Import core modules
@@ -25,13 +26,13 @@ BASE = Path(__file__).resolve().parent
 
 # --- THREADING CLASSES ---
 class WorkerSignals(QObject):
-    """Defines the signals available from a running worker thread."""
+    """Defines thread-safe signals for background tasks."""
     finished = Signal(object)
-    error = Signal(Exception)
+    error = Signal(object)
 
 
 class Worker(QRunnable):
-    """Worker thread to run long-running Python functions without freezing the UI."""
+    """Worker thread that executes heavy tasks off the main thread."""
     def __init__(self, fn, *args, **kwargs):
         super().__init__()
         self.fn = fn
@@ -45,6 +46,7 @@ class Worker(QRunnable):
             result = self.fn(*self.args, **self.kwargs)
             self.signals.finished.emit(result)
         except Exception as e:
+            # Emit error signal safely to main thread handler
             self.signals.error.emit(e)
 
 
@@ -100,6 +102,8 @@ class Backend(QObject):
         self.message = str(text)
         print(text)
 
+    # CRITICAL FIX: @Slot(object) ensures error handling is marshaled back to the Main GUI thread safely
+    @Slot(object)
     def fail(self, e):
         err = f"Error: {str(e)}"
         self.message = err
@@ -118,17 +122,18 @@ class Backend(QObject):
 
     # --- ASYNC HELPER ---
     def _run_async(self, func, callback_success, *args):
-        """Helper to run a function in the background and call a success function when done."""
+        """Helper to run a function in the background and safely receive results on the GUI thread."""
         worker = Worker(func, *args)
-        worker.signals.finished.connect(callback_success)
-        worker.signals.error.connect(self.fail)
+        # QueuedConnection forces cross-thread execution back onto the GUI event loop
+        worker.signals.finished.connect(callback_success, Qt.QueuedConnection)
+        worker.signals.error.connect(self.fail, Qt.QueuedConnection)
         self.threadpool.start(worker)
 
     # --- UTILS & CLIPBOARD ---
     @Slot(result=str)
     def clipboardText(self):
         try:
-            return QGuiApplication.clipboard().text() or ""
+            return QApplication.clipboard().text() or ""
         except Exception:
             return ""
 
@@ -179,7 +184,7 @@ class Backend(QObject):
     # --- EXPLORE & HEALTH (ExplorePage, HealthPage) ---
     @Slot(str)
     def loadData(self, path):
-        self.say("Loading dataset (this may take a moment)...")
+        self.say("Loading dataset...")
         def task():
             local = self._local(path)
             df = read_table(local)
@@ -412,8 +417,9 @@ class Backend(QObject):
     @Slot(int, bool)
     def detail(self, index, diff_only):
         try:
-            rec = self._compare_records[index]
-            self.detailReady.emit(json.dumps(rec))
+            if 0 <= index < len(self._compare_records):
+                rec = self._compare_records[index]
+                self.detailReady.emit(json.dumps(rec))
         except Exception as e:
             self.fail(e)
 
@@ -425,7 +431,6 @@ class Backend(QObject):
             df = read_table(self._local(path))
             res = review_dataframe(df)
             
-            # Map keys cleanly to match SingleReviewPage.qml model bindings
             payload = {
                 "totalRecords": res.get("recordCount", len(df)),
                 "attentionCount": res.get("issueCount", 0),
@@ -452,7 +457,7 @@ class Backend(QObject):
 
 
 def main():
-    app = QGuiApplication(sys.argv)
+    app = QApplication(sys.argv)
     engine = QQmlApplicationEngine()
     
     backend = Backend()
