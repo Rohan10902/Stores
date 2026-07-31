@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "pages"
+import "components"
 
 Window {
     id: window
@@ -10,6 +11,65 @@ Window {
     visible: true
     title: "StoreLens 7.2.1"
     color: "#0b1829"
+
+    // Toast Notification Container
+    Column {
+        id: toastContainer
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        anchors.margins: 20
+        spacing: 10
+        z: 999
+    }
+
+    Connections {
+        target: backend
+        function onToastSignal(title, msg, ntype) {
+            var comp = Qt.createComponent("components/Toast.qml")
+            if (comp.status === Component.Ready) {
+                comp.createObject(toastContainer, { title: title, message: msg, type: ntype })
+            }
+        }
+    }
+
+    // Drag and Drop Overlay
+    DropArea {
+        anchors.fill: parent
+        z: 998
+        onEntered: (drag) => dropOverlay.visible = true
+        onExited: dropOverlay.visible = false
+        onDropped: (drop) => {
+            dropOverlay.visible = false
+            if (drop.hasUrls && drop.urls.length > 0) {
+                var path = drop.urls[0].toString()
+                backend.loadData(path)
+            }
+        }
+    }
+
+    Rectangle {
+        id: dropOverlay
+        anchors.fill: parent
+        color: "#0b1829e6"
+        visible: false
+        z: 999
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 400; height: 200
+            color: "#0f172a"
+            radius: 12
+            border.color: "#3b82f6"
+            border.width: 2
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 10
+                Text { text: "📥 Drop File to Load Workspace"; color: "#f8fafc"; font.bold: true; font.pixelSize: 16 }
+                Text { text: "Supports CSV, TSV, Excel, JSON, and XML"; color: "#94a3b8"; font.pixelSize: 12 }
+            }
+        }
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -28,7 +88,6 @@ Window {
                 anchors.margins: 12
                 spacing: 8
 
-                // App Branding Header
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 10
@@ -45,14 +104,8 @@ Window {
 
                 Item { implicitHeight: 10 }
 
-                Text {
-                    text: "WORKSPACE"
-                    color: "#64748b"
-                    font.pixelSize: 10
-                    font.bold: true
-                }
+                Text { text: "WORKSPACE"; color: "#64748b"; font.pixelSize: 10; font.bold: true }
 
-                // Workspace Navigation Repeater
                 Repeater {
                     model: [
                         { name: "Compare & Validate", index: 0 },
@@ -83,16 +136,14 @@ Window {
                             leftPadding: 12
                         }
 
-                        onClicked: {
-                            stackView.currentIndex = modelData.index
-                        }
+                        onClicked: stackView.currentIndex = modelData.index
                     }
                 }
 
                 Item { Layout.fillHeight: true }
 
                 Text {
-                    text: "Source files remain unchanged until you explicitly export."
+                    text: "Source files remain unchanged until explicitly exported."
                     color: "#64748b"
                     font.pixelSize: 10
                     wrapMode: Text.WordWrap
@@ -101,7 +152,7 @@ Window {
             }
         }
 
-        // Main Content Area
+        // Main Workspace Container
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -111,7 +162,6 @@ Window {
                 anchors.fill: parent
                 spacing: 0
 
-                // Top Header Bar
                 Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 48
@@ -121,22 +171,11 @@ Window {
                     RowLayout {
                         anchors.fill: parent
                         anchors.margins: 12
-                        Text {
-                            text: "Local data quality, repair, comparison and analysis"
-                            color: "#94a3b8"
-                            font.pixelSize: 12
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: "• LOCAL ONLY"
-                            color: "#22c55e"
-                            font.pixelSize: 11
-                            font.bold: true
-                        }
+                        Text { text: "Local data quality, repair, comparison and analysis"; color: "#94a3b8"; font.pixelSize: 12; Layout.fillWidth: true }
+                        Text { text: "• LOCAL ONLY"; color: "#22c55e"; font.pixelSize: 11; font.bold: true }
                     }
                 }
 
-                // StackView / Pages Container
                 StackLayout {
                     id: stackView
                     Layout.fillWidth: true
@@ -151,7 +190,6 @@ Window {
                     ExplorePage { }
                 }
 
-                // Bottom Status Bar
                 Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 28
