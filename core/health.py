@@ -1,5 +1,6 @@
 import re
 import pandas as pd
+from pathlib import Path
 
 _IDENTIFIER = re.compile(r"(^|\b)(sid|id|code|zip|postal|postcode|pincode|pin)(\b|$)", re.I)
 
@@ -59,7 +60,6 @@ def statistic(df, col, op, group=""):
     results = []
     try:
         clean = df[col][~_blank(df[col])]
-        
         if op in ("Summary", "Quick Summary"):
             results.append({"metric": "Total Records", "result": str(len(df))})
             results.append({"metric": "Populated Values", "result": str(len(clean))})
@@ -67,28 +67,58 @@ def statistic(df, col, op, group=""):
             results.append({"metric": "Unique Values", "result": str(int(clean.nunique())) if len(clean) else "0"})
             nums = pd.to_numeric(clean, errors="coerce").dropna()
             if len(nums):
-                results.append({"metric": "Numeric Average (Mean)", "result": f"{nums.mean():.2f}"})
-                results.append({"metric": "Minimum Value", "result": str(nums.min())})
-                results.append({"metric": "Maximum Value", "result": str(nums.max())})
+                results.append({"metric": "Numeric Mean", "result": f"{nums.mean():.2f}"})
+                results.append({"metric": "Minimum", "result": str(nums.min())})
+                results.append({"metric": "Maximum", "result": str(nums.max())})
         elif op in ("Frequency", "Frequency Distribution"):
             counts = clean.astype(str).value_counts().head(10)
             for val, cnt in counts.items():
                 results.append({"metric": str(val), "result": f"{cnt} row(s)"})
-        elif op == "Average":
-            nums = pd.to_numeric(clean, errors="coerce").dropna()
-            results.append({"metric": f"Mean of {col}", "result": f"{nums.mean():.2f}" if len(nums) else "No numeric data"})
-        elif op in ("Outliers", "IQR Outliers"):
-            nums = pd.to_numeric(clean, errors="coerce").dropna()
-            if len(nums):
-                q1, q3 = nums.quantile(0.25), nums.quantile(0.75)
-                iqr = q3 - q1
-                outliers = nums[(nums < (q1 - 1.5 * iqr)) | (nums > (q3 + 1.5 * iqr))]
-                results.append({"metric": "Detected Outliers (IQR)", "result": str(len(outliers))})
-            else:
-                results.append({"metric": "Detected Outliers (IQR)", "result": "0"})
         else:
             results.append({"metric": f"{op} ({col})", "result": str(len(clean))})
     except Exception as e:
-        results.append({"metric": "Calculation Exception", "result": str(e)})
+        results.append({"metric": "Error", "result": str(e)})
 
     return {"results": results, "rows": results}
+
+def export_html_report(df, output_path):
+    prof = profile(df)
+    path = Path(output_path)
+    
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>StoreLens Executive Health Audit</title>
+    <style>
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0b1829; color: #f8fafc; padding: 24px; }}
+        .header {{ border-bottom: 2px solid #1e293b; padding-bottom: 12px; margin-bottom: 20px; }}
+        .cards {{ display: flex; gap: 16px; margin-bottom: 24px; }}
+        .card {{ background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; flex: 1; text-align: center; }}
+        .metric {{ font-size: 28px; font-weight: bold; color: #3b82f6; }}
+        table {{ width: 100%; border-collapse: collapse; background: #0f172a; border-radius: 8px; overflow: hidden; }}
+        th, td {{ padding: 10px 14px; text-align: left; border-bottom: 1px solid #1e293b; }}
+        th {{ background: #1e293b; color: #94a3b8; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>StoreLens 7.2.1 — Data Health & Quality Report</h1>
+        <p style="color: #94a3b8;">Local Data Audit Summary</p>
+    </div>
+    <div class="cards">
+        <div class="card"><div class="metric">{prof['health_score']}/100</div><div>Health Score</div></div>
+        <div class="card"><div class="metric">{prof['completeness']}%</div><div>Completeness</div></div>
+        <div class="card"><div class="metric">{prof['rows']}</div><div>Total Rows</div></div>
+        <div class="card"><div class="metric">{prof['duplicates']}</div><div>Duplicates</div></div>
+    </div>
+    <h2>Column Quality Analysis</h2>
+    <table>
+        <thead><tr><th>Column Name</th><th>Detected Type</th><th>Non-Blank Rows</th><th>Blank Rows</th><th>Unique Values</th></tr></thead>
+        <tbody>
+"""
+    for col in prof['column_details']:
+        html += f"<tr><td><b>{col['column']}</b></td><td>{col['type']}</td><td style='color:#4ade80;'>{col['non_blank']}</td><td style='color:#ef4444;'>{col['blank']}</td><td>{col['unique']}</td></tr>\n"
+
+    html += """</tbody></table></body></html>"""
+    path.write_text(html, encoding="utf-8")
+    return str(path)
