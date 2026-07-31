@@ -6,6 +6,13 @@ from pathlib import Path
 from difflib import SequenceMatcher
 import pandas as pd
 
+# Optional high-speed Polars acceleration with graceful fallback
+try:
+    import polars as pl
+    HAS_POLARS = True
+except ImportError:
+    HAS_POLARS = False
+
 STORE_FIELDS = [
     "Store Name", "SID", "Banner", "Nielsen Store Code",
     "Trip Received", "Last Trip", "Address 1", "Address 2",
@@ -64,6 +71,20 @@ def _unique_headers(header):
 
 def _read_delimited_ragged(p, ext):
     path = sanitize_path(p)
+    
+    # Accelerated Polars reader for standard delimited datasets
+    if HAS_POLARS and ext in (".csv", ".tsv", ".txt"):
+        try:
+            p_df = pl.read_csv(
+                path,
+                separator="\t" if ext == ".tsv" else ",",
+                infer_schema_length=0,
+                ignore_errors=True
+            )
+            return p_df.to_pandas().fillna("")
+        except Exception:
+            pass # Fall back to robust ragged reader on irregular structure
+            
     with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
         chunk = f.read(8192)
         f.seek(0)
