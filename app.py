@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property, QRunnable, QThreadPool, Qt
 from PySide6.QtQml import QQmlApplicationEngine
 
+# Core Logic Imports
 from core.common import read_table, json_value
 from core.explorer import run_sql
 from core.health import profile, statistic, export_html_report
@@ -22,12 +23,15 @@ from core.file_creator import review_dataframe, creator_validate
 
 BASE = Path(__file__).resolve().parent
 
+# --- THREADING WORKER CLASSES ---
 class WorkerSignals(QObject):
+    """Defines thread-safe signals for background tasks."""
     finished = Signal(object)
     error = Signal(object)
 
 
 class Worker(QRunnable):
+    """Worker thread that executes heavy tasks off the main GUI thread."""
     def __init__(self, fn, *args, **kwargs):
         super().__init__()
         self.fn = fn
@@ -44,9 +48,11 @@ class Worker(QRunnable):
             self.signals.error.emit(e)
 
 
+# --- MAIN BACKEND CLASS ---
 class Backend(QObject):
+    # Signals
     messageChanged = Signal()
-    toastSignal = Signal(str, str, str)
+    toastSignal = Signal(str, str, str)  # title, message, type (info, success, warning, error)
     
     creatorReady = Signal(str)
     creatorLoaded = Signal(str)
@@ -91,16 +97,21 @@ class Backend(QObject):
         err = f"Error: {str(e)}"
         self.message = err
         self.notify("Error Encountered", str(e), "error")
+        print("Backend error:", e)
         traceback.print_exc()
 
     def _local(self, path):
-        if not path: return ""
+        if not path:
+            return ""
         p = str(path).strip()
-        if p.startswith("file:///"): return p[8:]
-        elif p.startswith("file://"): return p[7:]
+        if p.startswith("file:///"):
+            return p[8:]
+        elif p.startswith("file://"):
+            return p[7:]
         return p
 
     def _run_async(self, func, callback_success, *args):
+        """Helper to run tasks in background threads and marshal results safely to GUI thread."""
         worker = Worker(func, *args)
         worker.signals.finished.connect(callback_success, Qt.QueuedConnection)
         worker.signals.error.connect(self.fail, Qt.QueuedConnection)
@@ -113,6 +124,7 @@ class Backend(QObject):
         except Exception:
             return ""
 
+    # --- STORE BUILDER ---
     @Slot(str, str)
     def exportCreator(self, rows_json, dst):
         self.say("Exporting...")
@@ -153,6 +165,7 @@ class Backend(QObject):
             
         self._run_async(task, on_complete)
 
+    # --- EXPLORE & HEALTH ---
     @Slot(str)
     def loadData(self, path):
         def task():
@@ -187,7 +200,8 @@ class Backend(QObject):
 
     @Slot(str, str)
     def search(self, query, col):
-        if self._df is None: return
+        if self._df is None: 
+            return
         def task():
             df = self._df
             if query:
@@ -212,7 +226,8 @@ class Backend(QObject):
 
     @Slot(str)
     def sql(self, query):
-        if self._df is None: return
+        if self._df is None: 
+            return
         def task():
             res_df = run_sql(self._df, query)
             view = res_df.head(1000).fillna("")
@@ -225,11 +240,13 @@ class Backend(QObject):
 
     @Slot(str, str, str)
     def stats(self, col, op, group):
-        if self._df is None: return
+        if self._df is None: 
+            return
         def task():
             return json.dumps(statistic(self._df, col, op, group))
         self._run_async(task, lambda payload: self.statsReady.emit(payload))
 
+    # --- RECORD REPAIR ---
     @Slot(str)
     def inspectRepair(self, path):
         def task():
@@ -304,6 +321,7 @@ class Backend(QObject):
             save_repaired(self._audit, self._local(dst))
         self._run_async(task, lambda _: self.notify("Repaired File Saved", "Exported copy successfully.", "success"))
 
+    # --- COMPARE & VALIDATE ---
     @Slot(str)
     def loadMaster(self, path):
         def task(): return read_table(self._local(path))
@@ -362,6 +380,7 @@ class Backend(QObject):
         except Exception as e:
             self.fail(e)
 
+    # --- SINGLE REVIEW ---
     @Slot(str)
     def reviewSingleFile(self, path):
         def task():
@@ -399,8 +418,17 @@ def main():
     engine.rootContext().setContextProperty("backend", backend)
     engine.load(QUrl.fromLocalFile(str(BASE / "qml" / "Main.qml")))
     
-    if not engine.rootObjects(): return 1
-    if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1": return 0
+    if not engine.rootObjects():
+        print("Failed to load QML root objects")
+        sys.stdout.flush()
+        return 1
+        
+    # --- CI STARTUP PROBE CHECK ---
+    if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
+        print("STORELENS_STARTUP_OK")
+        sys.stdout.flush()  # Ensures output is flushed to disk so PowerShell Tee-Object creates log file
+        return 0
+    # ------------------------------
     
     return app.exec()
 
