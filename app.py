@@ -3,13 +3,13 @@ import os
 import json
 import traceback
 from pathlib import Path
-
 import pandas as pd
+
 from PySide6.QtCore import QObject, Signal, Slot, QUrl, Property, QRunnable, QThreadPool
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-# Import all core logic modules
+# Import core modules
 from core.common import read_table, json_value
 from core.explorer import run_sql
 from core.health import profile, statistic
@@ -29,6 +29,7 @@ class WorkerSignals(QObject):
     finished = Signal(object)
     error = Signal(Exception)
 
+
 class Worker(QRunnable):
     """Worker thread to run long-running Python functions without freezing the UI."""
     def __init__(self, fn, *args, **kwargs):
@@ -45,6 +46,7 @@ class Worker(QRunnable):
             self.signals.finished.emit(result)
         except Exception as e:
             self.signals.error.emit(e)
+
 
 # --- BACKEND CLASS ---
 class Backend(QObject):
@@ -105,8 +107,14 @@ class Backend(QObject):
         traceback.print_exc()
 
     def _local(self, path):
-        if not path: return ""
-        return QUrl(path).toLocalFile() if path.startswith("file://") else path
+        if not path:
+            return ""
+        p = str(path).strip()
+        if p.startswith("file:///"):
+            return p[8:]
+        elif p.startswith("file://"):
+            return p[7:]
+        return p
 
     # --- ASYNC HELPER ---
     def _run_async(self, func, callback_success, *args):
@@ -120,7 +128,6 @@ class Backend(QObject):
     @Slot(result=str)
     def clipboardText(self):
         try:
-            from PySide6.QtGui import QGuiApplication
             return QGuiApplication.clipboard().text() or ""
         except Exception:
             return ""
@@ -142,7 +149,7 @@ class Backend(QObject):
             rows = json.loads(rows_json)
             findings = creator_validate(rows)
             return json.dumps({"count": len(findings), "findings": findings}), len(findings)
-        
+            
         def on_complete(result):
             payload, count = result
             self.creatorReady.emit(payload)
@@ -157,7 +164,7 @@ class Backend(QObject):
             local = self._local(path)
             df = read_table(local)
             headers = [str(c) for c in df.columns]
-            rows = [{headers[i]: json_value(v) for i, v in enumerate(row)} 
+            rows = [{headers[i]: json_value(v) for i, v in enumerate(row)}
                     for row in df.itertuples(index=False, name=None)]
             payload = json.dumps({"headers": headers, "rows": rows}, default=str)
             return payload, len(rows), Path(local).name
@@ -180,7 +187,7 @@ class Backend(QObject):
             df_view = df.head(1000).fillna("")
             table_data = {
                 "columns": [str(c) for c in df_view.columns],
-                "rows": df_view.values.tolist(),
+                "rows": df_view.head(100).to_dict(orient="records"),
                 "total": len(df),
                 "displayed": len(df_view),
                 "truncated": len(df) > 1000
@@ -197,7 +204,8 @@ class Backend(QObject):
 
     @Slot(str, str)
     def search(self, query, col):
-        if self._df is None: return
+        if self._df is None:
+            return
         self.say("Searching...")
         def task():
             if not query:
@@ -208,11 +216,11 @@ class Backend(QObject):
                 else:
                     mask = self._df.astype(str).apply(lambda x: x.str.contains(query, case=False, na=False)).any(axis=1)
                     res_df = self._df[mask]
-            
+                    
             view = res_df.head(1000).fillna("")
             return json.dumps({
                 "columns": [str(c) for c in view.columns],
-                "rows": view.values.tolist(),
+                "rows": view.head(100).to_dict(orient="records"),
                 "total": len(res_df),
                 "displayed": len(view)
             }), len(res_df)
@@ -226,14 +234,15 @@ class Backend(QObject):
 
     @Slot(str)
     def sql(self, query):
-        if self._df is None: return
+        if self._df is None:
+            return
         self.say("Executing SQL...")
         def task():
             res_df = run_sql(self._df, query)
             view = res_df.head(1000).fillna("")
             return json.dumps({
                 "columns": [str(c) for c in view.columns],
-                "rows": view.values.tolist(),
+                "rows": view.head(100).to_dict(orient="records"),
                 "total": len(res_df),
                 "displayed": len(view)
             })
@@ -246,7 +255,8 @@ class Backend(QObject):
 
     @Slot(str, str, str)
     def stats(self, col, op, group):
-        if self._df is None: return
+        if self._df is None:
+            return
         self.say("Generating statistics...")
         def task():
             return json.dumps(statistic(self._df, col, op, group))
@@ -414,15 +424,22 @@ class Backend(QObject):
         def task():
             df = read_table(self._local(path))
             res = review_dataframe(df)
-            res["previewRows"] = df.head(100).fillna("").to_dict(orient="records")
-            res["previewColumns"] = [str(c) for c in df.columns]
-            return json.dumps(res), len(df)
             
+            # Map keys cleanly to match SingleReviewPage.qml model bindings
+            payload = {
+                "totalRecords": res.get("recordCount", len(df)),
+                "attentionCount": res.get("issueCount", 0),
+                "previewColumns": [str(c) for c in df.columns],
+                "previewRows": df.head(100).fillna("").to_dict(orient="records"),
+                "findings": [{"message": f"Row {r['row']}: {'; '.join(r['issues'])}"} for r in res.get("rows", []) if r.get("issues")]
+            }
+            return json.dumps(payload), len(df)
+
         def on_complete(result):
             payload, count = result
             self.singleReviewReady.emit(payload)
             self.say(f"Analyzed {count} records.")
-            
+
         self._run_async(task, on_complete)
 
     @Slot(str, str)
@@ -445,15 +462,16 @@ def main():
     if not engine.rootObjects():
         print("Failed to load QML root objects")
         return 1
-
+        
     # --- CI STARTUP PROBE CHECK ---
     if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
         print("STORELENS_STARTUP_OK")
         sys.stdout.flush()
         return 0
     # ------------------------------
-
+    
     return app.exec()
+
 
 if __name__ == "__main__":
     sys.exit(main())
