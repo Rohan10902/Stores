@@ -5,18 +5,15 @@ import QtQuick.Layouts
 ApplicationWindow {
     id: root
     visible: true
-    width: 1024
-    height: 768
+    width: 1280
+    height: 720
     title: "StoreLens"
     
-    // Background color
-    color: "#1e1e2e"
-
     // ---------------------------------------------------------
-    // GLOBAL CONNECTION TO BACKEND
+    // 1. GLOBAL ERROR HANDLER CONNECTION
     // ---------------------------------------------------------
     Connections {
-        target: backend // Connected directly to MainBackendController
+        target: backend 
         
         function onErrorOccurred(title, details) {
             toast.showError(title, details)
@@ -24,60 +21,41 @@ ApplicationWindow {
     }
 
     // ---------------------------------------------------------
-    // MAIN UI CONTENT
+    // 2. YOUR ORIGINAL STORELENS UI GOES HERE
     // ---------------------------------------------------------
-    ColumnLayout {
-        anchors.centerIn: parent
-        spacing: 20
-
+    // --> PASTE YOUR ORIGINAL LAYOUT, SIDEBARS, AND VIEWS HERE <--
+    
+    Item {
+        anchors.fill: parent
+        
         Text {
-            // Defensive Binding: Fallback to "Unknown State" if backend is unavailable
-            text: "Status: " + (backend ? (backend.currentStatus ?? "Ready") : "Offline")
-            color: "#cdd6f4"
+            anchors.centerIn: parent
+            text: "Please paste your original StoreLens UI code here."
             font.pixelSize: 18
-            Layout.alignment: Qt.AlignHCenter
-        }
-
-        RowLayout {
-            spacing: 15
-            Layout.alignment: Qt.AlignHCenter
-
-            Button {
-                text: "Load Valid Data"
-                onClicked: {
-                    if (backend) backend.loadDataSafely("valid_dataset.csv")
-                }
-            }
-
-            Button {
-                text: "Simulate Critical Failure"
-                // This triggers the try-catch block in Python and shows the Toast UI
-                onClicked: {
-                    if (backend) backend.loadDataSafely("crash_test.csv")
-                }
-            }
+            color: "gray"
         }
     }
 
     // ---------------------------------------------------------
-    // GLOBAL TOAST NOTIFICATION (ERROR BANNER)
+    // 3. GLOBAL TOAST NOTIFICATION (ERROR BANNER)
     // ---------------------------------------------------------
+    // This stays at the bottom so it renders on top of your UI (z: 999)
     Rectangle {
         id: toast
         width: parent.width * 0.4
         height: 60
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
+        z: 999
         
         // Start hidden above the screen
         y: -height - 20 
         radius: 8
-        color: "#f38ba8" // Soft red color for errors
+        color: "#f38ba8" 
         
         property string errorTitle: ""
         property string errorMessage: ""
 
-        // Animation states
         states: [
             State {
                 name: "visible"
@@ -94,32 +72,31 @@ ApplicationWindow {
             anchors.margins: 10
             spacing: 15
 
-            Text {
+            Text { 
                 text: "⚠️"
-                font.pixelSize: 24
+                font.pixelSize: 24 
             }
 
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
-
-                Text {
+                
+                Text { 
                     text: toast.errorTitle
                     font.bold: true
                     color: "#11111b"
-                    font.pixelSize: 14
+                    font.pixelSize: 14 
                 }
-                Text {
+                Text { 
                     text: toast.errorMessage
                     color: "#181825"
                     font.pixelSize: 12
                     elide: Text.ElideRight
-                    Layout.fillWidth: true
+                    Layout.fillWidth: true 
                 }
             }
         }
 
-        // Timer to auto-hide the notification after 4 seconds
         Timer {
             id: hideTimer
             interval: 4000
