@@ -11,6 +11,27 @@ STORE_FIELDS = [
     "state", "pincode", "phone", "email", "status"
 ]
 
+# Common column field variations mapping for file creation and validation
+ALIASES = {
+    "code": "store_code",
+    "store code": "store_code",
+    "store_id": "store_code",
+    "id": "store_code",
+    "name": "store_name",
+    "store name": "store_name",
+    "store": "store_name",
+    "addr": "address",
+    "street": "address",
+    "town": "city",
+    "province": "state",
+    "postal code": "pincode",
+    "zip": "pincode",
+    "zipcode": "pincode",
+    "mobile": "phone",
+    "contact": "phone",
+    "mail": "email"
+}
+
 
 def read_table(file_path: str) -> pd.DataFrame:
     """
