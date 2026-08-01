@@ -12,7 +12,12 @@ from PySide6.QtQml import QQmlApplicationEngine
 from core.utils.logger import setup_logging, get_logger
 from core.controllers import MainBackendController
 
-BASE = Path(__file__).resolve().parent
+# Handle path resolution correctly for compiled executables vs script execution
+if getattr(sys, 'frozen', False):
+    BASE = Path(sys.executable).resolve().parent
+else:
+    BASE = Path(__file__).resolve().parent
+
 logger = get_logger("Bootstrap")
 
 logging.basicConfig(
@@ -51,11 +56,9 @@ def create_application(sys_argv):
     threadpool.setMaxThreadCount(max(2, os.cpu_count() or 4))
 
     logger.info("CHECKPOINT 2: Setting up QML engine and controllers...")
-    # Instantiate Aggregated Modular Controller and expose to QML
     backend = MainBackendController(threadpool=threadpool)
     engine.rootContext().setContextProperty("backend", backend)
 
-    # Ensure QML objects are not accessed after destruction
     def cleanup_resources():
         logger.info("Application shutting down. Intercepting background workers...")
         threadpool.clear() 
@@ -68,7 +71,6 @@ def create_application(sys_argv):
     logger.info("CHECKPOINT 3: Loading Main.qml...")
     main_qml = BASE / "qml" / "Main.qml"
     
-    # Verify if the file actually exists on disk
     if not main_qml.exists():
         logger.critical(f"CRITICAL: Main.qml not found at expected path: {main_qml}")
         return app, engine, 1
@@ -80,7 +82,6 @@ def create_application(sys_argv):
         logger.critical("CRITICAL: Failed to load Main.qml root object. Check for QML syntax errors or missing module imports.")
         return app, engine, 1
 
-    # CI Pipeline Startup Check
     if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
         print("STORELENS_STARTUP_OK")
         sys.stdout.flush()
