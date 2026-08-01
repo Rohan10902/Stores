@@ -1,47 +1,51 @@
+import os
 import csv
-import logging
-from typing import List, Dict
-from core.utils.text_processing import clean_cell_text
-from core.exceptions import InvalidCSVFormatException
+from core.utils.logger import get_logger
 
-logger = logging.getLogger("StoreLens.CSVRepair")
+logger = get_logger("CSVRepair")
 
-def robust_csv_parse(file_path: str) -> Dict[str, List]:
-    """Reads CSVs while recovering from empty rows, malformed headers, and padding mismatched columns."""
-    rows = []
-    headers = []
-    
+def save_repaired(audit: dict, dst_path: str) -> None:
+    """
+    Exports the repaired records to a new CSV file.
+    Includes defensive directory checks and write-permission validation.
+    """
+    if not audit or 'headers' not in audit or 'rows' not in audit:
+        raise ValueError("Audit data is empty or corrupted. Cannot save.")
+
+    if not dst_path:
+        raise ValueError("Destination path cannot be empty.")
+
+    # 🟠 HIGH PRIORITY: Defensive directory check (create if missing)
+    target_dir = os.path.dirname(dst_path)
+    if target_dir and not os.path.exists(target_dir):
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except OSError as e:
+            logger.error(f"Failed to create target directory: {target_dir}")
+            raise OSError(f"Could not access or create the target directory: {target_dir}") from e
+
+    # 🟠 HIGH PRIORITY: Explicit write-permission check
+    if os.path.exists(dst_path):
+        if not os.access(dst_path, os.W_OK):
+            raise PermissionError("Permission denied. The file is likely open in another program (like Excel). Please close it and try again.")
+
     try:
-        with open(file_path, mode='r', encoding='utf-8-sig', errors='replace') as f:
-            reader = csv.reader(f)
-            raw_headers = next(reader, None)
+        # 🟠 HIGH PRIORITY: Replace manual open() with a 'with open(...)' context manager
+        # newline='' prevents double-spacing issues in Windows CSV exports
+        with open(dst_path, mode='w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(audit['headers'])
             
-            if not raw_headers:
-                raise InvalidCSVFormatException("File appears empty.")
+            for row in audit['rows']:
+                # Ensure all elements are strings to prevent write errors
+                clean_row = [str(cell) if cell is not None else "" for cell in row]
+                writer.writerow(clean_row)
                 
-            headers = [clean_cell_text(h) for h in raw_headers]
-            expected_cols = len(headers)
-            
-            for line_num, row in enumerate(reader, start=2):
-                # 1. Skip completely empty rows
-                if not row or all(not str(c).strip() for c in row):
-                    continue
-                    
-                # 2. Clean individual cells
-                cleaned_row = [clean_cell_text(c) for c in row]
-                
-                # 3. Handle inconsistent column counts
-                if len(cleaned_row) < expected_cols:
-                    # Pad missing columns with empty strings
-                    cleaned_row.extend([""] * (expected_cols - len(cleaned_row)))
-                elif len(cleaned_row) > expected_cols:
-                    # Truncate extra orphaned data and log
-                    logger.warning(f"Row {line_num}: Truncated extra columns. Expected {expected_cols}, got {len(cleaned_row)}.")
-                    cleaned_row = cleaned_row[:expected_cols]
-                    
-                rows.append(cleaned_row)
-                
-        return {"headers": headers, "rows": rows}
+        logger.info(f"Successfully saved repaired CSV to {dst_path}")
         
-    except UnicodeDecodeError as e:
-        raise InvalidCSVFormatException("Unsupported file encoding. Please save as UTF-8.") from e
+    except PermissionError as pe:
+        logger.error(f"File locked during write: {dst_path}")
+        raise PermissionError("The file is currently open in another program. Please close it before saving.") from pe
+    except Exception as e:
+        logger.exception("Failed to write repaired CSV.")
+        raise RuntimeError("An unexpected error occurred while saving the file.") from e
