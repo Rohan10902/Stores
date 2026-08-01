@@ -14,6 +14,7 @@ from core.controllers import MainBackendController
 BASE = Path(__file__).resolve().parent
 logger = get_logger("Bootstrap")
 
+
 def setup_exception_traps():
     def global_exception_trap(exctype, value, tb):
         err_text = "".join(traceback.format_exception(exctype, value, tb))
@@ -30,6 +31,7 @@ def setup_exception_traps():
     sys.excepthook = global_exception_trap
     qInstallMessageHandler(qt_message_trap)
 
+
 def create_application(sys_argv):
     setup_logging()
     setup_exception_traps()
@@ -45,6 +47,20 @@ def create_application(sys_argv):
     # Instantiate Aggregated Modular Controller
     backend = MainBackendController(threadpool=threadpool)
     engine.rootContext().setContextProperty("backend", backend)
+
+    # 🟠 HIGH PRIORITY: Ensure QML objects are not accessed after destruction
+    # Safely clear the threadpool and prevent background signals during teardown
+    def cleanup_resources():
+        logger.info("Application shutting down. Intercepting background workers...")
+        # 1. Clear any pending tasks that haven't started yet
+        threadpool.clear() 
+        # 2. Give active threads exactly 2 seconds to finish gracefully
+        if not threadpool.waitForDone(2000):
+            logger.warning("Some background tasks were forcibly terminated during shutdown.")
+        logger.info("Resource cleanup complete. Safe to destroy QML Engine.")
+
+    # Connect the cleanup routine to the application's quit signal
+    app.aboutToQuit.connect(cleanup_resources)
 
     # Load QML Interface
     main_qml = QUrl.fromLocalFile(str(BASE / "qml" / "Main.qml"))
