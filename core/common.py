@@ -106,6 +106,13 @@ def norm_value(val) -> str:
         return ""
 
 
+def norm_name(val) -> str:
+    """
+    Normalizes names/strings for file creation matching.
+    """
+    return norm_value(val)
+
+
 def date_ok(val) -> bool:
     """
     Validates whether a value represents a valid date format.
