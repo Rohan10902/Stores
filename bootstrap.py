@@ -1,48 +1,63 @@
 # bootstrap.py
 import sys
-from typing import Tuple
-from PySide6.QtCore import QUrl
-from PySide6.QtGui import QGuiApplication
+import os
+import traceback
+from pathlib import Path
+
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QUrl, QThreadPool, qInstallMessageHandler, QtMsgType
 from PySide6.QtQml import QQmlApplicationEngine
 
-from core.utils.logger import setup_logging
-from core.controllers.import_controller import ImportController
-from core.controllers.repair_controller import RepairController
+from core.utils.logger import setup_logging, get_logger
+from core.controllers import MainBackendController
 
+BASE = Path(__file__).resolve().parent
+logger = get_logger("Bootstrap")
 
-def create_application(sys_argv: list) -> Tuple[QGuiApplication, QQmlApplicationEngine]:
-    """Initializes logging, Qt application, controllers, and QML engine."""
-    logger = setup_logging()
-    logger.info("Bootstrapping Application Engine...")
+def setup_exception_traps():
+    def global_exception_trap(exctype, value, tb):
+        err_text = "".join(traceback.format_exception(exctype, value, tb))
+        logger.critical(f"[CRITICAL EXCEPTION PREVENTED]:\n{err_text}")
+        sys.stdout.flush()
 
-    app = QGuiApplication(sys_argv)
+    def qt_message_trap(mode, context, message):
+        if mode == QtMsgType.QtFatalMsg:
+            logger.critical(f"[QT FATAL SUPPRESSED]: {message}")
+        elif mode == QtMsgType.QtCriticalMsg:
+            logger.error(f"[QT CRITICAL]: {message}")
+        sys.stdout.flush()
+
+    sys.excepthook = global_exception_trap
+    qInstallMessageHandler(qt_message_trap)
+
+def create_application(sys_argv):
+    setup_logging()
+    setup_exception_traps()
+    
+    logger.info("Initializing StoreLens Application...")
+    app = QApplication(sys_argv)
     engine = QQmlApplicationEngine()
 
-    # Initialize Backend Controllers
-    import_controller = ImportController()
-    repair_controller = RepairController()
+    # Configure hardware-aware threadpool
+    threadpool = QThreadPool.globalInstance()
+    threadpool.setMaxThreadCount(max(2, os.cpu_count() or 4))
 
-    # Connect Controller Cross-Talk
-    import_controller.importCompleted.connect(
-        lambda: repair_controller.load_dataset(
-            import_controller.table_model._headers,
-            import_controller.table_model._rows
-        )
-    )
+    # Instantiate Aggregated Modular Controller
+    backend = MainBackendController(threadpool=threadpool)
+    engine.rootContext().setContextProperty("backend", backend)
 
-    # Expose Controllers & Models to QML Context
-    context = engine.rootContext()
-    context.setContextProperty("importController", import_controller)
-    context.setContextProperty("repairController", repair_controller)
-    context.setContextProperty("storeTableModel", import_controller.table_model)
-
-    # Load Root QML View
-    qml_path = QUrl.fromLocalFile("qml/Main.qml")
-    engine.load(qml_path)
+    # Load QML Interface
+    main_qml = QUrl.fromLocalFile(str(BASE / "qml" / "Main.qml"))
+    engine.load(main_qml)
 
     if not engine.rootObjects():
-        logger.critical("Failed to load primary QML interface module.")
-        sys.exit(-1)
+        logger.critical("Failed to load root QML object.")
+        return app, engine, 1
 
-    logger.info("Application bootstrap complete.")
-    return app, engine
+    # CI Pipeline Startup Check
+    if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
+        print("STORELENS_STARTUP_OK")
+        sys.stdout.flush()
+        return app, engine, 0
+
+    return app, engine, None
