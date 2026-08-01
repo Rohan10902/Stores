@@ -29,16 +29,21 @@ Item {
         target: backend
         function onRepairReady(payload) {
             var audit = JSON.parse(payload)
-            totalRecords.text = audit.total_records || 0
-            expectedFields.text = audit.expected_fields || 0
-            healthyCount.text = audit.healthy_count || 0
-            autoFixedCount.text = audit.auto_fixed_count || 0
-            needsReviewCount.text = audit.issues ? audit.issues.length : 0
+            totalRecords.text = audit.records || 0
+            expectedFields.text = audit.expected || 0
+            healthyCount.text = audit.healthy || 0
+            autoFixedCount.text = audit.autoFixed || 0
+            needsReviewCount.text = audit.reviewRequired || 0
 
             issuesModel.clear()
             var issues = audit.issues || []
             for (var i = 0; i < issues.length; ++i) {
-                issuesModel.append(issues[i])
+                var it = issues[i]
+                issuesModel.append({
+                    row: String(it.line || ""),
+                    issue_type: it.problem || it.kind || "",
+                    description: it.diagnosis || ""
+                })
             }
         }
     }
