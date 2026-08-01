@@ -51,7 +51,6 @@ def inspect_csv(file_path: str) -> dict:
         raise ValueError(f"Malformed CSV formatting: {ce}") from ce
 
 
-# ⬇️ ADD ROBUST_CSV_PARSE HERE ⬇️
 def robust_csv_parse(file_path: str) -> dict:
     """
     Robustly parses a CSV file handling irregular columns or malformed rows.
@@ -87,7 +86,7 @@ def robust_csv_parse(file_path: str) -> dict:
         "recordCount": len(rows),
         "issueCount": len(issues)
     }
-    
+
 def join_shifted_rows(audit: dict, index: int) -> dict:
     try:
         if not audit or 'rows' not in audit:
@@ -96,7 +95,6 @@ def join_shifted_rows(audit: dict, index: int) -> dict:
         if not (0 <= index < len(rows)):
             raise IndexError(f"Index {index} out of range for rows list.")
         
-        # Core joining logic...
         return audit
     except (KeyError, IndexError) as err:
         logger.error(f"Index or key error joining rows: {err}")
@@ -109,7 +107,6 @@ def apply_mapping(audit: dict, issue_index: int, col_index: int, target: str) ->
     try:
         if not audit:
             raise ValueError("Audit object is empty.")
-        # Mapping logic...
         return audit
     except (KeyError, IndexError, ValueError) as err:
         logger.error(f"Invalid parameters mapping repair: {err}")
