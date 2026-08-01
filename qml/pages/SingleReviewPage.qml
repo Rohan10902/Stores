@@ -35,7 +35,7 @@ Item {
             var cols = d.previewColumns || []
             var rows = d.previewRows || []
             for (var i = 0; i < rows.length; ++i) {
-                previewModel.append(rows[i])
+                previewModel.append({ rowData: rows[i] })
             }
             
             findingsModel.clear()
@@ -129,7 +129,7 @@ Item {
                         Text {
                             anchors.fill: parent
                             anchors.margins: 6
-                            text: JSON.stringify(modelData)
+                            text: JSON.stringify(model.rowData || {})
                             color: "#f8fafc"
                             elide: Text.ElideRight
                         }
