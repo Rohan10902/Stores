@@ -36,7 +36,7 @@ def create_application(sys_argv):
     setup_logging()
     setup_exception_traps()
     
-    logger.info("Initializing StoreLens Application...")
+    logger.info("CHECKPOINT 1: Starting application initialization...")
     app = QApplication(sys_argv)
     engine = QQmlApplicationEngine()
 
@@ -44,30 +44,27 @@ def create_application(sys_argv):
     threadpool = QThreadPool.globalInstance()
     threadpool.setMaxThreadCount(max(2, os.cpu_count() or 4))
 
-    # Instantiate Aggregated Modular Controller
+    logger.info("CHECKPOINT 2: Setting up QML engine and controllers...")
+    # Instantiate Aggregated Modular Controller and expose to QML
     backend = MainBackendController(threadpool=threadpool)
     engine.rootContext().setContextProperty("backend", backend)
 
-    # 🟠 HIGH PRIORITY: Ensure QML objects are not accessed after destruction
-    # Safely clear the threadpool and prevent background signals during teardown
+    # Ensure QML objects are not accessed after destruction
     def cleanup_resources():
         logger.info("Application shutting down. Intercepting background workers...")
-        # 1. Clear any pending tasks that haven't started yet
         threadpool.clear() 
-        # 2. Give active threads exactly 2 seconds to finish gracefully
         if not threadpool.waitForDone(2000):
             logger.warning("Some background tasks were forcibly terminated during shutdown.")
         logger.info("Resource cleanup complete. Safe to destroy QML Engine.")
 
-    # Connect the cleanup routine to the application's quit signal
     app.aboutToQuit.connect(cleanup_resources)
 
-    # Load QML Interface
+    logger.info("CHECKPOINT 3: Loading Main.qml...")
     main_qml = QUrl.fromLocalFile(str(BASE / "qml" / "Main.qml"))
     engine.load(main_qml)
 
     if not engine.rootObjects():
-        logger.critical("Failed to load root QML object.")
+        logger.critical("CRITICAL: Failed to load Main.qml root object.")
         return app, engine, 1
 
     # CI Pipeline Startup Check
@@ -77,3 +74,17 @@ def create_application(sys_argv):
         return app, engine, 0
 
     return app, engine, None
+
+
+def main():
+    app, engine, exit_code = create_application(sys.argv)
+    
+    if exit_code is not None:
+        sys.exit(exit_code)
+        
+    logger.info("CHECKPOINT 4: Entering main event loop (app.exec())...")
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
