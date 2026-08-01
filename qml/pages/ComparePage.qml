@@ -301,7 +301,10 @@ Item {
 
                         MouseArea {
                             anchors.fill: parent
-                            onClicked: backend.detail(index, diffsOnlyCheck.checked)
+                            onClicked: {
+                                resultsListView.currentIndex = index
+                                backend.detail(index, diffsOnlyCheck.checked)
+                            }
                         }
                     }
                 }
