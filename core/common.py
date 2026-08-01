@@ -5,6 +5,12 @@ from core.utils.logger import get_logger
 
 logger = get_logger("Common")
 
+# Standard store field definitions required by store_validator.py
+STORE_FIELDS = [
+    "store_code", "store_name", "address", "city", 
+    "state", "pincode", "phone", "email", "status"
+]
+
 
 def read_table(file_path: str) -> pd.DataFrame:
     """
@@ -52,3 +58,51 @@ def json_value(val):
     except (ValueError, TypeError) as err:
         logger.warning(f"Failed to parse cell value, converting to string: {err}")
         return str(val)
+
+
+def map_columns(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
+    """
+    Maps DataFrame columns according to a given dictionary mapping.
+    """
+    if df is None or df.empty:
+        return df
+    try:
+        return df.rename(columns=mapping)
+    except (TypeError, ValueError) as err:
+        logger.error(f"Error mapping columns: {err}")
+        return df
+
+
+def norm_value(val) -> str:
+    """
+    Normalizes string values for comparison (strips whitespace and lowers case).
+    """
+    if pd.isna(val):
+        return ""
+    try:
+        return str(val).strip().lower()
+    except (ValueError, TypeError):
+        return ""
+
+
+def date_ok(val) -> bool:
+    """
+    Validates whether a value represents a valid date format.
+    """
+    if pd.isna(val) or not str(val).strip():
+        return False
+    try:
+        pd.to_datetime(val)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def binary_ok(val) -> bool:
+    """
+    Validates whether a value represents a valid binary indicator (Yes/No, 1/0, True/False).
+    """
+    if pd.isna(val):
+        return False
+    norm = norm_value(val)
+    return norm in ["1", "0", "true", "false", "yes", "no", "y", "n"]
