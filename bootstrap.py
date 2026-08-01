@@ -69,10 +69,19 @@ def create_application(sys_argv):
     app.aboutToQuit.connect(cleanup_resources)
 
     logger.info("CHECKPOINT 3: Loading Main.qml...")
-    main_qml = BASE / "qml" / "Main.qml"
     
-    if not main_qml.exists():
-        logger.critical(f"CRITICAL: Main.qml not found at expected path: {main_qml}")
+    # Robust multi-path search for Main.qml across build layouts
+    possible_paths = [
+        BASE / "qml" / "Main.qml",
+        BASE / "_internal" / "qml" / "Main.qml",
+        Path(sys.executable).resolve().parent / "qml" / "Main.qml" if getattr(sys, 'frozen', False) else None,
+        Path(sys.executable).resolve().parent / "_internal" / "qml" / "Main.qml" if getattr(sys, 'frozen', False) else None,
+    ]
+    
+    main_qml = next((p for p in possible_paths if p and p.exists()), None)
+    
+    if not main_qml:
+        logger.critical(f"CRITICAL: Main.qml not found in any expected paths. Checked: {[str(p) for p in possible_paths if p]}")
         return app, engine, 1
         
     logger.info(f"Loading QML file from verified path: {main_qml}")
