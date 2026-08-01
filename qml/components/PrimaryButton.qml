@@ -1,25 +1,27 @@
-import QtQuick
-import QtQuick.Controls
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import "../theme"
 
 Button {
     id: control
-
+    text: "Action"
+    
     contentItem: Text {
         text: control.text
-        color: "#ffffff"
+        font: Theme.fontBody
+        color: Theme.surface
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
-        font.pixelSize: 12
-        font.bold: true
     }
 
     background: Rectangle {
-        implicitWidth: Math.max(80, contentItem.implicitWidth + 20)
-        implicitHeight: 32
-        radius: 6
-        color: control.pressed ? "#1d4ed8" : (control.hovered ? "#3b82f6" : "#2563eb")
-        border.color: "#60a5fa"
-        border.width: 1
+        implicitWidth: 120
+        implicitHeight: 40
+        radius: Theme.radius
+        color: control.down || control.hovered ? Theme.primaryHover : Theme.primary
+        
+        Behavior on color {
+            ColorAnimation { duration: 150 }
+        }
     }
 }
