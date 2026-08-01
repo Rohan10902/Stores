@@ -1,33 +1,53 @@
+# core/mapping_store.py
 import json
-from pathlib import Path
+import os
+from core.utils.logger import get_logger
 
-class MappingStore:
-    def __init__(self, path=None):
-        self.path = Path(path or (Path.home() / ".store_data_assistant" / "approved_mappings.json"))
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.data = self._load()
+logger = get_logger("MappingStore")
 
-    def _load(self):
-        try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
-        except Exception:
-            return {"version": 1, "mappings": {}}
+def load_mappings(file_path: str) -> dict:
+    """
+    Safely loads saved column mapping profiles from disk.
+    """
+    if not file_path or not os.path.exists(file_path):
+        return {}
 
-    @staticmethod
-    def signature(value):
-        s = str(value or "").strip().lower()
-        if s in {"yes","no","true","false","y","n","1","0","active","inactive"}:
-            return "boolean:" + s
-        if s.isdigit() and len(s) in (5,6):
-            return "zip-like"
-        return "literal:" + s
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.warning(f"Mapping file not found at {file_path}. Returning empty mappings.")
+        return {}
+    except json.JSONDecodeError as jde:
+        logger.error(f"Mapping file is corrupted or malformed JSON: {jde}")
+        return {}
+    except OSError as oe:
+        logger.error(f"OS error reading mapping file {file_path}: {oe}")
+        return {}
+    except Exception as e:
+        # Final boundary catch with full traceback logging
+        logger.exception(f"Unexpected error loading mappings from {file_path}")
+        return {}
 
-    def remember(self, value, target):
-        key = self.signature(value)
-        row = self.data["mappings"].setdefault(key, {})
-        row[target] = int(row.get(target, 0)) + 1
-        self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+def save_mappings(file_path: str, data: dict) -> bool:
+    """
+    Safely saves column mapping profiles to disk.
+    """
+    if not file_path:
+        return False
 
-    def suggestions(self, value):
-        row = self.data.get("mappings", {}).get(self.signature(value), {})
-        return dict(row)
+    try:
+        target_dir = os.path.dirname(file_path)
+        if target_dir and not os.path.exists(target_dir):
+            os.makedirs(target_dir, exist_ok=True)
+
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4)
+        return True
+        
+    except (OSError, TypeError, ValueError) as err:
+        logger.error(f"Failed to save mappings to {file_path}: {err}")
+        return False
+    except Exception as e:
+        logger.exception(f"Unexpected error saving mappings to {file_path}")
+        return False
