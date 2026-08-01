@@ -53,29 +53,67 @@ def profile(df):
         "column_details": column_details
     }
 
+def _outliers(nums, limit=10):
+    if len(nums) < 4:
+        return None
+    q1, q3 = nums.quantile(0.25), nums.quantile(0.75)
+    iqr = q3 - q1
+    if iqr == 0:
+        return nums.iloc[0:0]
+    lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    return nums[(nums < lo) | (nums > hi)].head(limit)
+
+
+def _statistic_group(gdf, col, op, prefix=""):
+    results = []
+    clean = gdf[col][~_blank(gdf[col])]
+    if op in ("Summary", "Quick Summary"):
+        results.append({"metric": f"{prefix}Total Records", "result": str(len(gdf))})
+        results.append({"metric": f"{prefix}Populated Values", "result": str(len(clean))})
+        results.append({"metric": f"{prefix}Blank Cell Count", "result": str(int(_blank(gdf[col]).sum()))})
+        results.append({"metric": f"{prefix}Unique Values", "result": str(int(clean.nunique())) if len(clean) else "0"})
+        nums = pd.to_numeric(clean, errors="coerce").dropna()
+        if len(nums):
+            results.append({"metric": f"{prefix}Numeric Mean", "result": f"{nums.mean():.2f}"})
+            results.append({"metric": f"{prefix}Minimum", "result": str(nums.min())})
+            results.append({"metric": f"{prefix}Maximum", "result": str(nums.max())})
+    elif op in ("Frequency", "Frequency Distribution"):
+        counts = clean.astype(str).value_counts().head(10)
+        for val, cnt in counts.items():
+            results.append({"metric": f"{prefix}{val}", "result": f"{cnt} row(s)"})
+    elif op == "Average":
+        nums = pd.to_numeric(clean, errors="coerce").dropna()
+        if len(nums):
+            results.append({"metric": f"{prefix}Average ({col})", "result": f"{nums.mean():.2f}"})
+        else:
+            results.append({"metric": f"{prefix}Average ({col})", "result": "No numeric values found"})
+    elif op == "Outliers":
+        nums = pd.to_numeric(clean, errors="coerce").dropna()
+        found = _outliers(nums)
+        if found is None:
+            results.append({"metric": f"{prefix}Outliers ({col})", "result": "Not enough numeric values"})
+        elif found.empty:
+            results.append({"metric": f"{prefix}Outliers ({col})", "result": "None detected"})
+        else:
+            for val in found:
+                results.append({"metric": f"{prefix}Outlier", "result": str(val)})
+    else:
+        results.append({"metric": f"{prefix}{op} ({col})", "result": str(len(clean))})
+    return results
+
+
 def statistic(df, col, op, group=""):
     if col not in df.columns:
         return {"results": [{"metric": "Error", "result": f"Column '{col}' not found"}]}
-    
+
     results = []
     try:
-        clean = df[col][~_blank(df[col])]
-        if op in ("Summary", "Quick Summary"):
-            results.append({"metric": "Total Records", "result": str(len(df))})
-            results.append({"metric": "Populated Values", "result": str(len(clean))})
-            results.append({"metric": "Blank Cell Count", "result": str(int(_blank(df[col]).sum()))})
-            results.append({"metric": "Unique Values", "result": str(int(clean.nunique())) if len(clean) else "0"})
-            nums = pd.to_numeric(clean, errors="coerce").dropna()
-            if len(nums):
-                results.append({"metric": "Numeric Mean", "result": f"{nums.mean():.2f}"})
-                results.append({"metric": "Minimum", "result": str(nums.min())})
-                results.append({"metric": "Maximum", "result": str(nums.max())})
-        elif op in ("Frequency", "Frequency Distribution"):
-            counts = clean.astype(str).value_counts().head(10)
-            for val, cnt in counts.items():
-                results.append({"metric": str(val), "result": f"{cnt} row(s)"})
+        group_col = group if group and group != "None" and group in df.columns else ""
+        if group_col:
+            for gval, gdf in df.groupby(df[group_col].astype(str)):
+                results.extend(_statistic_group(gdf, col, op, prefix=f"[{group_col}={gval}] "))
         else:
-            results.append({"metric": f"{op} ({col})", "result": str(len(clean))})
+            results.extend(_statistic_group(df, col, op))
     except Exception as e:
         results.append({"metric": "Error", "result": str(e)})
 
