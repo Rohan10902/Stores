@@ -8,9 +8,9 @@ logger = get_logger("CSVRepair")
 
 class CSVParseResult(dict):
     """
-    A dictionary subclass that also supports 2-element tuple unpacking 
-    (headers, rows) to satisfy durability test expectations, 
-    while maintaining full dictionary access for regression tests.
+    A dictionary subclass that supports 2-element tuple unpacking 
+    (headers, rows) to satisfy test suite expectations, 
+    while maintaining full dictionary access for regression/audit tests.
     """
     def __iter__(self):
         return iter((self["headers"], self["rows"]))
@@ -19,6 +19,7 @@ class CSVParseResult(dict):
 def inspect_csv(file_path: str) -> dict:
     """
     Inspects a CSV file for alignment issues, shifted rows, and formatting errors.
+    Returns a CSVParseResult supporting both dict lookup and 2-tuple unpacking.
     """
     if not file_path or not os.path.exists(file_path):
         raise FileNotFoundError(f"CSV file not found: {file_path}")
@@ -44,12 +45,12 @@ def inspect_csv(file_path: str) -> dict:
                         "message": f"Expected {len(headers)} columns, found {len(row)}."
                     })
 
-        return {
+        return CSVParseResult({
             "headers": headers,
             "rows": rows,
             "issues": issues,
             "history": []
-        }
+        })
 
     except FileNotFoundError as fnf:
         logger.error(f"File not found during inspection: {fnf}")
