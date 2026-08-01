@@ -1,101 +1,75 @@
-# core/worker_manager.py
-import logging
-import uuid
-from typing import Optional
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+# core/models/store_table_model.py
+import pandas as pd
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex
+from core.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
-
-
-class BaseWorker(QObject):
-    """Base worker class with built-in task tracking."""
-    finished = Signal(str, object)  # task_id, result
-    failed = Signal(str, Exception)  # task_id, exception
-
-    def __init__(self, parent: Optional[QObject] = None):
-        super().__init__(parent)
-        self.task_id: str = ""
-        self._is_cancelled: bool = False
-
-    def cancel(self):
-        self._is_cancelled = True
-
-    @property
-    def is_cancelled(self) -> bool:
-        return self._is_cancelled
+logger = get_logger("StoreTableModel")
 
 
-class WorkerManager(QObject):
+class StoreTableModel(QAbstractTableModel):
     """
-    Guarantees thread-safe single-worker execution.
-    Cleans up resources and invalidates stale background results.
+    High-performance QAbstractTableModel adapter for Pandas DataFrames,
+    optimized for smooth virtualization and rendering inside QML TableViews.
     """
-    def __init__(self, parent: Optional[QObject] = None):
+    def __init__(self, df: pd.DataFrame = None, parent=None):
         super().__init__(parent)
-        self._current_thread: Optional[QThread] = None
-        self._current_worker: Optional[BaseWorker] = None
-        self._active_task_id: Optional[str] = None
+        self._df = df if df is not None else pd.DataFrame()
 
-    @property
-    def active_task_id(self) -> Optional[str]:
-        return self._active_task_id
-
-    def is_current_task(self, task_id: str) -> bool:
-        return self._active_task_id is not None and self._active_task_id == task_id
-
-    def cancel_active_worker(self) -> None:
-        """Stops and disconnects any currently executing worker thread."""
-        if self._current_worker:
-            logger.info(f"Canceling active worker task ID: {self._active_task_id}")
-            self._current_worker.cancel()
-            # Block signals immediately so pending emissions are ignored
-            self._current_worker.blockSignals(True)
-
-        if self._current_thread and self._current_thread.isRunning():
-            self._current_thread.quit()
-            if not self._current_thread.wait(1500):
-                logger.warning("Thread did not quit gracefully. Terminating.")
-                self._current_thread.terminate()
-                self._current_thread.wait()
-
-        self._cleanup_references()
-
-    def start_worker(self, worker: BaseWorker) -> str:
+    def setDataFrame(self, df: pd.DataFrame):
         """
-        Cancels any existing worker, wraps the new worker in a QThread,
-        assigns a unique task_id, and manages resource cleanup.
+        Safely replaces the underlying DataFrame and signals the view to update.
         """
-        self.cancel_active_worker()
+        self.beginResetModel()
+        self._df = df if df is not None else pd.DataFrame()
+        self.endResetModel()
 
-        task_id = str(uuid.uuid4())
-        worker.task_id = task_id
-        self._active_task_id = task_id
+    def rowCount(self, parent=QModelIndex()) -> int:
+        if parent.isValid():
+            return 0
+        return len(self._df)
 
-        thread = QThread()
-        worker.moveToThread(thread)
+    def columnCount(self, parent=QModelIndex()) -> int:
+        if parent.isValid():
+            return 0
+        return len(self._df.columns)
 
-        # Wire thread lifecycle and garbage collection
-        thread.started.connect(worker.run if hasattr(worker, 'run') else lambda: None)
-        worker.finished.connect(lambda tid, _: self._on_worker_done(thread))
-        worker.failed.connect(lambda tid, _: self._on_worker_done(thread))
+    def data(self, index: QModelIndex, role=Qt.DisplayRole):
+        """
+        Fast O(1) cell data lookup using pandas .iat[] to prevent UI lag.
+        """
+        if not index.isValid():
+            return None
 
-        thread.finished.connect(thread.deleteLater)
-        worker.destroyed.connect(lambda: logger.debug("Worker object destroyed."))
+        if role == Qt.DisplayRole or role == Qt.EditRole:
+            try:
+                val = self._df.iat[index.row(), index.column()]
+                if pd.isna(val):
+                    return ""
+                return str(val)
+            except (IndexError, TypeError, ValueError) as err:
+                logger.error(f"Error accessing cell at row {index.row()}, col {index.column()}: {err}")
+                return ""
+        return None
 
-        self._current_worker = worker
-        self._current_thread = thread
+    def headerData(self, section: int, orientation: Qt.Orientation, role=Qt.DisplayRole):
+        """
+        Provides column and row header data for the table view.
+        """
+        if role != Qt.DisplayRole:
+            return None
 
-        thread.start()
-        return task_id
+        if orientation == Qt.Orientation.Horizontal:
+            if 0 <= section < len(self._df.columns):
+                return str(self._df.columns[section])
+        elif orientation == Qt.Orientation.Vertical:
+            return str(section + 1)
+        return None
 
-    @Slot()
-    def _on_worker_done(self, thread: QThread) -> None:
-        if thread and thread.isRunning():
-            thread.quit()
-
-    def _cleanup_references(self) -> None:
-        if self._current_worker:
-            self._current_worker.deleteLater()
-        self._current_worker = None
-        self._current_thread = None
-        self._active_task_id = None
+    def roleNames(self) -> dict:
+        """
+        Maps column names to custom QML roles for flexible view binding.
+        """
+        roles = super().roleNames()
+        for i, col in enumerate(self._df.columns):
+            roles[Qt.UserRole + i + 1] = str(col).encode('utf-8')
+        return roles
