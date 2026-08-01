@@ -23,7 +23,7 @@ from core.csv_repair import (
     undo_last_created_action, save_repaired
 )
 from core.store_validator import suggest_keys, compare, validation_insights
-from core.file_creator import review_dataframe, creator_validate
+from core.file_creator import review_dataframe, creator_validate, export_creator
 
 BASE = Path(__file__).resolve().parent
 
@@ -75,6 +75,7 @@ class Backend(QObject):
     
     creatorReady = Signal(str)
     creatorLoaded = Signal(str)
+    creatorExported = Signal(str)
     healthReady = Signal(str)
     tableReady = Signal(str)
     statsReady = Signal(str)
@@ -154,10 +155,13 @@ class Backend(QObject):
     def exportCreator(self, rows_json, dst):
         self.say("Exporting...")
         def task():
+            rows = json.loads(rows_json)
             dst_path = self._local(dst)
-            Path(dst_path).write_text(rows_json, encoding="utf-8")
-            return Path(dst_path).name
-        self._run_async(task, lambda name: self.notify("Export Complete", f"Saved to {name}", "success"))
+            return export_creator(rows, dst_path)
+        def on_complete(saved_path):
+            self.creatorExported.emit(saved_path)
+            self.notify("Export Complete", f"Saved to {Path(saved_path).name}", "success")
+        self._run_async(task, on_complete)
 
     @Slot(str)
     def validateCreator(self, rows_json):
