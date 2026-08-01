@@ -2,6 +2,7 @@
 import sys
 import os
 import traceback
+import logging
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
@@ -14,6 +15,11 @@ from core.controllers import MainBackendController
 BASE = Path(__file__).resolve().parent
 logger = get_logger("Bootstrap")
 
+logging.basicConfig(
+    filename='startup_debug.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 def setup_exception_traps():
     def global_exception_trap(exctype, value, tb):
