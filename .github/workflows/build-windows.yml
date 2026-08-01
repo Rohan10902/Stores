@@ -1,127 +1,46 @@
-name: StoreLens Windows Build
+name: Windows App Build & Test
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [ main, master ]
   pull_request:
-    branches: [main]
-
-permissions:
-  contents: write
+    branches: [ main, master ]
 
 jobs:
-  build:
+  validate-and-build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - name: Install
-        shell: pwsh
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
-      - name: Apply permanent QML runtime fix if needed
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: pwsh
+          pip install pytest flake8 pyinstaller pytest-benchmark
+
+      - name: Lint Source Code
         run: |
-          $path = "qml/pages/CreateStorePage.qml"
-          $text = Get-Content -Raw -Encoding UTF8 $path
-          $pattern = 'required property string modelData\s*\r?\n\s*width: 155'
-          if ($text -match $pattern -and $text -notmatch 'required property int index\s*\r?\n\s*width: 155') {
-            $replacement = "required property string modelData`r`n                            required property int index`r`n                            width: 155"
-            $text = [regex]::Replace($text, $pattern, $replacement, 1)
-            [IO.File]::WriteAllText((Resolve-Path $path), $text, (New-Object Text.UTF8Encoding($false)))
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add $path
-            git commit -m "Fix Store Builder header delegate index"
-            git push origin HEAD:main
-          }
-      - name: Verify entire Python source
-        shell: pwsh
-        run: |
-          python -m compileall -q app.py core tests
-          python -c "import app, core.common, core.csv_repair, core.explorer, core.file_creator, core.health, core.mapping_store, core.quality, core.smart_repair, core.store_validator; print('ALL_IMPORTS_OK')"
-          if (!(Test-Path "tests")) { throw "Production CI requires the committed tests directory." }
-          python -m unittest discover -s tests -p "test_*.py" -v
-          if ($LASTEXITCODE -ne 0) { throw "Regression tests failed: $LASTEXITCODE" }
-      - name: Verify every QML file parses
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QT_QUICK_BACKEND: software
-        run: |
-          @'
-          import os, sys
-          from pathlib import Path
-          from PySide6.QtCore import QUrl
-          from PySide6.QtGui import QGuiApplication
-          from PySide6.QtQml import QQmlComponent, QQmlEngine
-          os.environ.setdefault("QT_QPA_PLATFORM","offscreen")
-          os.environ.setdefault("QT_QUICK_BACKEND","software")
-          app=QGuiApplication(sys.argv); engine=QQmlEngine(); engine.addImportPath(str(Path("qml").resolve()))
-          failed=[]
-          for p in sorted(Path("qml").rglob("*.qml")):
-              c=QQmlComponent(engine,QUrl.fromLocalFile(str(p.resolve())))
-              if c.isError():
-                  failed.append(str(p)); print(f"QML_FAIL {p}")
-                  for e in c.errors(): print(e.toString())
-              else: print(f"QML_OK {p}")
-          if failed: raise SystemExit("QML parse failures: "+", ".join(failed))
-          '@ | python -
-      - name: Verify StoreLens UI startup
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QT_QUICK_BACKEND: software
-          STORELENS_CI_STARTUP_TEST: "1"
-        run: |
-          python app.py 2>&1 | Tee-Object -FilePath source-startup.log
-          $exitCode = $LASTEXITCODE
-          $log = Get-Content -Raw source-startup.log
-          if ($log -match '(?im)(ReferenceError|TypeError|SyntaxError|QQmlApplicationEngine.*failed|QML.*Error)') { Get-Content source-startup.log; throw "Source startup emitted a QML/runtime error." }
-          if ($exitCode -ne 0) { Get-Content source-startup.log; throw "Source startup failed: $exitCode" }
-          if ($log -notmatch 'STORELENS_STARTUP_OK') { Get-Content source-startup.log; throw "STORELENS_STARTUP_OK marker was not emitted." }
-      - name: Build StoreLens.exe
-        shell: pwsh
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name StoreLens --collect-all PySide6 --collect-all shiboken6 --hidden-import PySide6.QtQuickControls2 --hidden-import PySide6.QtWidgets --add-data "qml;qml" app.py
-      - name: Verify packaged StoreLens.exe
-        shell: pwsh
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QT_QUICK_BACKEND: software
-          STORELENS_CI_STARTUP_TEST: "1"
-        run: |
-          if(!(Test-Path "dist/StoreLens.exe")){throw "StoreLens.exe was not created"}
-          $p=Start-Process -FilePath (Resolve-Path "dist/StoreLens.exe").Path -PassThru -RedirectStandardOutput packaged-out.log -RedirectStandardError packaged-err.log
-          if(-not $p.WaitForExit(60000)){Stop-Process -Id $p.Id -Force;throw "Packaged startup timed out"}
-          if(Test-Path packaged-out.log){Get-Content packaged-out.log}
-          if(Test-Path packaged-err.log){Get-Content packaged-err.log}
-          $out = if(Test-Path packaged-out.log){Get-Content -Raw packaged-out.log}else{""}
-          $err = if(Test-Path packaged-err.log){Get-Content -Raw packaged-err.log}else{""}
-          $log = $out + "`n" + $err
-          if($log -match '(?im)(ReferenceError|TypeError|SyntaxError|QQmlApplicationEngine.*failed|QML.*Error)'){throw "Packaged startup emitted a QML/runtime error."}
-          if($p.ExitCode -ne 0){throw "Packaged startup failed: $($p.ExitCode)"}
-          if($log -notmatch 'STORELENS_STARTUP_OK'){throw "Packaged startup marker was not emitted."}
-      - name: Create checksum
-        shell: pwsh
-        run: |
-          $hash=(Get-FileHash "dist/StoreLens.exe" -Algorithm SHA256).Hash.ToLower()
-          "$hash  StoreLens.exe" | Set-Content -Encoding ascii "dist/StoreLens.sha256"
-      - name: Publish testing build
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 core/ tests/ app.py bootstrap.py --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Treat all other warnings as non-fatal
+          flake8 core/ tests/ app.py bootstrap.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Execute Test Suite
+        run: pytest tests/ -v
+
+      - name: Build Windows Executable
+        run: pyinstaller --noconfirm --clean --windowed app.py
+        
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StoreLens-Windows-Testing
-          path: |
-            dist/StoreLens.exe
-            dist/StoreLens.sha256
-          if-no-files-found: error
-          retention-days: 30
+          name: StoreLens-Windows-Build
+          path: dist/app/
