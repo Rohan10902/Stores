@@ -66,11 +66,18 @@ def create_application(sys_argv):
     app.aboutToQuit.connect(cleanup_resources)
 
     logger.info("CHECKPOINT 3: Loading Main.qml...")
-    main_qml = QUrl.fromLocalFile(str(BASE / "qml" / "Main.qml"))
-    engine.load(main_qml)
+    main_qml = BASE / "qml" / "Main.qml"
+    
+    # Verify if the file actually exists on disk
+    if not main_qml.exists():
+        logger.critical(f"CRITICAL: Main.qml not found at expected path: {main_qml}")
+        return app, engine, 1
+        
+    logger.info(f"Loading QML file from verified path: {main_qml}")
+    engine.load(QUrl.fromLocalFile(str(main_qml)))
 
     if not engine.rootObjects():
-        logger.critical("CRITICAL: Failed to load Main.qml root object.")
+        logger.critical("CRITICAL: Failed to load Main.qml root object. Check for QML syntax errors or missing module imports.")
         return app, engine, 1
 
     # CI Pipeline Startup Check
