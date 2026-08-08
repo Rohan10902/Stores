@@ -8,11 +8,153 @@ import "../theme"
 Item {
     id: root
 
+    property string master: ""
+    property string upload: ""
+    property int selected: -1
+    property bool diff: true
+
+    property int total: 0
+    property int ok: 0
+    property int rev: 0
+    property int err: 0
+    property int attention: 0
+    property string filterKey: ""
+
+    property string detailProblem: ""
+    property string detailStatus: ""
+    property var detailContext: ({})
+    property var suggestedKeys: []
+    property string key1: "SID"
+    property string key2: "Nielsen Store Code"
+
+    ListModel { id: rows }
+    ListModel { id: details }
+    ListModel { id: related }
+    ListModel { id: insights }
+
+    FileDialog {
+        id: md
+        title: "Select Master Dataset"
+        nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
+        onAccepted: {
+            master = selectedFile.toString()
+            if (typeof backend !== "undefined") {
+                backend.loadMaster(master)
+            }
+        }
+    }
+
+    FileDialog {
+        id: ud
+        title: "Select Uploaded / Country File"
+        nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
+        onAccepted: {
+            upload = selectedFile.toString()
+            if (typeof backend !== "undefined") {
+                backend.loadUpload(upload)
+            }
+        }
+    }
+
+    Connections {
+        target: typeof backend !== "undefined" ? backend : null
+        ignoreUnknownSignals: true
+
+        function onMappingReady(p) {
+            try {
+                var d = JSON.parse(p)
+                suggestedKeys = d.suggestedKeys || ["SID"]
+                key1 = suggestedKeys[0] || "SID"
+                key2 = suggestedKeys.length > 1 ? suggestedKeys[1] : "(None)"
+            } catch (e) {
+                // Safe parsing fallback
+            }
+        }
+
+        function onValidationReady(p) {
+            try {
+                var d = JSON.parse(p)
+                total = d.total || 0
+                ok = d.correct || 0
+                rev = d.review || 0
+                err = d.errors || 0
+                attention = d.attention || 0
+                filterKey = ""
+                rows.clear()
+                insights.clear()
+                details.clear()
+                related.clear()
+                selected = -1
+
+                var rawRows = d.rows || []
+                for (var i = 0; i < rawRows.length; i++) {
+                    var r = rawRows[i]
+                    rows.append({
+                        row: String(r.row || ""),
+                        sid: String(r.sid || ""),
+                        store: String(r.storeName || ""),
+                        status: String(r.status || ""),
+                        problem: String(r.problem || ""),
+                        categoriesJson: JSON.stringify(r.categories || [])
+                    })
+                }
+
+                var rawInsights = d.insights || []
+                for (var j = 0; j < rawInsights.length; j++) {
+                    var x = rawInsights[j]
+                    insights.append({
+                        key: String(x.key || ""),
+                        title: String(x.title || ""),
+                        count: String(x.count || ""),
+                        severity: String(x.severity || ""),
+                        action: String(x.action || "")
+                    })
+                }
+            } catch (e) {
+                // Safe parsing fallback
+            }
+        }
+
+        function onDetailReady(p) {
+            try {
+                var d = JSON.parse(p)
+                detailProblem = d.problem || ""
+                detailStatus = d.status || ""
+                detailContext = d.context || {}
+                details.clear()
+                related.clear()
+
+                var rawFields = d.rows || []
+                for (var i = 0; i < rawFields.length; i++) {
+                    var r = rawFields[i]
+                    details.append({
+                        fieldName: String(r.field || ""),
+                        masterValue: r.master === undefined || r.master === null ? "" : String(r.master),
+                        uploadedValue: r.uploaded === undefined || r.uploaded === null ? "" : String(r.uploaded),
+                        resultText: String(r.result || ""),
+                        severityText: String(r.severity || "")
+                    })
+                }
+
+                var rr = (detailContext.relatedUploaded || [])
+                for (var j = 0; j < rr.length; j++) {
+                    related.append({
+                        row: String(rr[j].row || ""),
+                        sid: String(rr[j].sid || ""),
+                        nielsen: String(rr[j].nielsen || ""),
+                        store: String(rr[j].storeName || "")
+                    })
+                }
+            } catch (e) {
+                // Safe parsing fallback
+            }
+        }
+    }
+
     ScrollView {
         id: scrollView
         anchors.fill: parent
         clip: true
-        contentWidth: availableWidth
 
         ColumnLayout {
             width: scrollView.availableWidth
@@ -20,248 +162,494 @@ Item {
             spacing: Theme.spacingLarge
 
             PageTitle {
-                title: "Compare & Validate"
-                subtitle: "Match and validate uploaded store data against the Master dataset."
+                text: "Compare & Validate"
+                Layout.fillWidth: true
+            }
+            Text {
+                text: "Row-order-independent master vs uploaded store comparison."
+                color: Theme.textSecondary
                 Layout.fillWidth: true
             }
 
-            // --- 1. FILE SELECTION ---
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spacingLarge
-
-                Card {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 110
-                    hoverable: false
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Theme.spacingMedium
-                        Text { text: "Master Dataset"; color: Theme.textPrimary; font.bold: true }
-                        Text { 
-                            text: typeof validate_controller !== "undefined" && validate_controller.masterFilePath !== "" ? validate_controller.masterFilePath : "No master file selected." 
-                            color: Theme.textSecondary; elide: Text.ElideMiddle; Layout.fillWidth: true
-                        }
-                        Item { Layout.fillHeight: true }
-                        AppButton { text: "Select Master"; onClicked: masterFileDialog.open() }
-                    }
-                }
-
-                Card {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 110
-                    hoverable: false
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Theme.spacingMedium
-                        Text { text: "Uploaded Dataset"; color: Theme.textPrimary; font.bold: true }
-                        Text { 
-                            text: typeof validate_controller !== "undefined" && validate_controller.uploadFilePath !== "" ? validate_controller.uploadFilePath : "No upload file selected."
-                            color: Theme.textSecondary; elide: Text.ElideMiddle; Layout.fillWidth: true
-                        }
-                        Item { Layout.fillHeight: true }
-                        AppButton { text: "Select Upload"; onClicked: uploadFileDialog.open() }
-                    }
-                }
-            }
-
-            // --- 2. MATCH CONTROLS & ACTIONS ---
+            // 1. FILE SELECTION CARD
             Card {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 80
-                hoverable: false
-                
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingLarge
-
-                    Text { text: "Match By:"; color: Theme.textPrimary; font.bold: true }
-                    
-                    RadioButton {
-                        text: "SID"
-                        checked: typeof validate_controller !== "undefined" ? validate_controller.matchMethod === "SID" : true
-                        onCheckedChanged: if(checked && typeof validate_controller !== "undefined") validate_controller.matchMethod = "SID"
-                        contentItem: Text { text: parent.text; color: Theme.textPrimary; leftMargin: parent.indicator.width + Theme.spacingSmall; verticalAlignment: Text.AlignVCenter }
-                    }
-                    
-                    RadioButton {
-                        text: "Nielsen Store Code"
-                        checked: typeof validate_controller !== "undefined" ? validate_controller.matchMethod === "Nielsen" : false
-                        onCheckedChanged: if(checked && typeof validate_controller !== "undefined") validate_controller.matchMethod = "Nielsen"
-                        contentItem: Text { text: parent.text; color: Theme.textPrimary; leftMargin: parent.indicator.width + Theme.spacingSmall; verticalAlignment: Text.AlignVCenter }
-                    }
-
-                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Theme.border; Layout.margins: Theme.spacingSmall }
-
-                    AppButton { 
-                        text: "Detect Columns"
-                        enabled: typeof validate_controller !== "undefined" && validate_controller.masterFilePath !== "" && validate_controller.uploadFilePath !== ""
-                        onClicked: if(typeof validate_controller !== "undefined") validate_controller.detectColumns()
-                    }
-
-                    Item { Layout.fillWidth: true } // Spacer
-
-                    CheckBox {
-                        text: "Differences Only"
-                        checked: typeof validate_controller !== "undefined" ? validate_controller.differencesOnly : false
-                        onCheckedChanged: if(typeof validate_controller !== "undefined") validate_controller.differencesOnly = checked
-                        contentItem: Text { text: parent.text; color: Theme.textPrimary; leftMargin: parent.indicator.width + Theme.spacingSmall; verticalAlignment: Text.AlignVCenter }
-                    }
-
-                    PrimaryButton {
-                        text: typeof validate_controller !== "undefined" && validate_controller.isProcessing ? "Validating..." : "Run Validation"
-                        enabled: typeof validate_controller !== "undefined" && validate_controller.masterFilePath !== "" && validate_controller.uploadFilePath !== "" && !validate_controller.isProcessing
-                        onClicked: validate_controller.startValidation()
-                    }
-                }
-            }
-
-            // --- 3. METRICS COUNTERS ---
-            Card {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 90
-                hoverable: false
-                
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingLarge
-
-                    MetricBlock { label: "Total Rows"; value: typeof validate_controller !== "undefined" ? validate_controller.totalCount : "0"; valueColor: Theme.textPrimary }
-                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Theme.border }
-                    MetricBlock { label: "Correct"; value: typeof validate_controller !== "undefined" ? validate_controller.correctCount : "0"; valueColor: Theme.success }
-                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Theme.border }
-                    MetricBlock { label: "Review Needed"; value: typeof validate_controller !== "undefined" ? validate_controller.reviewCount : "0"; valueColor: Theme.warning }
-                    Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Theme.border }
-                    MetricBlock { label: "Errors"; value: typeof validate_controller !== "undefined" ? validate_controller.errorCount : "0"; valueColor: Theme.error }
-                }
-            }
-
-            // --- 4. COMPARISON INSPECTOR ---
-            Card {
-                Layout.fillWidth: true
-                Layout.minimumHeight: 300
-                Layout.fillHeight: true
-                hoverable: false
+                Layout.preferredHeight: 140
 
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
-                    spacing: 0
+                    spacing: Theme.spacingSmall
 
-                    Text { 
-                        text: "Comparison Inspector"
-                        color: Theme.textPrimary
-                        font.bold: true
-                        font.pixelSize: 16
-                        Layout.bottomMargin: Theme.spacingMedium
-                    }
-
-                    ProgressBar {
+                    RowLayout {
                         Layout.fillWidth: true
-                        visible: typeof validate_controller !== "undefined" && validate_controller.isProcessing
-                        value: typeof validate_controller !== "undefined" ? validate_controller.progress : 0
-                        from: 0
-                        to: 100
-                        Layout.bottomMargin: Theme.spacingMedium
-                    }
+                        spacing: Theme.spacingMedium
 
-                    // Table Header
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 36
-                        color: Theme.surfaceHover
-                        border.color: Theme.border
-                        border.width: 1
-                        
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Theme.spacingMedium
-                            anchors.rightMargin: Theme.spacingMedium
-                            spacing: Theme.spacingMedium
+                        TextField {
+                            Layout.fillWidth: true
+                            readOnly: true
+                            text: root.master
+                            placeholderText: "Master file path..."
+                            color: Theme.textPrimary
+                            background: Rectangle {
+                                color: Theme.background
+                                border.color: Theme.border
+                                radius: Theme.radiusMedium
+                            }
+                        }
 
-                            Text { text: "Field"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 150 }
-                            Text { text: "Master Value"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
-                            Text { text: "Uploaded Value"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
-                            Text { text: "Result"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 100 }
+                        AppButton {
+                            text: "Browse Master"
+                            onClicked: md.open()
                         }
                     }
 
-                    // Table Body (List View)
-                    ListView {
-                        id: resultsList
+                    RowLayout {
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        model: typeof validate_controller !== "undefined" ? validate_controller.comparisonModel : null
-                        
-                        delegate: Rectangle {
-                            width: resultsList.width
-                            height: 40
-                            color: index % 2 === 0 ? "transparent" : Theme.surfaceHover
-                            border.color: Theme.border
-                            border.width: 1
-                            
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.spacingMedium
-                                anchors.rightMargin: Theme.spacingMedium
-                                spacing: Theme.spacingMedium
+                        spacing: Theme.spacingMedium
 
-                                Text { text: model.field; color: Theme.textPrimary; Layout.preferredWidth: 150; elide: Text.ElideRight }
-                                Text { text: model.masterValue; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { 
-                                    text: model.uploadValue
-                                    color: model.status === "Error" ? Theme.error : (model.status === "Review" ? Theme.warning : Theme.textPrimary)
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                                Text { 
-                                    text: model.result
-                                    color: model.status === "Error" ? Theme.error : (model.status === "Review" ? Theme.warning : Theme.success)
-                                    font.bold: true
-                                    Layout.preferredWidth: 100 
+                        TextField {
+                            Layout.fillWidth: true
+                            readOnly: true
+                            text: root.upload
+                            placeholderText: "Uploaded / country file path..."
+                            color: Theme.textPrimary
+                            background: Rectangle {
+                                color: Theme.background
+                                border.color: Theme.border
+                                radius: Theme.radiusMedium
+                            }
+                        }
+
+                        AppButton {
+                            text: "Browse Upload"
+                            onClicked: ud.open()
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingMedium
+
+                        Text { text: "Match by"; color: Theme.textSecondary }
+
+                        ComboBox {
+                            id: k1
+                            Layout.preferredWidth: 180
+                            model: ["SID", "Nielsen Store Code"]
+                            currentIndex: Math.max(0, model.indexOf(key1))
+                            background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
+                            contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
+                        }
+
+                        Text { text: "+"; color: Theme.textSecondary }
+
+                        ComboBox {
+                            id: k2
+                            Layout.preferredWidth: 200
+                            model: ["(None)", "Nielsen Store Code", "SID"]
+                            currentIndex: Math.max(0, model.indexOf(key2))
+                            background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
+                            contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
+                        }
+
+                        Text {
+                            text: suggestedKeys.length ? "Smart suggestion: " + suggestedKeys.join(" + ") : ""
+                            color: Theme.info
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+
+                        AppButton {
+                            text: "Detect Columns"
+                            enabled: root.master !== "" && root.upload !== ""
+                            onClicked: {
+                                if (typeof backend !== "undefined") {
+                                    backend.detect()
                                 }
                             }
                         }
 
+                        PrimaryButton {
+                            text: "Validate"
+                            enabled: root.master !== "" && root.upload !== ""
+                            onClicked: {
+                                var a = [k1.currentText]
+                                if (k2.currentText !== "(None)" && k2.currentText !== k1.currentText) {
+                                    a.push(k2.currentText)
+                                }
+                                if (typeof backend !== "undefined") {
+                                    backend.validate(JSON.stringify(a))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. COUNTERS ROW
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingMedium
+
+                Repeater {
+                    model: [
+                        ["TOTAL", total, Theme.primary],
+                        ["CORRECT", ok, Theme.success],
+                        ["REVIEW", rev, Theme.warning],
+                        ["ERROR", err, Theme.error]
+                    ]
+
+                    delegate: Card {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 70
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingSmall
+                            spacing: 2
+
+                            Text {
+                                text: modelData[1]
+                                color: modelData[2]
+                                font.pixelSize: 20
+                                font.bold: true
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                            Text {
+                                text: modelData[0]
+                                color: Theme.textSecondary
+                                font.pixelSize: 10
+                                font.bold: true
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. VALIDATION INTELLIGENCE
+            Card {
+                Layout.fillWidth: true
+                Layout.preferredHeight: insights.count > 0 ? 120 : 0
+                visible: insights.count > 0
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingMedium
+                    spacing: Theme.spacingSmall
+
+                    RowLayout {
+                        Layout.fillWidth: true
+
                         Text {
-                            anchors.centerIn: parent
-                            text: "No validation data to display."
-                            color: Theme.textMuted
-                            visible: resultsList.count === 0 && (typeof validate_controller === "undefined" || !validate_controller.isProcessing)
+                            text: "Validation Intelligence   " + attention + " finding(s) need attention"
+                            color: Theme.textPrimary
+                            font.bold: true
+                        }
+                        Item { Layout.fillWidth: true }
+                        AppButton {
+                            text: filterKey ? "Show All" : "All Records"
+                            onClicked: filterKey = ""
+                        }
+                    }
+
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 65
+                        orientation: ListView.Horizontal
+                        spacing: Theme.spacingSmall
+                        model: insights
+                        clip: true
+
+                        delegate: Rectangle {
+                            required property string key
+                            required property string title
+                            required property string count
+                            required property string severity
+                            required property string action
+
+                            width: 250
+                            height: 65
+                            radius: Theme.radiusMedium
+                            color: filterKey === key ? Theme.surfaceHover : (severity === "ERROR" ? "#421820" : "#433614")
+                            border.color: filterKey === key ? Theme.primary : Theme.border
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: filterKey = key
+                            }
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: Theme.spacingSmall
+                                spacing: 2
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Theme.spacingSmall
+                                    Text {
+                                        text: count
+                                        color: severity === "ERROR" ? Theme.error : Theme.warning
+                                        font.bold: true
+                                        font.pixelSize: 16
+                                    }
+                                    Text {
+                                        text: title
+                                        color: Theme.textPrimary
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                                Text {
+                                    text: action
+                                    color: Theme.textSecondary
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. VALIDATION RESULTS & COMPARISON INSPECTOR (SPLIT VIEW)
+            SplitView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: 500
+                orientation: Qt.Vertical
+
+                // Top Pane: Validation Results List
+                Card {
+                    SplitView.minimumHeight: 180
+                    SplitView.preferredHeight: 220
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingMedium
+                        spacing: Theme.spacingSmall
+
+                        Text {
+                            text: "Validation Results   (row order does not affect matching)"
+                            color: Theme.textPrimary
+                            font.bold: true
+                        }
+
+                        // Table Header
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
+                            color: Theme.surfaceHover
+                            border.color: Theme.border
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spacingSmall
+                                anchors.rightMargin: Theme.spacingSmall
+                                spacing: Theme.spacingSmall
+
+                                Text { text: "Row"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 50 }
+                                Text { text: "SID"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 120 }
+                                Text { text: "Store Name"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
+                                Text { text: "Status"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 90 }
+                                Text { text: "Problem"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 180 }
+                            }
+                        }
+
+                        ListView {
+                            id: resultsListView
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            model: rows
+                            clip: true
+
+                            delegate: Rectangle {
+                                required property int index
+                                required property string row
+                                required property string sid
+                                required property string store
+                                required property string status
+                                required property string problem
+                                required property string categoriesJson
+
+                                width: resultsListView.width
+                                height: (filterKey === "" || JSON.parse(categoriesJson).indexOf(filterKey) >= 0) ? 36 : 0
+                                visible: height > 0
+                                color: selected === index ? Theme.surfaceHover : (index % 2 === 0 ? Theme.background : Theme.surface)
+                                border.color: Theme.border
+                                border.width: 1
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        selected = index
+                                        if (typeof backend !== "undefined") {
+                                            backend.detail(index, diff)
+                                        }
+                                    }
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spacingSmall
+                                    anchors.rightMargin: Theme.spacingSmall
+                                    spacing: Theme.spacingSmall
+
+                                    Text { text: row; color: Theme.textSecondary; Layout.preferredWidth: 50 }
+                                    Text { text: sid; color: Theme.textPrimary; Layout.preferredWidth: 120; elide: Text.ElideRight }
+                                    Text { text: store; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text {
+                                        text: status
+                                        color: status === "ERROR" ? Theme.error : (status === "REVIEW" ? Theme.warning : Theme.success)
+                                        font.bold: true
+                                        Layout.preferredWidth: 90
+                                    }
+                                    Text { text: problem; color: Theme.textPrimary; Layout.preferredWidth: 180; elide: Text.ElideRight }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Bottom Pane: Error-aware Comparison Inspector
+                Card {
+                    SplitView.minimumHeight: 220
+                    SplitView.fillHeight: true
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingMedium
+                        spacing: Theme.spacingSmall
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                text: "Error-aware Comparison Inspector"
+                                color: Theme.textPrimary
+                                font.bold: true
+                            }
+                            Item { Layout.fillWidth: true }
+                            CheckBox {
+                                text: "Differences only"
+                                checked: diff
+                                onToggled: {
+                                    diff = checked
+                                    if (selected >= 0 && typeof backend !== "undefined") {
+                                        backend.detail(selected, diff)
+                                    }
+                                }
+                                contentItem: Text { text: parent.text; color: Theme.textPrimary; leftMargin: parent.indicator.width + 4; verticalAlignment: Text.AlignVCenter }
+                            }
+                        }
+
+                        // Problem Banner
+                        Rectangle {
+                            visible: selected >= 0
+                            Layout.fillWidth: true
+                            implicitHeight: 45
+                            radius: Theme.radiusMedium
+                            color: detailStatus === "ERROR" ? "#421820" : (detailStatus === "REVIEW" ? "#433614" : "#113426")
+                            border.color: Theme.border
+
+                            Text {
+                                anchors.fill: parent
+                                anchors.margins: Theme.spacingSmall
+                                text: detailProblem
+                                color: Theme.textPrimary
+                                wrapMode: Text.WordWrap
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+
+                        // Related identities notice
+                        Text {
+                            visible: related.count > 1
+                            text: "Related uploaded records for this identity:"
+                            color: Theme.warning
+                            font.bold: true
+                        }
+
+                        ListView {
+                            visible: related.count > 1
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(65, related.count * 24)
+                            model: related
+                            clip: true
+
+                            delegate: RowLayout {
+                                required property string row
+                                required property string sid
+                                required property string nielsen
+                                required property string store
+
+                                width: ListView.view.width
+                                height: 24
+                                spacing: Theme.spacingSmall
+
+                                Text { text: "Row " + row; color: Theme.textSecondary; Layout.preferredWidth: 70 }
+                                Text { text: sid; color: Theme.textPrimary; Layout.preferredWidth: 110; elide: Text.ElideRight }
+                                Text { text: nielsen; color: Theme.info; Layout.preferredWidth: 150; elide: Text.ElideRight }
+                                Text { text: store; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
+                            }
+                        }
+
+                        // Field Comparison Table Header
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Theme.spacingSmall
+                            Text { text: "Field"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 160 }
+                            Text { text: "Master Value"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
+                            Text { text: "Uploaded / Updated Value"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
+                            Text { text: "Result"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 120 }
+                        }
+
+                        // Field Comparison Table Body
+                        ListView {
+                            id: detailsListView
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            model: details
+                            clip: true
+
+                            delegate: Rectangle {
+                                required property string fieldName
+                                required property string masterValue
+                                required property string uploadedValue
+                                required property string resultText
+                                required property string severityText
+
+                                width: detailsListView.width
+                                height: 32
+                                color: severityText === "ERROR" ? "#421820" : (severityText === "REVIEW" ? "#433614" : "#113426")
+                                border.color: Theme.border
+                                border.width: 1
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spacingSmall
+                                    anchors.rightMargin: Theme.spacingSmall
+                                    spacing: Theme.spacingSmall
+
+                                    Text { text: fieldName; color: Theme.textPrimary; font.bold: true; Layout.preferredWidth: 160; elide: Text.ElideRight }
+                                    Text { text: masterValue === "" ? "—" : masterValue; color: masterValue === "" ? Theme.textMuted : Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight; ToolTip.visible: hoverHandlerMaster.hovered; ToolTip.text: text; HoverHandler { id: hoverHandlerMaster } }
+                                    Text { text: uploadedValue === "" ? "—" : uploadedValue; color: uploadedValue === "" ? Theme.textMuted : Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight; ToolTip.visible: hoverHandlerUpload.hovered; ToolTip.text: text; HoverHandler { id: hoverHandlerUpload } }
+                                    Text {
+                                        text: resultText
+                                        color: severityText === "ERROR" ? Theme.error : (severityText === "REVIEW" ? Theme.warning : Theme.success)
+                                        font.bold: true
+                                        Layout.preferredWidth: 120
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    // Inline Component for Metric Display
-    component MetricBlock: ColumnLayout {
-        property string label: ""
-        property string value: "0"
-        property color valueColor: Theme.textPrimary
-        
-        Layout.fillWidth: true
-        spacing: 4
-
-        Text { text: parent.label; color: Theme.textSecondary; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
-        Text { text: parent.value; color: parent.valueColor; font.pixelSize: 24; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-    }
-
-    FileDialog {
-        id: masterFileDialog
-        title: "Select Master CSV"
-        nameFilters: ["CSV Files (*.csv)", "All Files (*)"]
-        onAccepted: if(typeof validate_controller !== "undefined") validate_controller.setMasterFile(selectedFile)
-    }
-
-    FileDialog {
-        id: uploadFileDialog
-        title: "Select Uploaded CSV"
-        nameFilters: ["CSV Files (*.csv)", "All Files (*)"]
-        onAccepted: if(typeof validate_controller !== "undefined") validate_controller.setUploadFile(selectedFile)
     }
 }
