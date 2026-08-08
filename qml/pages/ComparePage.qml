@@ -33,12 +33,25 @@ Item {
     ListModel { id: related }
     ListModel { id: insights }
 
+    // Helper to strip Qt 6 'file:///' prefix for Python compatibility
+    function urlToPath(urlStr) {
+        var s = urlStr.toString();
+        if (s.indexOf("file:///") === 0) {
+            s = s.substring(8);
+            // Handle Windows drive letters (e.g., /C:/ -> C:/)
+            if (Qt.platform.os === "windows" && s.charAt(0) === '/' && s.charAt(2) === ':') {
+                s = s.substring(1);
+            }
+        }
+        return s;
+    }
+
     FileDialog {
         id: md
         title: "Select Master Dataset"
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
-            master = selectedFile.toString()
+            master = urlToPath(selectedFile)
             if (typeof backend !== "undefined") {
                 backend.loadMaster(master)
             }
@@ -50,7 +63,7 @@ Item {
         title: "Select Uploaded / Country File"
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
-            upload = selectedFile.toString()
+            upload = urlToPath(selectedFile)
             if (typeof backend !== "undefined") {
                 backend.loadUpload(upload)
             }
@@ -542,9 +555,9 @@ Item {
                                     }
                                 }
                                 contentItem: Text { 
-                                    text: parent.text
-                                    color: Theme.textPrimary
-                                    leftPadding: parent.indicator.width + 4
+                                    text: parent.text; 
+                                    color: Theme.textPrimary; 
+                                    leftPadding: parent.indicator.width + 4; 
                                     verticalAlignment: Text.AlignVCenter 
                                 }
                             }
