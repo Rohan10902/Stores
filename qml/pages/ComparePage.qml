@@ -37,9 +37,7 @@ Item {
         var s = urlStr.toString();
         if (s.indexOf("file:///") === 0) {
             s = s.substring(8);
-            if (Qt.platform.os === "windows" && s.charAt(0) === '/' && s.charAt(2) === ':') {
-                s = s.substring(1);
-            }
+            if (Qt.platform.os === "windows" && s.charAt(0) === '/' && s.charAt(2) === ':') { s = s.substring(1); }
         }
         return s;
     }
@@ -441,12 +439,7 @@ Item {
                                     Text { text: row; color: Theme.textSecondary; Layout.preferredWidth: 50 }
                                     Text { text: sid; color: Theme.textPrimary; Layout.preferredWidth: 120; elide: Text.ElideRight }
                                     Text { text: store; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Text {
-                                        text: status
-                                        color: status === "ERROR" ? Theme.error : (status === "REVIEW" ? Theme.warning : Theme.success)
-                                        font.bold: true
-                                        Layout.preferredWidth: 90
-                                    }
+                                    Text { text: status; color: status === "ERROR" ? Theme.error : (status === "REVIEW" ? Theme.warning : Theme.success); font.bold: true; Layout.preferredWidth: 90 }
                                     Text { text: problem; color: Theme.textPrimary; Layout.preferredWidth: 180; elide: Text.ElideRight }
                                 }
                             }
