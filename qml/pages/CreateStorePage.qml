@@ -27,7 +27,7 @@ Item {
 
     FileDialog {
         id: fileDialog
-        title: "Load Store Template / Dataset"
+        title: "Load Store Template"
         nameFilters: ["Data (*.csv *.xlsx)"]
         onAccepted: {
             currentFile = urlToPath(selectedFile)
@@ -51,20 +51,22 @@ Item {
         target: typeof backend !== "undefined" ? backend.creator : null
         ignoreUnknownSignals: true
 
-        function onCreatorLoaded(headersStr, rowsStr) {
+        function onCreatorLoaded(payloadStr) {
             try {
-                tableHeaders = JSON.parse(headersStr)
-                tableRows = JSON.parse(rowsStr)
+                var d = JSON.parse(payloadStr)
+                tableHeaders = d.headers || []
+                tableRows = d.rows || []
                 findingsModel.clear()
                 exportBlocked = true
                 valCount = 0
             } catch(e) {}
         }
 
-        function onCreatorReady(count, findingsStr) {
+        function onCreatorReady(payloadStr) {
             try {
-                valCount = count
-                var f = JSON.parse(findingsStr) || []
+                var d = JSON.parse(payloadStr)
+                valCount = d.count || 0
+                var f = d.findings || []
                 findingsModel.clear()
                 var hasError = false
                 for(var i=0; i<f.length; i++) {
@@ -76,9 +78,7 @@ Item {
         }
 
         function onCreatorExported() {
-            if (typeof backend !== "undefined" && backend.notifySignal) {
-                backend.notifySignal("Success", "Store record exported successfully.", "success")
-            }
+            // Handled via main.qml notifySignal wrapper passed up from python
         }
     }
 
