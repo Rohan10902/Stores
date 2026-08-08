@@ -123,10 +123,11 @@ Item {
                                 model: root.tCols.length
                                 delegate: Rectangle {
                                     required property int index
+                                    property string colName: root.tCols[index]
                                     width: 150; height: 30; color: Theme.background; border.color: Theme.border; border.width: 1
                                     Text { 
                                         anchors.fill: parent; anchors.margins: 4
-                                        text: rowData[index] !== undefined ? String(rowData[index]) : ""
+                                        text: rowData[colName] !== undefined ? String(rowData[colName]) : (rowData[index] !== undefined ? String(rowData[index]) : "")
                                         color: Theme.textPrimary; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
                                     }
                                 }
