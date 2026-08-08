@@ -1,4 +1,3 @@
-// qml/pages/CreateStorePage.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -32,9 +31,7 @@ Item {
         nameFilters: ["Data (*.csv *.xlsx)"]
         onAccepted: {
             currentFile = urlToPath(selectedFile)
-            if (typeof backend !== "undefined" && backend.creator) {
-                backend.creator.load_creator_file(currentFile)
-            }
+            if (typeof backend !== "undefined" && backend.creator) { backend.creator.load_creator_file(currentFile) }
         }
     }
 
@@ -79,44 +76,30 @@ Item {
         }
 
         function onCreatorExported() {
-            toast.show("Success", "Store record exported successfully.", "success") // Assumes global toast availability or handled in main
+            if (typeof backend !== "undefined" && backend.notifySignal) {
+                backend.notifySignal("Success", "Store record exported successfully.", "success")
+            }
         }
     }
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Theme.spacingXLarge
-        spacing: Theme.spacingLarge
+        anchors.fill: parent; anchors.margins: Theme.spacingXLarge; spacing: Theme.spacingLarge
 
-        PageTitle {
-            title: "Create Store Record"
-            subtitle: "Enter, validate, and export new store records."
-            Layout.fillWidth: true
-        }
+        PageTitle { title: "Create Store Record"; subtitle: "Enter, validate, and export new store records."; Layout.fillWidth: true }
 
         Card {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 90
-
+            Layout.fillWidth: true; Layout.preferredHeight: 90
             RowLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingMedium
-                spacing: Theme.spacingMedium
-
+                anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingMedium
                 AppButton { text: "Load Template"; onClicked: fileDialog.open() }
-                
                 Item { Layout.fillWidth: true }
-                
                 AppButton { 
                     text: "Validate Data"
                     enabled: tableRows.length > 0
                     onClicked: {
-                        if (typeof backend !== "undefined" && backend.creator) {
-                            backend.creator.validate_creator(JSON.stringify(tableRows))
-                        }
+                        if (typeof backend !== "undefined" && backend.creator) { backend.creator.validate_creator(JSON.stringify(tableRows)) }
                     }
                 }
-                
                 PrimaryButton { 
                     text: "Export Store"
                     enabled: !exportBlocked && tableRows.length > 0
@@ -126,42 +109,30 @@ Item {
         }
 
         SplitView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            orientation: Qt.Vertical
+            Layout.fillWidth: true; Layout.fillHeight: true; orientation: Qt.Vertical
 
             Card {
-                SplitView.minimumHeight: 200
-                SplitView.fillHeight: true
-
+                SplitView.minimumHeight: 200; SplitView.fillHeight: true
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingSmall
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     Text { text: "Data Entry"; color: Theme.textPrimary; font.bold: true }
 
                     ScrollView {
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        clip: true
-                        
+                        Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                         ListView {
-                            width: parent.width
-                            model: root.tableRows.length
-                            
+                            width: parent.width; model: root.tableRows.length
                             delegate: RowLayout {
                                 required property int index
                                 property int rowIndex: index
                                 property var rowData: root.tableRows[index]
                                 spacing: 2
-                                
                                 Repeater {
                                     model: root.tableHeaders.length
                                     delegate: TextField {
                                         required property int index
                                         width: 160; height: 35
                                         text: rowData[index] !== undefined ? String(rowData[index]) : ""
-                                        color: Theme.textPrimary
-                                        placeholderText: root.tableHeaders[index]
+                                        color: Theme.textPrimary; placeholderText: root.tableHeaders[index]
                                         background: Rectangle { color: Theme.background; border.color: Theme.border }
                                         onTextChanged: { root.tableRows[rowIndex][index] = text }
                                     }
@@ -173,21 +144,12 @@ Item {
             }
 
             Card {
-                SplitView.minimumHeight: 120
-                SplitView.preferredHeight: 150
-                
+                SplitView.minimumHeight: 120; SplitView.preferredHeight: 150
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingSmall
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     Text { text: "Validation Feedback"; color: Theme.textPrimary; font.bold: true }
-
                     ListView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: findingsModel
-                        clip: true
-                        spacing: 2
+                        Layout.fillWidth: true; Layout.fillHeight: true; model: findingsModel; clip: true; spacing: 2
                         delegate: Rectangle {
                             required property string msg
                             required property string sev
