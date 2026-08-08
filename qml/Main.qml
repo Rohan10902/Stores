@@ -1,4 +1,3 @@
-// qml/Main.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -18,12 +17,15 @@ ApplicationWindow {
         ignoreUnknownSignals: true
 
         function onNotifySignal(title, message, level) {
-            // Forward global backend notifications to the local Toast component
-            toast.show(title, message, level)
+            if (typeof toast !== "undefined") {
+                toast.show(title, message, level)
+            }
         }
 
         function onSaySignal(message) {
-            toast.show("Message", message, "info")
+            if (typeof toast !== "undefined") {
+                toast.show("Message", message, "info")
+            }
         }
     }
 
@@ -60,7 +62,7 @@ ApplicationWindow {
                 SidebarButton { text: "Explore Data"; onClicked: pageLoader.source = "pages/ExplorePage.qml"; Layout.fillWidth: true }
                 SidebarButton { text: "Health & Stats"; onClicked: pageLoader.source = "pages/HealthPage.qml"; Layout.fillWidth: true }
 
-                Item { Layout.fillHeight: true } // Spacer
+                Item { Layout.fillHeight: true } 
             }
         }
 
@@ -73,12 +75,11 @@ ApplicationWindow {
             Loader {
                 id: pageLoader
                 anchors.fill: parent
-                source: "pages/ComparePage.qml" // Default page
+                source: "pages/ComparePage.qml"
             }
         }
     }
 
-    // Global Notification Component
     Toast {
         id: toast
         anchors.bottom: parent.bottom
