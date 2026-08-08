@@ -10,7 +10,6 @@ class CSVRepairTool:
         self.history = []
 
     def _save_state(self):
-        # Deep copy rows and issues to history for undo functionality
         self.history.append((copy.deepcopy(self.rows), copy.deepcopy(self.issues)))
 
     def inspect_csv(self, path):
@@ -41,7 +40,6 @@ class CSVRepairTool:
         if issue:
             r_idx = issue['row'] - 1
             if r_idx < len(self.rows) - 1:
-                # Actual state mutation: Join this row with the next row
                 self.rows[r_idx] = self.rows[r_idx] + self.rows[r_idx+1]
                 del self.rows[r_idx+1]
                 self._recalculate_issues()
@@ -59,7 +57,6 @@ class CSVRepairTool:
 
     def keep_issue_as_is(self, issue_index):
         self._save_state()
-        # Actual state mutation: Remove issue from list without modifying data
         self.issues = [i for i in self.issues if i['index'] != issue_index]
         return self._get_payload()
 
@@ -70,13 +67,11 @@ class CSVRepairTool:
 
     def delete_created_record(self, record_id):
         self._save_state()
-        # Stub mutation for deleted records
         self._recalculate_issues()
         return self._get_payload()
 
     def undo_action(self):
         if self.history:
-            # Actual state mutation: Restore previous rows and issues
             self.rows, self.issues = self.history.pop()
         return self._get_payload()
 
@@ -91,22 +86,23 @@ class CSVRepairTool:
         if issue:
             r_idx = issue['row'] - 1
             row = self.rows[r_idx]
-            # Actual state mutation: Truncate or pad row to match header length
-            if len(row) > len(self.headers):
-                self.rows[r_idx] = row[:len(self.headers)]
-            else:
-                self.rows[r_idx] = row + [''] * (len(self.headers) - len(row))
+            expected_len = len(self.headers)
+            if len(row) > expected_len:
+                self.rows[r_idx] = row[:expected_len]
+            elif len(row) < expected_len:
+                self.rows[r_idx] = row + [''] * (expected_len - len(row))
             self._recalculate_issues()
 
     def _recalculate_issues(self):
         self.issues = []
+        expected_len = len(self.headers)
         for i, row in enumerate(self.rows):
-            if len(row) != len(self.headers):
+            if len(row) != expected_len:
                 self.issues.append({
                     'index': len(self.issues),
                     'row': i + 1,
-                    'type': 'Column Count Mismatch',
-                    'message': f'Expected {len(self.headers)} columns, found {len(row)}.'
+                    'type': 'Length Mismatch',
+                    'message': f'Expected {expected_len} columns, found {len(row)}.'
                 })
 
     def _get_payload(self):
