@@ -18,8 +18,8 @@ Item {
     function urlToPath(urlStr) {
         var path = urlStr.toString();
         path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os !== "windows" && !path.startsWith("/")) {
-            path = "/" + path;
+        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+            path = path.substring(1);
         }
         return decodeURIComponent(path);
     }
@@ -135,7 +135,13 @@ Item {
                                         border.color: Theme.border
                                         Text { 
                                             anchors.fill: parent; anchors.margins: 4
-                                            text: rowData[colName] !== undefined ? String(rowData[colName]) : (rowData[index] !== undefined ? String(rowData[index]) : "")
+                                            // Safely resolves both dict-based columns and array-based indices
+                                            text: {
+                                                if (rowData === undefined || rowData === null) return "";
+                                                var val = rowData[colName];
+                                                if (val === undefined) val = rowData[index];
+                                                return val !== undefined && val !== null ? String(val) : "";
+                                            }
                                             color: Theme.textPrimary; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
                                         }
                                     }
