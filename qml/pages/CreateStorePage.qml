@@ -78,7 +78,7 @@ Item {
         }
 
         function onCreatorExported() {
-            // Managed via notifySignal from Python backend
+            // Unused manually in QML, assumed python fires global notifySignal instead.
         }
     }
 
