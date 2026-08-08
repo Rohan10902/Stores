@@ -54,7 +54,7 @@ Item {
                 for (var i = 0; i < issuesList.length; i++) {
                     var issue = issuesList[i]
                     issuesModel.append({
-                        issueIndex: i, // Assuming ordered lists since index not guaranteed
+                        issueIndex: issue.index !== undefined ? issue.index : i,
                         rowNum: String(issue.row !== undefined ? issue.row : "N/A"),
                         issueType: String(issue.type || "Unknown"),
                         issueMsg: String(issue.message || "Structural Issue")
@@ -62,7 +62,7 @@ Item {
                 }
                 
                 if (selectedIssue >= 0 && selectedIssue < issuesModel.count) {
-                    activeIssueData = { index: selectedIssue, type: issuesModel.get(selectedIssue).issueType, message: issuesModel.get(selectedIssue).issueMsg }
+                    activeIssueData = { index: issuesModel.get(selectedIssue).issueIndex, message: issuesModel.get(selectedIssue).issueMsg }
                 } else {
                     activeIssueData = null
                 }
@@ -71,30 +71,21 @@ Item {
     }
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Theme.spacingXLarge
-        spacing: Theme.spacingLarge
+        anchors.fill: parent; anchors.margins: Theme.spacingXLarge; spacing: Theme.spacingLarge
 
-        PageTitle {
-            title: "Record Repair"
-            subtitle: "Fix structural CSV issues, join shifted rows, and safely map unknown columns."
-            Layout.fillWidth: true
-        }
+        PageTitle { title: "Record Repair"; subtitle: "Fix structural CSV issues, join shifted rows, and safely map unknown columns."; Layout.fillWidth: true }
 
         RowLayout {
             Layout.fillWidth: true; spacing: Theme.spacingMedium
             TextField {
-                Layout.fillWidth: true
-                readOnly: true
-                text: root.currentFile
-                placeholderText: "Select file to inspect..."
-                color: Theme.textPrimary
+                Layout.fillWidth: true; readOnly: true; text: root.currentFile
+                placeholderText: "Select file to inspect..."; color: Theme.textPrimary
                 background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
             }
             AppButton { text: "Browse"; onClicked: fileDialog.open() }
             PrimaryButton { 
                 text: "Export Repaired"
-                enabled: root.currentFile !== "" && issuesModel.count > 0
+                enabled: root.currentFile !== "" && issuesModel.count === 0
                 onClicked: saveDialog.open()
             }
         }
@@ -110,7 +101,7 @@ Item {
                         Layout.fillWidth: true
                         Text { text: "Detected Issues (" + issuesModel.count + ")"; color: Theme.textPrimary; font.bold: true; Layout.fillWidth: true }
                         AppButton { 
-                            text: "Undo Action"
+                            text: "Undo"
                             enabled: typeof backend !== "undefined" && backend.repair
                             onClicked: backend.repair.undo_repair_action()
                         }
@@ -120,6 +111,7 @@ Item {
                         Layout.fillWidth: true; Layout.fillHeight: true; model: issuesModel; clip: true; spacing: 2
                         delegate: Rectangle {
                             required property int index
+                            required property int issueIndex
                             required property string rowNum
                             required property string issueType
                             required property string issueMsg
@@ -132,7 +124,7 @@ Item {
                                 anchors.fill: parent
                                 onClicked: {
                                     selectedIssue = index
-                                    activeIssueData = { index: index, type: issueType, message: issueMsg }
+                                    activeIssueData = { index: issueIndex, type: issueType, message: issueMsg }
                                 }
                             }
                             RowLayout {
@@ -168,7 +160,7 @@ Item {
                         Layout.fillWidth: true; spacing: Theme.spacingMedium
                         AppButton { text: "Join Shifted Rows"; onClicked: { if(backend.repair && activeIssueData) backend.repair.join_repair_rows(activeIssueData.index) } }
                         AppButton { text: "Keep Issue As-Is"; onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_issue(activeIssueData.index) } }
-                        AppButton { text: "Keep Unresolved"; onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_unresolved(activeIssueData.index, 0) } }
+                        AppButton { text: "Pad Unresolved"; onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_unresolved(activeIssueData.index, 0) } }
                         AppButton { text: "Delete Record"; onClicked: { if(backend.repair && activeIssueData) backend.repair.delete_repair_record(activeIssueData.index) } }
                         AppButton { text: "Create Record"; onClicked: { if(backend.repair && activeIssueData) backend.repair.create_repair_record(activeIssueData.index, "{}") } }
                     }
