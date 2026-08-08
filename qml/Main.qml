@@ -33,6 +33,7 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
+        // Modern Sidebar Navigation
         Rectangle {
             Layout.preferredWidth: 260
             Layout.fillHeight: true
@@ -65,6 +66,7 @@ ApplicationWindow {
             }
         }
 
+        // Main Content Area
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
