@@ -1,31 +1,43 @@
 pragma Singleton
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
 
 QtObject {
-    // Colors
-    readonly property color primary: "#1E88E5"
-    readonly property color primaryHover: "#1565C0"
-    readonly property color background: "#F5F7FA"
-    readonly property color surface: "#FFFFFF"
-    readonly property color textPrimary: "#212121"
-    readonly property color textSecondary: "#757575"
-    readonly property color border: "#E0E0E0"
+    id: theme
+
+    // Colors - Deep Navy / Charcoal professional theme
+    readonly property color background: "#0F172A"        // Deep navy background
+    readonly property color surface: "#1E293B"           // Slightly lighter panels
+    readonly property color surfaceHover: "#334155"      // Card hover state
+    readonly property color border: "#334155"            // Subtle borders
     
-    // Semantic Colors
-    readonly property color success: "#43A047"
-    readonly property color warning: "#FDD835"
-    readonly property color error: "#E53935"
+    readonly property color primary: "#3B82F6"           // Blue primary accent
+    readonly property color primaryHover: "#2563EB"      // Blue accent hover
+    
+    readonly property color textPrimary: "#F8FAFC"       // High readability text
+    readonly property color textSecondary: "#94A3B8"     // Muted text
+    
+    // Status Colors
+    readonly property color success: "#10B981"           // Green success
+    readonly property color warning: "#F59E0B"           // Amber warning
+    readonly property color error: "#EF4444"             // Red error
+    readonly property color info: "#3B82F6"              // Blue info
 
-    // Spacing & Radii
-    readonly property int paddingSmall: 8
-    readonly property int paddingMedium: 16
-    readonly property int paddingLarge: 24
-    readonly property int radius: 6
+    // Spacing
+    readonly property int spacingSmall: 8
+    readonly property int spacingMedium: 16
+    readonly property int spacingLarge: 24
+    readonly property int spacingXLarge: 32
 
-    // Typography
-    readonly property font fontTitle: Qt.font({ family: "Segoe UI", pixelSize: 20, weight: Font.Bold })
-    readonly property font fontSubtitle: Qt.font({ family: "Segoe UI", pixelSize: 16, weight: Font.DemiBold })
-    readonly property font fontBody: Qt.font({ family: "Segoe UI", pixelSize: 14 })
-    readonly property font fontCaption: Qt.font({ family: "Segoe UI", pixelSize: 12 })
+    // Radius
+    readonly property int radiusMedium: 8
+    readonly property int radiusLarge: 12
+
+    // Dimensions
+    readonly property int sidebarWidth: 260
+    readonly property int buttonHeight: 40
+    readonly property int headerHeight: 64
+
+    // Animation Durations
+    readonly property int durationFast: 150
+    readonly property int durationMedium: 250
 }
