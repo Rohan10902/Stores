@@ -30,12 +30,21 @@ Item {
     ListModel { id: details }
     ListModel { id: insights }
 
+    function urlToPath(urlStr) {
+        var path = urlStr.toString();
+        path = path.replace(/^(file:\/{2,3})/, "");
+        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+            path = path.substring(1);
+        }
+        return decodeURIComponent(path);
+    }
+
     FileDialog {
         id: md
         title: "Select Master Dataset"
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
-            master = selectedFile.toString()
+            master = urlToPath(selectedFile)
             if (typeof backend !== "undefined" && backend.validate) {
                 backend.validate.load_master(master)
             }
@@ -47,7 +56,7 @@ Item {
         title: "Select Uploaded / Country File"
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
-            upload = selectedFile.toString()
+            upload = urlToPath(selectedFile)
             if (typeof backend !== "undefined" && backend.validate) {
                 backend.validate.load_upload(upload)
             }
