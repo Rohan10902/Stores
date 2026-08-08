@@ -13,12 +13,21 @@ Item {
 
     ListModel { id: issuesModel }
     
+    function urlToPath(urlStr) {
+        var path = urlStr.toString();
+        path = path.replace(/^(file:\/{2,3})/, "");
+        if (Qt.platform.os !== "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+            path = path.substring(1);
+        }
+        return decodeURIComponent(path);
+    }
+
     FileDialog {
         id: fileDialog
         title: "Select CSV for Repair"
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
-            currentFile = selectedFile.toString()
+            currentFile = urlToPath(selectedFile)
             if (typeof backend !== "undefined" && backend.repair) { backend.repair.inspect_repair(currentFile) }
         }
     }
@@ -29,7 +38,7 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
-            if (typeof backend !== "undefined" && backend.repair) { backend.repair.repair(currentFile, selectedFile.toString()) }
+            if (typeof backend !== "undefined" && backend.repair) { backend.repair.repair(currentFile, urlToPath(selectedFile)) }
         }
     }
 
