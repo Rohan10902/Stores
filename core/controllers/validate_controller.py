@@ -1,6 +1,12 @@
 import json
-from PySide6.QtCore import QObject, Slot, Signal
+from PySide6.QtCore import QObject, Slot, Signal, QUrl
 from ..store_validator import StoreValidator
+
+def _to_local_file(url_str):
+    url = QUrl(url_str)
+    if url.isLocalFile():
+        return url.toLocalFile()
+    return url_str
 
 class ValidateController(QObject):
     mappingReady = Signal(str)
@@ -15,12 +21,12 @@ class ValidateController(QObject):
     @Slot(str)
     def load_master(self, path):
         if hasattr(self.validator, 'load_master'):
-            self.validator.load_master(path)
+            self.validator.load_master(_to_local_file(path))
 
     @Slot(str)
     def load_upload(self, path):
         if hasattr(self.validator, 'load_upload'):
-            self.validator.load_upload(path)
+            self.validator.load_upload(_to_local_file(path))
 
     @Slot()
     def detect(self):
@@ -39,34 +45,32 @@ class ValidateController(QObject):
         raw_rows = results_dict.get("rows", [])
         self.last_results = raw_rows
         
-        # Calculate actual metrics from real validator vocabulary
-        err_count = sum(1 for r in raw_rows if r.get("status") == "ERROR")
-        rev_count = sum(1 for r in raw_rows if r.get("status") == "REVIEW")
-        ok_count = sum(1 for r in raw_rows if r.get("status") == "CORRECT")
+        err_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "ERROR")
+        rev_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "REVIEW")
+        ok_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "CORRECT")
 
         formatted_rows = []
         for i, r in enumerate(raw_rows):
             formatted_rows.append({
                 "row": int(r.get("row", i + 1)),
                 "key": str(r.get("key", "")),
-                "status": str(r.get("status", "UNKNOWN")),
+                "status": str(r.get("status", "UNKNOWN")).upper(),
                 "message": str(r.get("message", ""))
             })
         
-        # Generate ACTUAL validation insights safely from the records
         insights = []
         if err_count > 0:
-            insights.append({"key": "err", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
+            insights.append({"key": "ERROR", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
         if rev_count > 0:
-            insights.append({"key": "rev", "title": "Manual Review Needed", "count": str(rev_count), "severity": "REVIEW", "action": "Check flagged fields"})
-        if err_count == 0 and rev_count == 0 and len(raw_rows) > 0:
-            insights.append({"key": "ok", "title": "Clean Validation", "count": str(ok_count), "severity": "CORRECT", "action": "Ready for deployment"})
+            insights.append({"key": "REVIEW", "title": "Manual Review Needed", "count": str(rev_count), "severity": "REVIEW", "action": "Check flagged fields"})
+        if err_count == 0 and rev_count == 0 and len(formatted_rows) > 0:
+            insights.append({"key": "CORRECT", "title": "Clean Validation", "count": str(ok_count), "severity": "CORRECT", "action": "Ready for deployment"})
 
         payload = {
-            "total": int(results_dict.get("total", len(raw_rows))),
-            "correct": int(results_dict.get("correct", ok_count)),
-            "review": int(results_dict.get("review", rev_count)),
-            "errors": int(results_dict.get("errors", err_count)),
+            "total": int(results_dict.get("total", len(formatted_rows))),
+            "correct": ok_count,
+            "review": rev_count,
+            "errors": err_count,
             "attention": int(err_count + rev_count),
             "rows": formatted_rows,
             "insights": insights
@@ -79,7 +83,7 @@ class ValidateController(QObject):
             row = self.last_results[index]
             comps = row.get("comparisons", [])
             if diff_only:
-                comps = [c for c in comps if c.get("severity") in ["ERROR", "WARNING", "REVIEW"]]
+                comps = [c for c in comps if str(c.get("severity", "")).upper() in ["ERROR", "WARNING", "REVIEW"]]
             
             formatted_comps = []
             for c in comps:
@@ -88,12 +92,12 @@ class ValidateController(QObject):
                     "master": str(c.get("master", "")),
                     "uploaded": str(c.get("uploaded", "")),
                     "result": str(c.get("result", "")),
-                    "severity": str(c.get("severity", ""))
+                    "severity": str(c.get("severity", "")).upper()
                 })
 
             payload = {
                 "message": str(row.get("message", "")),
-                "status": str(row.get("status", "")),
+                "status": str(row.get("status", "")).upper(),
                 "master": dict(row.get("master", {})),
                 "upload": dict(row.get("upload", {})),
                 "diffs": int(row.get("diffs", 0)),
