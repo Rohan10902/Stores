@@ -9,11 +9,12 @@ Item {
     signal navigateRequested(string pageId)
 
     ScrollView {
+        id: scrollView
         anchors.fill: parent
         clip: true
 
         ColumnLayout {
-            width: parent.availableWidth
+            width: scrollView.availableWidth
             spacing: Theme.spacingLarge
             
             PageTitle {
