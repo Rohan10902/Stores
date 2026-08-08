@@ -17,13 +17,13 @@ ApplicationWindow {
         ignoreUnknownSignals: true
 
         function onNotifySignal(title, message, level) {
-            if (typeof toast !== "undefined") {
+            if (typeof toast !== "undefined" && toast) {
                 toast.show(title, message, level)
             }
         }
 
         function onSaySignal(message) {
-            if (typeof toast !== "undefined") {
+            if (typeof toast !== "undefined" && toast) {
                 toast.show("Message", message, "info")
             }
         }
@@ -33,7 +33,6 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
-        // Modern Sidebar Navigation
         Rectangle {
             Layout.preferredWidth: 260
             Layout.fillHeight: true
@@ -66,7 +65,6 @@ ApplicationWindow {
             }
         }
 
-        // Main Content Area
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
