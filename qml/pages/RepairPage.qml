@@ -16,8 +16,8 @@ Item {
     function urlToPath(urlStr) {
         var path = urlStr.toString();
         path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os !== "windows" && !path.startsWith("/")) {
-            path = "/" + path;
+        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+            path = path.substring(1);
         }
         return decodeURIComponent(path);
     }
@@ -62,9 +62,10 @@ Item {
                 }
                 
                 if (selectedIssue >= 0 && selectedIssue < issuesModel.count) {
-                    activeIssueData = { index: issuesModel.get(selectedIssue).issueIndex, message: issuesModel.get(selectedIssue).issueMsg }
+                    activeIssueData = { index: issuesModel.get(selectedIssue).issueIndex, type: issuesModel.get(selectedIssue).issueType, message: issuesModel.get(selectedIssue).issueMsg }
                 } else {
                     activeIssueData = null
+                    selectedIssue = -1
                 }
             } catch (e) { }
         }
