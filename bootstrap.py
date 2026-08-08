@@ -49,6 +49,23 @@ def create_application(sys_argv):
     app = QApplication(sys_argv)
     engine = QQmlApplicationEngine()
 
+    # --- FIXED DIAGNOSTIC CODE ---
+    # Wire up the QML warnings signal BEFORE loading anything to catch all component errors
+    def handle_qml_warnings(warnings):
+        for warning in warnings:
+            # Safely handle PySide6 QQmlError properties/methods
+            url = warning.url().toLocalFile() if hasattr(warning.url(), 'toLocalFile') else warning.url().toString()
+            line = warning.line()
+            column = warning.column()
+            desc = warning.description()
+            
+            error_msg = f"QML WARNING/ERROR: {url}:{line}:{column} - {desc}"
+            logger.critical(error_msg)
+            print(error_msg, file=sys.stderr)
+
+    engine.warnings.connect(handle_qml_warnings)
+    # -----------------------------
+
     # Configure hardware-aware threadpool
     threadpool = QThreadPool.globalInstance()
     threadpool.setMaxThreadCount(max(2, os.cpu_count() or 4))
@@ -84,32 +101,15 @@ def create_application(sys_argv):
         
     logger.info(f"Loading QML file from verified path: {main_qml}")
     
-    # Ensure the QML engine can resolve modules (like 'theme') by adding the qml directory to import paths
     qml_base_dir = main_qml.parent
     engine.addImportPath(str(qml_base_dir))
     logger.info(f"Added QML import path: {qml_base_dir}")
 
+    # The engine will emit warnings() automatically if this fails to load/parse
     engine.load(QUrl.fromLocalFile(str(main_qml)))
 
     if not engine.rootObjects():
-        logger.critical("CRITICAL: Failed to load Main.qml root object. Check for QML syntax errors or missing module imports.")
-        
-        # --- DIAGNOSTIC BLOCK ---
-        print("\n================ QML ENGINE DIAGNOSTICS ================")
-        for warning in engine.warnings():
-            file_url = warning.url().toString()
-            line = warning.line()
-            column = warning.column()
-            desc = warning.description()
-            
-            print(f"File: {file_url}")
-            print(f"Line: {line} | Column: {column}")
-            print(f"Error: {desc}")
-            print("-" * 50)
-            logger.critical(f"QML Error [{line}:{column}] in {file_url}: {desc}")
-        print("========================================================\n")
-        # ------------------------
-        
+        logger.critical("CRITICAL: Failed to load Main.qml root object. See terminal or log for the exact QML errors caught by the diagnostic handler.")
         return app, engine, 1
 
     if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
