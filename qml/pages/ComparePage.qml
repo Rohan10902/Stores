@@ -30,21 +30,12 @@ Item {
     ListModel { id: details }
     ListModel { id: insights }
 
-    function urlToPath(urlStr) {
-        var path = urlStr.toString();
-        path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
-            path = path.substring(1);
-        }
-        return decodeURIComponent(path);
-    }
-
     FileDialog {
         id: md
         title: "Select Master Dataset"
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
-            master = urlToPath(selectedFile)
+            master = selectedFile.toString()
             if (typeof backend !== "undefined" && backend.validate) {
                 backend.validate.load_master(master)
             }
@@ -56,7 +47,7 @@ Item {
         title: "Select Uploaded / Country File"
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
-            upload = urlToPath(selectedFile)
+            upload = selectedFile.toString()
             if (typeof backend !== "undefined" && backend.validate) {
                 backend.validate.load_upload(upload)
             }
@@ -67,18 +58,18 @@ Item {
         target: typeof backend !== "undefined" ? backend.validate : null
         ignoreUnknownSignals: true
 
-        function onMappingReady(p) {
+        function onMappingReady(payload) {
             try {
-                var d = JSON.parse(p)
+                var d = JSON.parse(payload)
                 suggestedKeys = d.suggestedKeys || ["SID"]
                 key1 = suggestedKeys[0] || "SID"
                 key2 = suggestedKeys.length > 1 ? suggestedKeys[1] : "(None)"
             } catch (e) { }
         }
 
-        function onValidationReady(p) {
+        function onValidationReady(payload) {
             try {
-                var d = JSON.parse(p)
+                var d = JSON.parse(payload)
                 total = d.total || 0
                 ok = d.correct || 0
                 rev = d.review || 0
@@ -105,7 +96,7 @@ Item {
                 for (var j = 0; j < rawInsights.length; j++) {
                     var x = rawInsights[j]
                     insights.append({
-                        key: String(x.key || ""),
+                        insightKey: String(x.key || ""),
                         title: String(x.title || ""),
                         count: String(x.count || ""),
                         severity: String(x.severity || ""),
@@ -115,9 +106,9 @@ Item {
             } catch (e) { }
         }
 
-        function onDetailReady(p) {
+        function onDetailReady(payload) {
             try {
-                var d = JSON.parse(p)
+                var d = JSON.parse(payload)
                 detailMessage = d.message || ""
                 detailStatus = d.status || ""
                 details.clear()
@@ -277,17 +268,17 @@ Item {
                         Layout.fillWidth: true; Layout.preferredHeight: 65
                         orientation: ListView.Horizontal; spacing: Theme.spacingSmall; model: insights; clip: true
                         delegate: Rectangle {
-                            required property string key
+                            required property string insightKey
                             required property string title
                             required property string count
                             required property string severity
                             required property string action
                             width: 250; height: 65; radius: Theme.radiusMedium
-                            color: filterKey === severity ? Theme.surfaceHover : (severity === "ERROR" ? "#421820" : (severity === "REVIEW" ? "#433614" : Theme.surfaceHover))
-                            border.color: filterKey === severity ? Theme.primary : Theme.border
+                            color: filterKey === insightKey ? Theme.surfaceHover : (severity === "ERROR" ? "#421820" : (severity === "REVIEW" ? "#433614" : Theme.surfaceHover))
+                            border.color: filterKey === insightKey ? Theme.primary : Theme.border
                             MouseArea { 
                                 anchors.fill: parent 
-                                onClicked: filterKey = severity // Binds list filtering to the exact status string
+                                onClicked: filterKey = insightKey
                             }
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: Theme.spacingSmall; spacing: 2
@@ -331,7 +322,6 @@ Item {
                                 required property string statusVal
                                 required property string msgVal
                                 
-                                // Actual UI Filtering bound to filterKey === severity string
                                 width: resultsListView.width
                                 height: (filterKey === "" || statusVal === filterKey) ? 36 : 0
                                 visible: height > 0
