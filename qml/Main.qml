@@ -1,143 +1,88 @@
+// qml/Main.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Window
 import "components"
-import "pages"
 import "theme"
 
 ApplicationWindow {
     id: window
     width: 1280
-    height: 720
-    minimumWidth: 1024
-    minimumHeight: 600
+    height: 800
     visible: true
-    title: qsTr("StoreLens 7.2.1")
+    title: "StoreLens"
     color: Theme.background
 
-    property string activePageId: "dashboard"
-
-    Toast {
-        id: toastManager
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottomMargin: Theme.spacingLarge
-        z: 100
-    }
-
-    // FIXED: Properly handle 3-parameter notifySignal from Python backend
     Connections {
         target: typeof backend !== "undefined" ? backend : null
         ignoreUnknownSignals: true
+
         function onNotifySignal(title, message, level) {
-            toastManager.show(message, level || "info")
+            // Forward global backend notifications to the local Toast component
+            toast.show(title, message, level)
+        }
+
+        function onSaySignal(message) {
+            toast.show("Message", message, "info")
         }
     }
 
-    ColumnLayout {
+    RowLayout {
         anchors.fill: parent
         spacing: 0
 
-        // TOP BAR
+        // Modern Sidebar Navigation
         Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Theme.headerHeight
+            Layout.preferredWidth: 260
+            Layout.fillHeight: true
             color: Theme.surface
             border.color: Theme.border
             border.width: 1
 
-            RowLayout {
+            ColumnLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Theme.spacingLarge
-                anchors.rightMargin: Theme.spacingLarge
+                anchors.margins: Theme.spacingLarge
                 spacing: Theme.spacingMedium
 
-                Text { text: "StoreLens"; color: Theme.primary; font.pixelSize: 18; font.bold: true }
-                Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.border }
-                Text { text: "Data Quality Studio"; color: Theme.textSecondary; font.pixelSize: 14 }
-                Item { Layout.fillWidth: true }
-                // FIXED: Display the correct 7.2.1 version explicitly
-                Text { text: "v7.2.1"; color: Theme.textMuted; font.pixelSize: 12 }
+                Text {
+                    text: "StoreLens"
+                    color: Theme.primary
+                    font.pixelSize: 24
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.bottomMargin: Theme.spacingLarge
+                }
+
+                SidebarButton { text: "Compare & Validate"; onClicked: pageLoader.source = "pages/ComparePage.qml"; Layout.fillWidth: true }
+                SidebarButton { text: "Record Repair"; onClicked: pageLoader.source = "pages/RepairPage.qml"; Layout.fillWidth: true }
+                SidebarButton { text: "Single File Review"; onClicked: pageLoader.source = "pages/SingleReviewPage.qml"; Layout.fillWidth: true }
+                SidebarButton { text: "Create Store"; onClicked: pageLoader.source = "pages/CreateStorePage.qml"; Layout.fillWidth: true }
+                SidebarButton { text: "Explore Data"; onClicked: pageLoader.source = "pages/ExplorePage.qml"; Layout.fillWidth: true }
+                SidebarButton { text: "Health & Stats"; onClicked: pageLoader.source = "pages/HealthPage.qml"; Layout.fillWidth: true }
+
+                Item { Layout.fillHeight: true } // Spacer
             }
         }
 
-        RowLayout {
+        // Main Content Area
+        Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
+            color: Theme.background
 
-            // SIDEBAR
-            Rectangle {
-                Layout.preferredWidth: Theme.sidebarWidth
-                Layout.fillHeight: true
-                color: Theme.background
-                border.color: Theme.border
-                border.width: 1
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    anchors.topMargin: Theme.spacingMedium
-                    spacing: 2 
-
-                    Text {
-                        text: "MODULES"
-                        color: Theme.textMuted
-                        font.pixelSize: 11
-                        font.bold: true
-                        Layout.bottomMargin: Theme.spacingSmall
-                        Layout.leftMargin: Theme.spacingSmall
-                    }
-
-                    SidebarButton { text: "Dashboard"; isActive: window.activePageId === "dashboard"; onClicked: { window.activePageId = "dashboard"; stackView.replace(homePage) } }
-                    SidebarButton { text: "Match / Verify"; isActive: window.activePageId === "compare"; onClicked: { window.activePageId = "compare"; stackView.replace(comparePage) } }
-                    SidebarButton { text: "File Review"; isActive: window.activePageId === "review"; onClicked: { window.activePageId = "review"; stackView.replace(reviewPage) } }
-                    SidebarButton { text: "Record Repair"; isActive: window.activePageId === "repair"; onClicked: { window.activePageId = "repair"; stackView.replace(repairPage) } }
-                    SidebarButton { text: "Store Builder"; isActive: window.activePageId === "create"; onClicked: { window.activePageId = "create"; stackView.replace(createPage) } }
-                    SidebarButton { text: "Data Intelligence"; isActive: window.activePageId === "health"; onClicked: { window.activePageId = "health"; stackView.replace(healthPage) } }
-                    SidebarButton { text: "Query Studio"; isActive: window.activePageId === "explore"; onClicked: { window.activePageId = "explore"; stackView.replace(explorePage) } }
-
-                    Item { Layout.fillHeight: true }
-                }
-            }
-
-            // MAIN CONTENT
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                
-                StackView {
-                    id: stackView
-                    anchors.fill: parent
-                    initialItem: homePage
-                    
-                    replaceEnter: Transition { PropertyAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durationFast } }
-                    replaceExit: Transition { PropertyAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.durationFast } }
-                }
+            Loader {
+                id: pageLoader
+                anchors.fill: parent
+                source: "pages/ComparePage.qml" // Default page
             }
         }
     }
 
-    Component { 
-        id: homePage; 
-        HomePage {
-            onNavigateRequested: function(pageId) {
-                window.activePageId = pageId;
-                if (pageId === "compare") stackView.replace(comparePage)
-                else if (pageId === "review") stackView.replace(reviewPage)
-                else if (pageId === "repair") stackView.replace(repairPage)
-                else if (pageId === "create") stackView.replace(createPage)
-                else if (pageId === "health") stackView.replace(healthPage)
-                else if (pageId === "explore") stackView.replace(explorePage)
-            }
-        } 
+    // Global Notification Component
+    Toast {
+        id: toast
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        anchors.margins: Theme.spacingLarge
     }
-    
-    Component { id: comparePage; ComparePage {} }
-    Component { id: reviewPage; SingleReviewPage {} }
-    Component { id: repairPage; RepairPage {} }
-    Component { id: createPage; CreateStorePage {} }
-    Component { id: healthPage; HealthPage {} }
-    Component { id: explorePage; ExplorePage {} }
 }
