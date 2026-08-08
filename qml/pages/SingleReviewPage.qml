@@ -1,4 +1,3 @@
-// qml/pages/SingleReviewPage.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -32,9 +31,7 @@ Item {
         nameFilters: ["Data (*.csv *.xlsx)"]
         onAccepted: {
             currentFile = urlToPath(selectedFile)
-            if (typeof backend !== "undefined" && backend.review) {
-                backend.review.review_single_file(currentFile)
-            }
+            if (typeof backend !== "undefined" && backend.review) { backend.review.review_single_file(currentFile) }
         }
     }
 
@@ -44,9 +41,7 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
-            if (typeof backend !== "undefined" && backend.review) {
-                backend.review.export_single_review(currentFile, urlToPath(selectedFile))
-            }
+            if (typeof backend !== "undefined" && backend.review) { backend.review.export_single_review(currentFile, urlToPath(selectedFile)) }
         }
     }
 
@@ -65,10 +60,9 @@ Item {
                 findingsModel.clear()
                 var findingsList = d.findings || []
                 for (var i = 0; i < findingsList.length; i++) {
-                    var f = findingsList[i]
                     findingsModel.append({
-                        message: String(f.message || ""),
-                        severity: String(f.severity || "INFO")
+                        msg: String(findingsList[i].message || ""),
+                        sev: String(findingsList[i].severity || "INFO")
                     })
                 }
             } catch (e) { }
@@ -76,31 +70,17 @@ Item {
     }
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Theme.spacingXLarge
-        spacing: Theme.spacingLarge
+        anchors.fill: parent; anchors.margins: Theme.spacingXLarge; spacing: Theme.spacingLarge
 
-        PageTitle {
-            title: "Single File Review"
-            subtitle: "Analyze and export a single dataset for data quality review."
-            Layout.fillWidth: true
-        }
+        PageTitle { title: "Single File Review"; subtitle: "Analyze and export a single dataset for data quality review."; Layout.fillWidth: true }
 
         Card {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 90
-
+            Layout.fillWidth: true; Layout.preferredHeight: 90
             RowLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingMedium
-                spacing: Theme.spacingMedium
-
+                anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingMedium
                 TextField {
-                    Layout.fillWidth: true
-                    readOnly: true
-                    text: root.currentFile
-                    placeholderText: "Select file..."
-                    color: Theme.textPrimary
+                    Layout.fillWidth: true; readOnly: true; text: root.currentFile
+                    placeholderText: "Select file..."; color: Theme.textPrimary
                     background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                 }
                 AppButton { text: "Browse"; onClicked: fileDialog.open() }
@@ -113,9 +93,7 @@ Item {
         }
 
         RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spacingMedium
-
+            Layout.fillWidth: true; spacing: Theme.spacingMedium
             Card {
                 Layout.fillWidth: true; Layout.preferredHeight: 80
                 ColumnLayout {
@@ -135,35 +113,23 @@ Item {
         }
 
         SplitView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            orientation: Qt.Vertical
+            Layout.fillWidth: true; Layout.fillHeight: true; orientation: Qt.Vertical
 
             Card {
-                SplitView.minimumHeight: 150
-                SplitView.fillHeight: true
-
+                SplitView.minimumHeight: 150; SplitView.fillHeight: true
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingSmall
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     Text { text: "Data Preview"; color: Theme.textPrimary; font.bold: true }
 
                     ScrollView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        
+                        Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                         ListView {
                             id: previewList
-                            width: parent.width
-                            model: root.previewRows.length
-                            
+                            width: parent.width; model: root.previewRows.length
                             delegate: RowLayout {
                                 required property int index
                                 property var rowData: root.previewRows[index]
                                 spacing: Theme.spacingSmall
-                                
                                 Repeater {
                                     model: root.previewCols.length
                                     delegate: Rectangle {
@@ -185,30 +151,21 @@ Item {
             }
 
             Card {
-                SplitView.minimumHeight: 120
-                SplitView.preferredHeight: 180
-                
+                SplitView.minimumHeight: 120; SplitView.preferredHeight: 180
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingSmall
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     Text { text: "Quality Findings"; color: Theme.textPrimary; font.bold: true }
-
                     ListView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: findingsModel
-                        clip: true
-                        spacing: 2
+                        Layout.fillWidth: true; Layout.fillHeight: true; model: findingsModel; clip: true; spacing: 2
                         delegate: Rectangle {
-                            required property string message
-                            required property string severity
+                            required property string msg
+                            required property string sev
                             width: ListView.view.width; height: 32
-                            color: severity === "ERROR" ? "#421820" : (severity === "WARNING" ? "#433614" : Theme.surfaceHover)
+                            color: sev === "ERROR" ? "#421820" : (sev === "WARNING" ? "#433614" : Theme.surfaceHover)
                             border.color: Theme.border
                             Text {
                                 anchors.fill: parent; anchors.margins: 6
-                                text: message; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                                text: msg; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
                             }
                         }
                     }
