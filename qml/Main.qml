@@ -1,113 +1,161 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
+import "components"
+import "pages"
+import "theme"
 
 ApplicationWindow {
-    id: root
-    visible: true
+    id: window
     width: 1280
     height: 720
-    title: "StoreLens"
-    
-    // ---------------------------------------------------------
-    // 1. GLOBAL ERROR HANDLER CONNECTION
-    // ---------------------------------------------------------
-    Connections {
-        target: backend 
-        
-        function onErrorOccurred(title, details) {
-            toast.showError(title, details)
-        }
-    }
+    minimumWidth: 1024
+    minimumHeight: 600
+    visible: true
+    title: qsTr("StoreLens - Data Quality Studio")
+    color: Theme.background
 
-    // ---------------------------------------------------------
-    // 2. YOUR ORIGINAL STORELENS UI GOES HERE
-    // ---------------------------------------------------------
-    // --> PASTE YOUR ORIGINAL LAYOUT, SIDEBARS, AND VIEWS HERE <--
-    
-    Item {
-        anchors.fill: parent
-        
-        Text {
-            anchors.centerIn: parent
-            text: "Please paste your original StoreLens UI code here."
-            font.pixelSize: 18
-            color: "gray"
-        }
-    }
-
-    // ---------------------------------------------------------
-    // 3. GLOBAL TOAST NOTIFICATION (ERROR BANNER)
-    // ---------------------------------------------------------
-    // This stays at the bottom so it renders on top of your UI (z: 999)
-    Rectangle {
-        id: toast
-        width: parent.width * 0.4
-        height: 60
-        anchors.top: parent.top
+    // Centralized Toast Notification System
+    Toast {
+        id: toastManager
+        anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        z: 999
-        
-        // Start hidden above the screen
-        y: -height - 20 
-        radius: 8
-        color: "#f38ba8" 
-        
-        property string errorTitle: ""
-        property string errorMessage: ""
+        anchors.bottomMargin: Theme.spacingLarge
+        z: 100
+    }
 
-        states: [
-            State {
-                name: "visible"
-                PropertyChanges { target: toast; y: 20 }
-            }
-        ]
-
-        transitions: Transition {
-            NumberAnimation { properties: "y"; duration: 300; easing.type: Easing.OutBack }
+    // Connect Python backend signals to Toast
+    Connections {
+        target: notificationController // Assuming this is your Python backend controller for notifications
+        ignoreUnknownSignals: true
+        function onNotify(type, message) {
+            toastManager.show(message, type);
         }
+    }
+
+    RowLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        // ---------------------------------------------------
+        // SIDEBAR NAVIGATION
+        // ---------------------------------------------------
+        Rectangle {
+            id: sidebar
+            Layout.preferredWidth: Theme.sidebarWidth
+            Layout.fillHeight: true
+            color: Theme.surface
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Theme.spacingMedium
+                spacing: Theme.spacingSmall
+
+                // Logo/Header Area
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Theme.headerHeight
+                    
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "StoreLens"
+                        color: Theme.textPrimary
+                        font.pixelSize: 24
+                        font.bold: true
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Theme.border
+                    Layout.bottomMargin: Theme.spacingMedium
+                }
+
+                // Navigation Links
+                SidebarButton { text: "Dashboard"; iconSource: "qrc:/icons/home.png"; onClicked: stackView.replace(homePage) }
+                SidebarButton { text: "Match / Verify"; iconSource: "qrc:/icons/compare.png"; onClicked: stackView.replace(comparePage) }
+                SidebarButton { text: "File Review"; iconSource: "qrc:/icons/review.png"; onClicked: stackView.replace(reviewPage) }
+                SidebarButton { text: "Record Repair"; iconSource: "qrc:/icons/repair.png"; onClicked: stackView.replace(repairPage) }
+                SidebarButton { text: "Store Builder"; iconSource: "qrc:/icons/build.png"; onClicked: stackView.replace(createPage) }
+                SidebarButton { text: "Data Intelligence"; iconSource: "qrc:/icons/health.png"; onClicked: stackView.replace(healthPage) }
+                SidebarButton { text: "Query Studio"; iconSource: "qrc:/icons/explore.png"; onClicked: stackView.replace(explorePage) }
+
+                Item { Layout.fillHeight: true } // Spacer
+            }
+        }
+
+        // Vertical Divider
+        Rectangle {
+            Layout.preferredWidth: 1
+            Layout.fillHeight: true
+            color: Theme.border
+        }
+
+        // ---------------------------------------------------
+        // MAIN CONTENT AREA
+        // ---------------------------------------------------
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            
+            StackView {
+                id: stackView
+                anchors.fill: parent
+                initialItem: homePage
+                
+                // Restrained transitions
+                replaceEnter: Transition {
+                    PropertyAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durationMedium }
+                }
+                replaceExit: Transition {
+                    PropertyAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.durationMedium }
+                }
+            }
+        }
+    }
+
+    // Page Instances (Lazy loaded or instantiated for the stack view)
+    Component { id: homePage; HomePage {} }
+    Component { id: comparePage; ComparePage {} }
+    Component { id: reviewPage; SingleReviewPage {} }
+    Component { id: repairPage; RepairPage {} }
+    Component { id: createPage; CreateStorePage {} }
+    Component { id: healthPage; HealthPage {} }
+    Component { id: explorePage; ExplorePage {} }
+
+    // Reusable Sidebar Button Component inside Main
+    component SidebarButton: Rectangle {
+        property string text: ""
+        property string iconSource: ""
+        signal clicked()
+
+        Layout.fillWidth: true
+        Layout.preferredHeight: 44
+        radius: Theme.radiusMedium
+        color: mouseArea.containsMouse ? Theme.surfaceHover : "transparent"
+
+        Behavior on color { ColorAnimation { duration: Theme.durationFast } }
 
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 10
-            spacing: 15
+            anchors.leftMargin: Theme.spacingMedium
+            spacing: Theme.spacingMedium
 
-            Text { 
-                text: "⚠️"
-                font.pixelSize: 24 
-            }
-
-            ColumnLayout {
+            Text {
+                text: parent.parent.text
+                color: Theme.textPrimary
+                font.pixelSize: 15
                 Layout.fillWidth: true
-                spacing: 2
-                
-                Text { 
-                    text: toast.errorTitle
-                    font.bold: true
-                    color: "#11111b"
-                    font.pixelSize: 14 
-                }
-                Text { 
-                    text: toast.errorMessage
-                    color: "#181825"
-                    font.pixelSize: 12
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true 
-                }
             }
         }
 
-        Timer {
-            id: hideTimer
-            interval: 4000
-            onTriggered: toast.state = ""
-        }
-
-        function showError(title, message) {
-            toast.errorTitle = title
-            toast.errorMessage = message
-            toast.state = "visible"
-            hideTimer.restart()
+        MouseArea {
+            id: mouseArea
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: parent.clicked()
         }
     }
 }
