@@ -19,8 +19,8 @@ class RepairController(QObject):
         self._emit_state(self.tool.inspect_csv(path))
 
     @Slot(int)
-    def join_repair_rows(self, index):
-        self._emit_state(self.tool.join_shifted_rows(index))
+    def join_repair_rows(self, issue_index):
+        self._emit_state(self.tool.join_shifted_rows(issue_index))
 
     @Slot(int, int, str, bool)
     def apply_repair_mapping(self, issue_index, col_index, target, remember):
@@ -40,7 +40,11 @@ class RepairController(QObject):
 
     @Slot(str)
     def delete_repair_record(self, record_id):
-        self._emit_state(self.tool.delete_created_record(record_id))
+        try:
+            idx = int(record_id)
+        except ValueError:
+            idx = -1
+        self._emit_state(self.tool.delete_created_record(idx))
 
     @Slot()
     def undo_repair_action(self):
