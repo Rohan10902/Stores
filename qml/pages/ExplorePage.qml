@@ -15,12 +15,12 @@ Item {
     property bool tTruncated: false
 
     function urlToPath(urlStr) {
-        var s = urlStr.toString();
-        if (s.indexOf("file:///") === 0) {
-            s = s.substring(8);
-            if (Qt.platform.os === "windows" && s.charAt(0) === '/' && s.charAt(2) === ':') { s = s.substring(1); }
+        var path = urlStr.toString();
+        path = path.replace(/^(file:\/{2,3})/, "");
+        if (Qt.platform.os !== "windows" && !path.startsWith("/")) {
+            path = "/" + path;
         }
-        return s;
+        return decodeURIComponent(path);
     }
 
     FileDialog {
