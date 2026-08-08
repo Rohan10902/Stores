@@ -10,24 +10,18 @@ Item {
 
     ScrollView {
         anchors.fill: parent
-        contentWidth: availableWidth
         clip: true
 
         ColumnLayout {
-            width: parent.width
+            width: parent.availableWidth
             spacing: Theme.spacingLarge
             
-            Item {
+            PageTitle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 100
-                
-                PageTitle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: parent.left
-                    anchors.leftMargin: Theme.spacingXLarge
-                    title: "Dashboard"
-                    subtitle: "Select a module to begin data processing."
-                }
+                Layout.leftMargin: Theme.spacingXLarge
+                Layout.topMargin: Theme.spacingLarge
+                title: "Dashboard"
+                subtitle: "Select a module to begin data processing."
             }
 
             GridLayout {
@@ -35,7 +29,7 @@ Item {
                 Layout.margins: Theme.spacingXLarge
                 Layout.topMargin: 0
                 Layout.alignment: Qt.AlignTop
-                columns: root.width > 900 ? 2 : 1 // STRICTLY 2 COLUMNS MAX
+                columns: root.width > 900 ? 2 : 1
                 columnSpacing: Theme.spacingLarge
                 rowSpacing: Theme.spacingLarge
 
@@ -46,6 +40,7 @@ Item {
                 DashboardCard { title: "Data Health & Statistics"; description: "Quality score and on-demand statistics."; buttonText: "View Intelligence"; onClicked: root.navigateRequested("health") }
                 DashboardCard { title: "Explore & Analyze"; description: "Search and read-only SQL with table output."; buttonText: "Open Query Studio"; onClicked: root.navigateRequested("explore") }
             }
+            
             Item { Layout.fillHeight: true }
         }
     }
