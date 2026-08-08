@@ -4,8 +4,8 @@ import "../theme"
 Rectangle {
     id: cardRoot
     radius: Theme.radiusLarge
-    color: Theme.surface
-    border.color: Theme.border
+    color: hoverHandler.hovered && hoverable ? Theme.surfaceHover : Theme.surface
+    border.color: hoverHandler.hovered && hoverable ? Theme.primary : Theme.border
     border.width: 1
 
     property bool hoverable: true
@@ -13,24 +13,8 @@ Rectangle {
     Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     Behavior on border.color { ColorAnimation { duration: Theme.durationFast } }
 
-    MouseArea {
-        id: mouseArea
-        anchors.fill: parent
-        hoverEnabled: cardRoot.hoverable
-        propagateComposedEvents: true 
-        
-        onEntered: {
-            if (cardRoot.hoverable) {
-                cardRoot.color = Theme.surfaceHover
-                cardRoot.border.color = Theme.primary
-            }
-        }
-        
-        onExited: {
-            if (cardRoot.hoverable) {
-                cardRoot.color = Theme.surface
-                cardRoot.border.color = Theme.border
-            }
-        }
+    HoverHandler {
+        id: hoverHandler
+        enabled: cardRoot.hoverable
     }
 }
