@@ -73,7 +73,7 @@ Item {
                     spacing: Theme.spacingSmall
 
                     delegate: Rectangle {
-                        width: ListView.view.width
+                        width: resultsList.width
                         height: 40
                         color: "transparent"
                         border.color: Theme.border
