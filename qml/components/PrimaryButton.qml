@@ -1,27 +1,29 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 import "../theme"
 
 Button {
     id: control
-    text: "Action"
+    property string text: "Button"
     
+    implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
+    implicitHeight: Theme.buttonHeight
+
     contentItem: Text {
         text: control.text
-        font: Theme.fontBody
-        color: Theme.surface
+        font.pixelSize: 14
+        font.bold: true
+        color: "#FFFFFF"
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
 
     background: Rectangle {
-        implicitWidth: 120
-        implicitHeight: 40
-        radius: Theme.radius
-        color: control.down || control.hovered ? Theme.primaryHover : Theme.primary
+        radius: Theme.radiusMedium
+        color: control.pressed ? Qt.darker(Theme.primary, 1.2) : (control.hovered ? Theme.primaryHover : Theme.primary)
         
-        Behavior on color {
-            ColorAnimation { duration: 150 }
-        }
+        Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     }
+    
+    mouseArea.cursorShape: Qt.PointingHandCursor
 }
