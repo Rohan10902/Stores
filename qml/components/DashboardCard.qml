@@ -11,13 +11,13 @@ Card {
     signal clicked()
 
     Layout.fillWidth: true
-    Layout.preferredHeight: 150
-    Layout.minimumWidth: 300
+    Layout.preferredHeight: 125 // FIXED: Compact height
+    Layout.minimumWidth: 280
     Layout.alignment: Qt.AlignTop
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Theme.spacingLarge
+        anchors.margins: Theme.spacingMedium // FIXED: Reduced padding
         spacing: Theme.spacingSmall
 
         Text {
@@ -37,7 +37,7 @@ Card {
             verticalAlignment: Text.AlignTop
         }
 
-        Item { Layout.fillHeight: true } // Forces button to bottom right
+        Item { Layout.fillHeight: true }
 
         PrimaryButton {
             text: root.buttonText
