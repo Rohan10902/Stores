@@ -1,25 +1,36 @@
 import QtQuick
 import QtQuick.Controls
+import "../theme"
 
 Button {
     id: control
+    property string text: "Button"
+    
+    implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
+    implicitHeight: Theme.buttonHeight
+    hoverEnabled: true
 
     contentItem: Text {
         text: control.text
-        color: control.enabled ? "#f8fafc" : "#64748b"
+        font.pixelSize: 14
+        font.bold: true
+        color: Theme.textPrimary
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
-        font.pixelSize: 12
-        font.bold: true
     }
 
     background: Rectangle {
-        implicitWidth: Math.max(80, contentItem.implicitWidth + 20)
-        implicitHeight: 32
-        radius: 6
-        color: control.pressed ? "#334155" : (control.hovered ? "#1e293b" : "#0f172a")
-        border.color: control.hovered ? "#3b82f6" : "#334155"
+        radius: Theme.radiusMedium
+        color: "transparent"
+        border.color: control.pressed ? Theme.primary : (control.hovered ? Theme.textSecondary : "transparent")
         border.width: 1
+        
+        Behavior on border.color { ColorAnimation { duration: Theme.durationFast } }
+    }
+    
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.NoButton
+        cursorShape: Qt.PointingHandCursor
     }
 }
