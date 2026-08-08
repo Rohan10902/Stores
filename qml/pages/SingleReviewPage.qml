@@ -15,21 +15,12 @@ Item {
     
     ListModel { id: findingsModel }
 
-    function urlToPath(urlStr) {
-        var path = urlStr.toString();
-        path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
-            path = path.substring(1);
-        }
-        return decodeURIComponent(path);
-    }
-
     FileDialog {
         id: fileDialog
         title: "Select File to Review"
         nameFilters: ["Data (*.csv *.xlsx)"]
         onAccepted: {
-            currentFile = urlToPath(selectedFile)
+            currentFile = selectedFile.toString()
             if (typeof backend !== "undefined" && backend.review) { backend.review.review_single_file(currentFile) }
         }
     }
@@ -40,7 +31,7 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
-            if (typeof backend !== "undefined" && backend.review) { backend.review.export_single_review(currentFile, urlToPath(selectedFile)) }
+            if (typeof backend !== "undefined" && backend.review) { backend.review.export_single_review(currentFile, selectedFile.toString()) }
         }
     }
 
@@ -135,7 +126,6 @@ Item {
                                         border.color: Theme.border
                                         Text { 
                                             anchors.fill: parent; anchors.margins: 4
-                                            // Safely resolves both dict-based columns and array-based indices
                                             text: {
                                                 if (rowData === undefined || rowData === null) return "";
                                                 var val = rowData[colName];
