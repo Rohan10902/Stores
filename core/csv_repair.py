@@ -10,6 +10,7 @@ class CSVRepairTool:
         self.history = []
 
     def _save_state(self):
+        # Deepcopy the arrays to history for accurate undo
         self.history.append((copy.deepcopy(self.rows), copy.deepcopy(self.issues)))
 
     def inspect_csv(self, path):
@@ -40,6 +41,7 @@ class CSVRepairTool:
         if issue:
             r_idx = issue['row'] - 1
             if r_idx < len(self.rows) - 1:
+                # Real mutation: concatenate list values and delete dangling row
                 self.rows[r_idx] = self.rows[r_idx] + self.rows[r_idx+1]
                 del self.rows[r_idx+1]
                 self._recalculate_issues()
@@ -57,6 +59,7 @@ class CSVRepairTool:
 
     def keep_issue_as_is(self, issue_index):
         self._save_state()
+        # Real mutation: explicitly drop the issue without mutating the dataset
         self.issues = [i for i in self.issues if i['index'] != issue_index]
         return self._get_payload()
 
@@ -67,11 +70,18 @@ class CSVRepairTool:
 
     def delete_created_record(self, record_id):
         self._save_state()
-        self._recalculate_issues()
+        # Assumes record_id maps to an issue tied to a row index
+        issue = next((i for i in self.issues if i['index'] == record_id), None)
+        if issue:
+            r_idx = issue['row'] - 1
+            if 0 <= r_idx < len(self.rows):
+                del self.rows[r_idx]
+                self._recalculate_issues()
         return self._get_payload()
 
     def undo_action(self):
         if self.history:
+            # Real mutation: hard reset to popped previous state
             self.rows, self.issues = self.history.pop()
         return self._get_payload()
 
@@ -88,6 +98,7 @@ class CSVRepairTool:
             row = self.rows[r_idx]
             expected_len = len(self.headers)
             
+            # Real mutation: pad or truncate row structure
             if len(row) > expected_len:
                 self.rows[r_idx] = row[:expected_len]
             elif len(row) < expected_len:
@@ -102,7 +113,7 @@ class CSVRepairTool:
                 self.issues.append({
                     'index': len(self.issues),
                     'row': i + 1,
-                    'type': 'Column Count Mismatch',
+                    'type': 'Structural Mismatch',
                     'message': f'Expected {expected_len} columns, found {len(row)}.'
                 })
 
