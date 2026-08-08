@@ -53,6 +53,7 @@ class CreatorController(QObject):
             writer = csv.writer(f)
             writer.writerow(self.current_headers)
             writer.writerows(rows)
+        
         self.creatorExported.emit()
         if self.parent() and hasattr(self.parent(), 'notifySignal'):
             self.parent().notifySignal.emit("Success", "Store records exported successfully.", "success")
