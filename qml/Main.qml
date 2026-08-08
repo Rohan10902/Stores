@@ -26,10 +26,13 @@ ApplicationWindow {
         z: 100
     }
 
+    // FIXED: Target 'backend' (MainBackendController) and intercept 'notifySignal'
     Connections {
-        target: typeof notificationController !== "undefined" ? notificationController : null
+        target: typeof backend !== "undefined" ? backend : null
         ignoreUnknownSignals: true
-        function onNotify(type, message) { toastManager.show(message, type); }
+        function onNotifySignal(type, message) { 
+            toastManager.show(message, type); 
+        }
     }
 
     ColumnLayout {
@@ -54,7 +57,8 @@ ApplicationWindow {
                 Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.border }
                 Text { text: "Data Quality Studio"; color: Theme.textSecondary; font.pixelSize: 14 }
                 Item { Layout.fillWidth: true }
-                Text { text: "v1.2.0-prod"; color: Theme.textSecondary; font.pixelSize: 12 }
+                // FIXED: Corrected Version Number
+                Text { text: "v7.2.1"; color: Theme.textSecondary; font.pixelSize: 12 }
             }
         }
 
@@ -63,9 +67,9 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 0
 
-            // SIDEBAR
+            // SIDEBAR - FIXED: Compact width
             Rectangle {
-                Layout.preferredWidth: 240
+                Layout.preferredWidth: Theme.sidebarWidth
                 Layout.fillHeight: true
                 color: Theme.background
                 border.color: Theme.border
@@ -74,8 +78,8 @@ ApplicationWindow {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
-                    anchors.topMargin: Theme.spacingLarge
-                    spacing: 4
+                    anchors.topMargin: Theme.spacingMedium
+                    spacing: 2 // FIXED: Reduced vertical spacing for compact look
 
                     Text {
                         text: "MODULES"
