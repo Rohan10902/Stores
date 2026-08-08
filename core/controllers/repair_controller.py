@@ -1,6 +1,12 @@
 import json
-from PySide6.QtCore import QObject, Slot, Signal
+from PySide6.QtCore import QObject, Slot, Signal, QUrl
 from ..csv_repair import CSVRepairTool
+
+def _to_local_file(url_str):
+    url = QUrl(url_str)
+    if url.isLocalFile():
+        return url.toLocalFile()
+    return url_str
 
 class RepairController(QObject):
     repairReady = Signal(str)
@@ -15,8 +21,8 @@ class RepairController(QObject):
 
     @Slot(str)
     def inspect_repair(self, path):
-        self.current_file = path
-        self._emit_state(self.tool.inspect_csv(path))
+        self.current_file = _to_local_file(path)
+        self._emit_state(self.tool.inspect_csv(self.current_file))
 
     @Slot(int)
     def join_repair_rows(self, issue_index):
@@ -52,6 +58,6 @@ class RepairController(QObject):
 
     @Slot(str, str)
     def repair(self, src, dst):
-        self.tool.export_csv(dst)
+        self.tool.export_csv(_to_local_file(dst))
         if self.parent() and hasattr(self.parent(), 'notifySignal'):
             self.parent().notifySignal.emit("Success", "Repaired CSV exported successfully.", "success")
