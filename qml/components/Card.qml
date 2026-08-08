@@ -10,19 +10,13 @@ Rectangle {
 
     property bool hoverable: true
 
-    Behavior on color {
-        ColorAnimation { duration: Theme.durationFast }
-    }
-
-    Behavior on border.color {
-        ColorAnimation { duration: Theme.durationFast }
-    }
+    Behavior on color { ColorAnimation { duration: Theme.durationFast } }
+    Behavior on border.color { ColorAnimation { duration: Theme.durationFast } }
 
     MouseArea {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: cardRoot.hoverable
-        // Pass clicks through if not explicitly handled here
         propagateComposedEvents: true 
         
         onEntered: {
