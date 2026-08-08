@@ -36,28 +36,37 @@ class ValidateController(QObject):
         if hasattr(self.validator, 'validate'):
             results_dict = self.validator.validate(keys)
         
-        self.last_results = results_dict.get("rows", [])
+        raw_rows = results_dict.get("rows", [])
+        self.last_results = raw_rows
         
-        # Calculate derived insights accurately based on actual result list
+        err_count = sum(1 for r in raw_rows if r.get("status") == "ERROR")
+        rev_count = sum(1 for r in raw_rows if r.get("status") == "REVIEW")
+        ok_count = sum(1 for r in raw_rows if r.get("status") in ["CORRECT", "OK"])
+
+        formatted_rows = []
+        for i, r in enumerate(raw_rows):
+            formatted_rows.append({
+                "row": int(r.get("row", i + 1)),
+                "key": str(r.get("key", "")),
+                "status": str(r.get("status", "UNKNOWN")),
+                "message": str(r.get("message", ""))
+            })
+        
         insights = []
-        err_count = sum(1 for r in self.last_results if r.get("status") == "ERROR")
-        rev_count = sum(1 for r in self.last_results if r.get("status") == "REVIEW")
-        ok_count = sum(1 for r in self.last_results if r.get("status") == "OK")
-        
         if err_count > 0:
             insights.append({"key": "err", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
         if rev_count > 0:
             insights.append({"key": "rev", "title": "Manual Review Needed", "count": str(rev_count), "severity": "WARNING", "action": "Check flagged fields"})
-        if err_count == 0 and rev_count == 0 and len(self.last_results) > 0:
+        if err_count == 0 and rev_count == 0 and len(raw_rows) > 0:
             insights.append({"key": "ok", "title": "Clean Validation", "count": str(ok_count), "severity": "INFO", "action": "Ready for deployment"})
 
         payload = {
-            "total": results_dict.get("total", len(self.last_results)),
-            "correct": results_dict.get("correct", ok_count),
-            "review": results_dict.get("review", rev_count),
-            "errors": results_dict.get("errors", err_count),
-            "attention": err_count + rev_count,
-            "rows": self.last_results,
+            "total": int(results_dict.get("total", len(raw_rows))),
+            "correct": int(results_dict.get("correct", ok_count)),
+            "review": int(results_dict.get("review", rev_count)),
+            "errors": int(results_dict.get("errors", err_count)),
+            "attention": int(err_count + rev_count),
+            "rows": formatted_rows,
             "insights": insights
         }
         self.validationReady.emit(json.dumps(payload))
@@ -70,12 +79,22 @@ class ValidateController(QObject):
             if diff_only:
                 comps = [c for c in comps if c.get("severity") in ["ERROR", "WARNING", "REVIEW"]]
             
+            formatted_comps = []
+            for c in comps:
+                formatted_comps.append({
+                    "field": str(c.get("field", "")),
+                    "master": str(c.get("master", "")),
+                    "uploaded": str(c.get("uploaded", "")),
+                    "result": str(c.get("result", "")),
+                    "severity": str(c.get("severity", ""))
+                })
+
             payload = {
-                "message": row.get("message", ""),
-                "status": row.get("status", ""),
-                "master": row.get("master", {}),
-                "upload": row.get("upload", {}),
-                "diffs": row.get("diffs", 0),
-                "comparisons": comps
+                "message": str(row.get("message", "")),
+                "status": str(row.get("status", "")),
+                "master": dict(row.get("master", {})),
+                "upload": dict(row.get("upload", {})),
+                "diffs": int(row.get("diffs", 0)),
+                "comparisons": formatted_comps
             }
             self.detailReady.emit(json.dumps(payload))
