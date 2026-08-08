@@ -1,49 +1,76 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
+import "../theme"
 
-Rectangle {
+Item {
     id: root
-    property string title: ""
+    width: 350
+    height: 60
+    visible: false
+    opacity: 0
+
     property string message: ""
-    property string type: "info"
-    
-    width: 320
-    implicitHeight: 64
-    radius: 8
-    color: "#0f172a"
-    border.color: type === "success" ? "#22c55e" : (type === "error" ? "#ef4444" : (type === "warning" ? "#f59e0b" : "#3b82f6"))
-    border.width: 1
+    property string type: "info" // accepts: success, warning, error, info
 
-    Row {
+    // Expose show method to be called from Main.qml Connections
+    function show(msg, msgType) {
+        root.message = msg;
+        if (msgType) root.type = msgType;
+        
+        root.visible = true;
+        showAnim.start();
+        hideTimer.restart();
+    }
+
+    Rectangle {
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 12
-
-        Rectangle {
-            width: 4; height: parent.height
-            radius: 2
-            color: root.border.color
+        radius: Theme.radiusMedium
+        color: Theme.surface
+        
+        // Dynamic border color based on notification type
+        border.color: {
+            if (root.type === "success") return Theme.success;
+            if (root.type === "error") return Theme.error;
+            if (root.type === "warning") return Theme.warning;
+            return Theme.primary; // default info
         }
+        border.width: 2
 
-        Column {
-            width: parent.width - 24
-            spacing: 2
-            Text { text: root.title; color: "#f8fafc"; font.bold: true; font.pixelSize: 12 }
-            Text { text: root.message; color: "#94a3b8"; font.pixelSize: 11; elide: Text.ElideRight; width: parent.width }
+        // Subtle drop shadow effect
+        layer.enabled: true
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: Theme.spacingMedium
+            spacing: Theme.spacingMedium
+
+            Text {
+                text: root.message
+                color: Theme.textPrimary
+                font.pixelSize: 14
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                verticalAlignment: Text.AlignVCenter
+            }
         }
     }
 
-    ParallelAnimation {
+    // Animations (Step 10)
+    SequentialAnimation {
         id: showAnim
-        NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; duration: 200 }
-        NumberAnimation { target: root; property: "y"; from: root.y + 20; to: root.y; duration: 200 }
+        NumberAnimation { target: root; property: "opacity"; to: 1.0; duration: Theme.durationMedium }
+    }
+
+    SequentialAnimation {
+        id: hideAnim
+        NumberAnimation { target: root; property: "opacity"; to: 0.0; duration: Theme.durationMedium }
+        PropertyAction { target: root; property: "visible"; value: false }
     }
 
     Timer {
-        interval: 3500
-        running: true
-        onTriggered: root.destroy()
+        id: hideTimer
+        interval: 3500 // Visible for 3.5 seconds
+        onTriggered: hideAnim.start()
     }
-
-    Component.onCompleted: showAnim.start()
 }
