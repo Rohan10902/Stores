@@ -14,15 +14,13 @@ class RepairController(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.tool = CSVRepairTool()
-        self.current_file = ""
 
     def _emit_state(self, payload):
         self.repairReady.emit(json.dumps(payload))
 
     @Slot(str)
     def inspect_repair(self, path):
-        self.current_file = _to_local_file(path)
-        self._emit_state(self.tool.inspect_csv(self.current_file))
+        self._emit_state(self.tool.inspect_csv(_to_local_file(path)))
 
     @Slot(int)
     def join_repair_rows(self, issue_index):
