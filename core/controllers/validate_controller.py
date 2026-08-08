@@ -58,6 +58,7 @@ class ValidateController(QObject):
                 "message": str(r.get("message", ""))
             })
         
+        # Real validation insights generation
         insights = []
         if err_count > 0:
             insights.append({"key": "ERROR", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
