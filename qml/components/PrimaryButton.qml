@@ -24,10 +24,4 @@ Button {
         color: control.pressed ? Qt.darker(Theme.primary, 1.2) : (control.hovered ? Theme.primaryHover : Theme.primary)
         Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     }
-    
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.NoButton
-        cursorShape: Qt.PointingHandCursor
-    }
 }
