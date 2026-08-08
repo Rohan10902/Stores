@@ -14,6 +14,8 @@ class CreatorController(QObject):
 
     @Slot(str)
     def load_creator_file(self, path):
+        self.current_headers = []
+        self.current_rows = []
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 reader = csv.reader(f)
@@ -23,7 +25,10 @@ class CreatorController(QObject):
             self.current_headers = ["Column 1", "Column 2", "Column 3"]
             self.current_rows = [["", "", ""]]
 
-        payload = {"headers": self.current_headers, "rows": self.current_rows}
+        payload = {
+            "headers": self.current_headers, 
+            "rows": self.current_rows
+        }
         self.creatorLoaded.emit(json.dumps(payload))
 
     @Slot(str)
@@ -32,10 +37,13 @@ class CreatorController(QObject):
         findings = []
         for i, row in enumerate(rows):
             if not any(row): continue 
-            if len(row) > 0 and not row[0]: 
+            if len(row) > 0 and not str(row[0]).strip(): 
                 findings.append({"message": f"Row {i+1}: Primary ID is empty", "severity": "ERROR"})
         
-        payload = {"count": len(rows), "findings": findings}
+        payload = {
+            "count": len(rows), 
+            "findings": findings
+        }
         self.creatorReady.emit(json.dumps(payload))
 
     @Slot(str, str)
@@ -47,4 +55,4 @@ class CreatorController(QObject):
             writer.writerows(rows)
         self.creatorExported.emit()
         if self.parent() and hasattr(self.parent(), 'notifySignal'):
-            self.parent().notifySignal.emit("Exported", "Store records generated successfully.", "success")
+            self.parent().notifySignal.emit("Success", "Store records exported successfully.", "success")
