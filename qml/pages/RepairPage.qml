@@ -68,7 +68,6 @@ Item {
                     })
                 }
                 
-                // Refresh selection details if one is selected
                 if (selectedIssue >= 0 && selectedIssue < issuesModel.count) {
                     activeIssueData = JSON.parse(issuesModel.get(selectedIssue).rawJson)
                 } else {
@@ -114,9 +113,8 @@ Item {
             Layout.fillHeight: true
             orientation: Qt.Horizontal
 
-            // LEFT PANE: ISSUE LIST
             Card {
-                SplitView.minimumWidth: 250
+                SplitView.minimumWidth: 280
                 SplitView.preferredWidth: 350
                 SplitView.fillHeight: true
                 
@@ -129,7 +127,7 @@ Item {
                         Layout.fillWidth: true
                         Text { text: "Detected Issues (" + issuesModel.count + ")"; color: Theme.textPrimary; font.bold: true; Layout.fillWidth: true }
                         AppButton { 
-                            text: "Undo Last"
+                            text: "Undo Action"
                             enabled: typeof backend !== "undefined" && backend.repair
                             onClicked: backend.repair.undo_repair_action()
                         }
@@ -176,7 +174,6 @@ Item {
                 }
             }
 
-            // RIGHT PANE: ISSUE INSPECTOR & TOOLS
             Card {
                 SplitView.fillWidth: true
                 SplitView.fillHeight: true
@@ -206,51 +203,51 @@ Item {
                         }
                     }
 
-                    // Resolution Actions
-                    RowLayout {
+                    // Resolution Action Tools
+                    Flow {
                         Layout.fillWidth: true
                         spacing: Theme.spacingMedium
 
                         AppButton {
                             text: "Join Shifted Rows"
-                            onClicked: {
-                                if(backend.repair && activeIssueData) {
-                                    backend.repair.join_repair_rows(activeIssueData.index)
-                                }
-                            }
+                            onClicked: { if(backend.repair && activeIssueData) backend.repair.join_repair_rows(activeIssueData.index) }
                         }
                         AppButton {
                             text: "Keep Issue As-Is"
-                            onClicked: {
-                                if(backend.repair && activeIssueData) {
-                                    backend.repair.keep_repair_issue(activeIssueData.index)
-                                }
-                            }
+                            onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_issue(activeIssueData.index) }
+                        }
+                        AppButton {
+                            text: "Keep Unresolved"
+                            onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_unresolved(activeIssueData.index, 0) } // Default col 0
                         }
                         AppButton {
                             text: "Delete Record"
-                            onClicked: {
-                                if(backend.repair && activeIssueData) {
-                                    backend.repair.delete_repair_record(activeIssueData.index) // Assuming ID/idx mapping logic is safe
-                                }
-                            }
+                            onClicked: { if(backend.repair && activeIssueData) backend.repair.delete_repair_record(activeIssueData.index) }
+                        }
+                        AppButton {
+                            text: "Create Record"
+                            onClicked: { if(backend.repair && activeIssueData) backend.repair.create_repair_record(activeIssueData.index, "{}") }
                         }
                     }
 
                     Text { text: "Data Preview"; color: Theme.textSecondary; font.bold: true }
 
-                    // A placeholder grid showing the broken data. A real app would iterate activeIssueData.columns
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         color: Theme.background
                         border.color: Theme.border
+                        radius: Theme.radiusMedium
                         
-                        Text {
-                            anchors.centerIn: parent
-                            text: activeIssueData ? JSON.stringify(activeIssueData.data || {}, null, 2) : "No data to preview."
-                            color: Theme.textMuted
-                            wrapMode: Text.WordWrap
+                        ScrollView {
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingSmall
+                            clip: true
+                            Text {
+                                text: activeIssueData ? JSON.stringify(activeIssueData.data || {}, null, 2) : "No data to preview."
+                                color: Theme.textMuted
+                                wrapMode: Text.WordWrap
+                            }
                         }
                     }
                 }
