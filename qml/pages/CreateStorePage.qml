@@ -16,12 +16,21 @@ Item {
     
     ListModel { id: findingsModel }
 
+    function urlToPath(urlStr) {
+        var path = urlStr.toString();
+        path = path.replace(/^(file:\/{2,3})/, "");
+        if (Qt.platform.os !== "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+            path = path.substring(1);
+        }
+        return decodeURIComponent(path);
+    }
+
     FileDialog {
         id: fileDialog
         title: "Load Store Template"
         nameFilters: ["Data (*.csv *.xlsx)"]
         onAccepted: {
-            currentFile = selectedFile.toString()
+            currentFile = urlToPath(selectedFile)
             if (typeof backend !== "undefined" && backend.creator) { backend.creator.load_creator_file(currentFile) }
         }
     }
@@ -33,7 +42,7 @@ Item {
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
             if (typeof backend !== "undefined" && backend.creator) {
-                backend.creator.export_creator_file(JSON.stringify(tableRows), selectedFile.toString())
+                backend.creator.export_creator_file(JSON.stringify(tableRows), urlToPath(selectedFile))
             }
         }
     }
@@ -42,9 +51,9 @@ Item {
         target: typeof backend !== "undefined" ? backend.creator : null
         ignoreUnknownSignals: true
 
-        function onCreatorLoaded(payloadStr) {
+        function onCreatorLoaded(payload) {
             try {
-                var d = JSON.parse(payloadStr)
+                var d = JSON.parse(payload)
                 tableHeaders = d.headers || []
                 tableRows = d.rows || []
                 findingsModel.clear()
@@ -53,9 +62,9 @@ Item {
             } catch(e) {}
         }
 
-        function onCreatorReady(payloadStr) {
+        function onCreatorReady(payload) {
             try {
-                var d = JSON.parse(payloadStr)
+                var d = JSON.parse(payload)
                 valCount = d.count || 0
                 var f = d.findings || []
                 findingsModel.clear()
@@ -69,6 +78,7 @@ Item {
         }
 
         function onCreatorExported() {
+            // Usually managed by central notifications
         }
     }
 
