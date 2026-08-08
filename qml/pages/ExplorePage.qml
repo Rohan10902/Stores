@@ -1,4 +1,3 @@
-// qml/pages/ExplorePage.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -8,7 +7,6 @@ import "../theme"
 
 Item {
     id: root
-
     property string currentFile: ""
     property var tCols: []
     property var tRows: []
@@ -31,9 +29,7 @@ Item {
         nameFilters: ["Data (*.csv *.xlsx *.db *.sqlite)"]
         onAccepted: {
             currentFile = urlToPath(selectedFile)
-            if (typeof backend !== "undefined" && backend.health) {
-                backend.health.load_data(currentFile)
-            }
+            if (typeof backend !== "undefined" && backend.health) { backend.health.load_data(currentFile) }
         }
     }
 
@@ -54,105 +50,69 @@ Item {
     }
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Theme.spacingXLarge
-        spacing: Theme.spacingLarge
+        anchors.fill: parent; anchors.margins: Theme.spacingXLarge; spacing: Theme.spacingLarge
 
-        PageTitle {
-            title: "Explore Data"
-            subtitle: "Query, search, and visually inspect dataset contents."
-            Layout.fillWidth: true
-        }
+        PageTitle { title: "Explore Data"; subtitle: "Query, search, and visually inspect dataset contents."; Layout.fillWidth: true }
 
         Card {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 120
-
+            Layout.fillWidth: true; Layout.preferredHeight: 120
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingMedium
-                spacing: Theme.spacingSmall
-
+                anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                 RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMedium
+                    Layout.fillWidth: true; spacing: Theme.spacingMedium
                     AppButton { text: "Load Data"; onClicked: fileDialog.open() }
                     Text { text: currentFile !== "" ? currentFile : "No file loaded"; color: Theme.textSecondary; Layout.fillWidth: true; elide: Text.ElideRight }
                 }
-
                 RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMedium
-                    
+                    Layout.fillWidth: true; spacing: Theme.spacingMedium
                     TextField {
                         id: searchInput
-                        Layout.fillWidth: true
-                        placeholderText: "Quick search / SQL Query..."
-                        color: Theme.textPrimary
+                        Layout.fillWidth: true; placeholderText: "Quick search / SQL Query..."; color: Theme.textPrimary
                         background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                     }
                     ComboBox {
                         id: colCombo
-                        Layout.preferredWidth: 150
-                        model: ["All Columns"].concat(tCols)
+                        Layout.preferredWidth: 150; model: ["All Columns"].concat(tCols)
                         background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                         contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
                     }
                     AppButton { 
                         text: "Search"
-                        onClicked: {
-                            if (backend && backend.health) backend.health.search(searchInput.text, colCombo.currentText === "All Columns" ? "" : colCombo.currentText)
-                        }
+                        onClicked: { if (backend && backend.health) backend.health.search(searchInput.text, colCombo.currentText === "All Columns" ? "" : colCombo.currentText) }
                     }
                     PrimaryButton { 
                         text: "Run SQL"
-                        onClicked: {
-                            if (backend && backend.health) backend.health.sql(searchInput.text)
-                        }
+                        onClicked: { if (backend && backend.health) backend.health.sql(searchInput.text) }
                     }
                 }
             }
         }
 
         Card {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-
+            Layout.fillWidth: true; Layout.fillHeight: true
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingMedium
-                spacing: Theme.spacingSmall
-
+                anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                 RowLayout {
                     Layout.fillWidth: true
                     Text { text: "Data Table"; color: Theme.textPrimary; font.bold: true }
                     Item { Layout.fillWidth: true }
                     Text { 
                         text: "Showing " + tDisplayed + " of " + tTotal + (tTruncated ? " (Truncated)" : "")
-                        color: tTruncated ? Theme.warning : Theme.textSecondary
-                        font.pixelSize: 11
+                        color: tTruncated ? Theme.warning : Theme.textSecondary; font.pixelSize: 11
                     }
                 }
-
                 Rectangle {
-                    Layout.fillWidth: true; Layout.preferredHeight: 30
-                    color: Theme.surfaceHover; border.color: Theme.border
+                    Layout.fillWidth: true; Layout.preferredHeight: 30; color: Theme.surfaceHover; border.color: Theme.border
                     RowLayout {
                         anchors.fill: parent; spacing: 2
                         Repeater {
                             model: tCols
-                            delegate: Text {
-                                text: String(modelData); color: Theme.textSecondary; font.bold: true
-                                Layout.preferredWidth: 150; elide: Text.ElideRight; leftPadding: 4
-                            }
+                            delegate: Text { text: String(modelData); color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 150; elide: Text.ElideRight; leftPadding: 4 }
                         }
                     }
                 }
-
                 ScrollView {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    clip: true
-                    
+                    Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                     ListView {
                         width: parent.width; model: root.tRows.length
                         delegate: RowLayout {
