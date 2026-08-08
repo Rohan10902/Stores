@@ -3,161 +3,120 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import "../components"
+import "../theme"
 
 Item {
-    id: page
-
-    FileDialog {
-        id: fileDlg
-        fileMode: FileDialog.OpenFile
-        nameFilters: ["All files (*)","CSV (*.csv)","TSV (*.tsv)","Excel (*.xlsx *.xls *.xlsm)","JSON (*.json)"]
-        onAccepted: {
-            var path = selectedFile ? selectedFile.toString() : ""
-            filePath.text = path
-        }
-    }
-
-    FileDialog {
-        id: saveDlg
-        fileMode: FileDialog.SaveFile
-        nameFilters: ["CSV (*.csv)"]
-        onAccepted: backend.exportSingleReview(filePath.text, selectedFile.toString())
-    }
-
-    Connections {
-        target: backend
-        function onSingleReviewReady(payload) {
-            var d = JSON.parse(payload)
-            totalRecs.text = d.totalRecords || 0
-            attentionRecs.text = d.attentionCount || 0
-            
-            previewModel.clear()
-            var cols = d.previewColumns || []
-            var rows = d.previewRows || []
-            for (var i = 0; i < rows.length; ++i) {
-                previewModel.append({ rowData: rows[i] })
-            }
-            
-            findingsModel.clear()
-            var findings = d.findings || []
-            for (var j = 0; j < findings.length; ++j) {
-                findingsModel.append(findings[j])
-            }
-        }
-    }
-
-    ListModel { id: previewModel }
-    ListModel { id: findingsModel }
+    id: root
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 12
+        anchors.margins: Theme.spacingXLarge
+        spacing: Theme.spacingLarge
 
-        PageTitle { text: "Review One File" }
-        Text { text: "Review a dataset without a Master file. The loaded file is previewed below; source data remains unchanged until export."; color: "#94a3b8" }
-
-        Card {
+        PageTitle {
+            title: "Single File Review"
+            subtitle: "Analyze an isolated dataset for formatting and code integrity."
             Layout.fillWidth: true
-            implicitHeight: 72
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 10
-                TextField {
-                    id: filePath
-                    Layout.fillWidth: true
-                    placeholderText: "Choose CSV / Excel / text file"
-                    readOnly: true
-                    color: "#f8fafc"
-                }
-                AppButton {
-                    text: "Choose File"
-                    onClicked: fileDlg.open()
-                }
-                PrimaryButton {
-                    text: "Analyze"
-                    onClicked: backend.reviewSingleFile(filePath.text)
-                }
-                AppButton {
-                    text: "Export Reviewed Copy"
-                    onClicked: saveDlg.open()
-                }
-            }
-        }
-
-        GridLayout {
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: 12
-
-            Card {
-                Layout.fillWidth: true; implicitHeight: 75
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    Text { id: totalRecs; text: "0"; color: "#f8fafc"; font.bold: true; font.pixelSize: 20 }
-                    Text { text: "RECORDS"; color: "#94a3b8"; font.pixelSize: 10 }
-                }
-            }
-            Card {
-                Layout.fillWidth: true; implicitHeight: 75
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    Text { id: attentionRecs; text: "0"; color: "#f59e0b"; font.bold: true; font.pixelSize: 20 }
-                    Text { text: "RECORDS NEEDING ATTENTION"; color: "#94a3b8"; font.pixelSize: 10 }
-                }
-            }
-        }
-
-        Card {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 10
-                Text { text: "File Preview"; color: "#f8fafc"; font.bold: true }
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: previewModel
-                    clip: true
-                    delegate: Rectangle {
-                        width: ListView.view.width
-                        height: 28
-                        color: index % 2 ? "#0d1b2e" : "#0b1829"
-                        border.color: "#1e293b"
-                        Text {
-                            anchors.fill: parent
-                            anchors.margins: 6
-                            text: JSON.stringify(model.rowData || {})
-                            color: "#f8fafc"
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-            }
         }
 
         Card {
             Layout.fillWidth: true
             Layout.preferredHeight: 140
+            hoverable: false
+
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                Text { text: "Records Needing Attention"; color: "#f8fafc"; font.bold: true }
-                ListView {
+                anchors.margins: Theme.spacingMedium
+                
+                Text { text: "Target Dataset"; color: Theme.textPrimary; font.bold: true }
+                Text { 
+                    text: review_controller.targetFilePath !== "" ? review_controller.targetFilePath : "No file selected." 
+                    color: Theme.textSecondary; elide: Text.ElideMiddle; Layout.fillWidth: true
+                }
+                
+                Item { Layout.fillHeight: true }
+                
+                RowLayout {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: findingsModel
-                    clip: true
-                    delegate: Text {
-                        width: ListView.view.width
-                        height: 24
-                        text: model.message || ""
-                        color: "#f59e0b"
+                    PrimaryButton { 
+                        text: "Select File"
+                        onClicked: targetFileDialog.open()
+                    }
+                    Item { Layout.fillWidth: true }
+                    PrimaryButton {
+                        text: review_controller.isProcessing ? "Analyzing..." : "Run Review"
+                        enabled: review_controller.targetFilePath !== "" && !review_controller.isProcessing
+                        onClicked: review_controller.startReview()
                     }
                 }
             }
         }
+
+        // Results Area
+        Card {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            hoverable: false
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Theme.spacingMedium
+                spacing: Theme.spacingMedium
+
+                Text { text: "Review Results"; color: Theme.textPrimary; font.bold: true; font.pixelSize: 16 }
+                
+                ListView {
+                    id: resultsList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    model: review_controller.resultsModel
+                    spacing: Theme.spacingSmall
+
+                    delegate: Rectangle {
+                        width: ListView.view.width
+                        height: 40
+                        color: "transparent"
+                        border.color: Theme.border
+                        radius: Theme.radiusMedium
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingSmall
+                            spacing: Theme.spacingMedium
+
+                            Text { 
+                                text: model.issueType
+                                color: model.severity === "Error" ? Theme.error : Theme.warning
+                                font.bold: true
+                                Layout.preferredWidth: 100
+                            }
+                            
+                            Text { 
+                                text: model.description 
+                                color: Theme.textPrimary
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: review_controller.targetFilePath === "" ? "Select a file and run a review to see results." : "No formatting issues found."
+                        color: Theme.textSecondary
+                        font.pixelSize: 16
+                        visible: resultsList.count === 0 && !review_controller.isProcessing
+                    }
+                }
+            }
+        }
+    }
+
+    FileDialog {
+        id: targetFileDialog
+        title: "Select Dataset"
+        nameFilters: ["CSV Files (*.csv)", "Text Files (*.txt)", "All Files (*)"]
+        onAccepted: review_controller.setTargetFile(selectedFile)
     }
 }
