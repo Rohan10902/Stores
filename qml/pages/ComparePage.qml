@@ -1,4 +1,3 @@
-// qml/pages/ComparePage.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -21,16 +20,14 @@ Item {
     property int attention: 0
     property string filterKey: ""
 
-    property string detailProblem: ""
+    property string detailMessage: ""
     property string detailStatus: ""
-    property var detailContext: ({})
     property var suggestedKeys: []
     property string key1: "SID"
     property string key2: "Nielsen Store Code"
 
     ListModel { id: rows }
     ListModel { id: details }
-    ListModel { id: related }
     ListModel { id: insights }
 
     function urlToPath(urlStr) {
@@ -91,19 +88,16 @@ Item {
                 rows.clear()
                 insights.clear()
                 details.clear()
-                related.clear()
                 selected = -1
 
                 var rawRows = d.rows || []
                 for (var i = 0; i < rawRows.length; i++) {
                     var r = rawRows[i]
                     rows.append({
-                        row: String(r.row || ""),
-                        sid: String(r.sid || ""),
-                        store: String(r.storeName || ""),
-                        status: String(r.status || ""),
-                        problem: String(r.problem || ""),
-                        categoriesJson: JSON.stringify(r.categories || [])
+                        rowNum: String(r.row || ""),
+                        keyVal: String(r.key || ""),
+                        statusVal: String(r.status || ""),
+                        msgVal: String(r.message || "")
                     })
                 }
 
@@ -124,31 +118,19 @@ Item {
         function onDetailReady(p) {
             try {
                 var d = JSON.parse(p)
-                detailProblem = d.problem || ""
+                detailMessage = d.message || ""
                 detailStatus = d.status || ""
-                detailContext = d.context || {}
                 details.clear()
-                related.clear()
 
-                var rawFields = d.rows || []
-                for (var i = 0; i < rawFields.length; i++) {
-                    var r = rawFields[i]
+                var comps = d.comparisons || []
+                for (var i = 0; i < comps.length; i++) {
+                    var c = comps[i]
                     details.append({
-                        fieldName: String(r.field || ""),
-                        masterValue: r.master === undefined || r.master === null ? "" : String(r.master),
-                        uploadedValue: r.uploaded === undefined || r.uploaded === null ? "" : String(r.uploaded),
-                        resultText: String(r.result || ""),
-                        severityText: String(r.severity || "")
-                    })
-                }
-
-                var rr = (detailContext.relatedUploaded || [])
-                for (var j = 0; j < rr.length; j++) {
-                    related.append({
-                        row: String(rr[j].row || ""),
-                        sid: String(rr[j].sid || ""),
-                        nielsen: String(rr[j].nielsen || ""),
-                        store: String(rr[j].storeName || "")
+                        fieldName: String(c.field || ""),
+                        masterValue: c.master === undefined || c.master === null ? "" : String(c.master),
+                        uploadedValue: c.uploaded === undefined || c.uploaded === null ? "" : String(c.uploaded),
+                        resultText: String(c.result || ""),
+                        severityText: String(c.severity || "")
                     })
                 }
             } catch (e) { }
@@ -183,7 +165,6 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spacingMedium
-
                         TextField {
                             Layout.fillWidth: true
                             readOnly: true
@@ -192,14 +173,12 @@ Item {
                             color: Theme.textPrimary
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                         }
-
                         AppButton { text: "Browse Master"; onClicked: md.open() }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spacingMedium
-
                         TextField {
                             Layout.fillWidth: true
                             readOnly: true
@@ -208,16 +187,13 @@ Item {
                             color: Theme.textPrimary
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                         }
-
                         AppButton { text: "Browse Upload"; onClicked: ud.open() }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spacingMedium
-
                         Text { text: "Match by"; color: Theme.textSecondary }
-
                         ComboBox {
                             id: k1
                             Layout.preferredWidth: 180
@@ -227,9 +203,7 @@ Item {
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                             contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
                         }
-
                         Text { text: "+"; color: Theme.textSecondary }
-
                         ComboBox {
                             id: k2
                             Layout.preferredWidth: 200
@@ -239,35 +213,24 @@ Item {
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                             contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
                         }
-
                         Text {
                             text: suggestedKeys.length ? "Smart suggestion: " + suggestedKeys.join(" + ") : ""
-                            color: Theme.info
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
+                            color: Theme.info; Layout.fillWidth: true; elide: Text.ElideRight
                         }
-
                         AppButton {
                             text: "Detect Columns"
                             enabled: root.master !== "" && root.upload !== ""
                             onClicked: {
-                                if (typeof backend !== "undefined" && backend.validate) {
-                                    backend.validate.detect()
-                                }
+                                if (typeof backend !== "undefined" && backend.validate) { backend.validate.detect() }
                             }
                         }
-
                         PrimaryButton {
                             text: "Validate"
                             enabled: root.master !== "" && root.upload !== ""
                             onClicked: {
                                 var a = [k1.currentText]
-                                if (k2.currentText !== "(None)" && k2.currentText !== k1.currentText) {
-                                    a.push(k2.currentText)
-                                }
-                                if (typeof backend !== "undefined" && backend.validate) {
-                                    backend.validate.validate(JSON.stringify(a))
-                                }
+                                if (k2.currentText !== "(None)" && k2.currentText !== k1.currentText) { a.push(k2.currentText) }
+                                if (typeof backend !== "undefined" && backend.validate) { backend.validate.validate(JSON.stringify(a)) }
                             }
                         }
                     }
@@ -285,16 +248,11 @@ Item {
                         ["REVIEW", rev, Theme.warning],
                         ["ERROR", err, Theme.error]
                     ]
-
                     delegate: Card {
                         required property var modelData
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 70
-
+                        Layout.fillWidth: true; Layout.preferredHeight: 70
                         ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: Theme.spacingSmall
-                            spacing: 2
+                            anchors.fill: parent; anchors.margins: Theme.spacingSmall; spacing: 2
                             Text { text: modelData[1]; color: modelData[2]; font.pixelSize: 20; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                             Text { text: modelData[0]; color: Theme.textSecondary; font.pixelSize: 10; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                         }
@@ -308,48 +266,30 @@ Item {
                 visible: insights.count > 0
 
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingSmall
-
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     RowLayout {
                         Layout.fillWidth: true
                         Text { text: "Validation Intelligence   " + attention + " finding(s) need attention"; color: Theme.textPrimary; font.bold: true }
                         Item { Layout.fillWidth: true }
                         AppButton { text: filterKey ? "Show All" : "All Records"; onClicked: filterKey = "" }
                     }
-
                     ListView {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 65
-                        orientation: ListView.Horizontal
-                        spacing: Theme.spacingSmall
-                        model: insights
-                        clip: true
-
+                        Layout.fillWidth: true; Layout.preferredHeight: 65
+                        orientation: ListView.Horizontal; spacing: Theme.spacingSmall; model: insights; clip: true
                         delegate: Rectangle {
                             required property string key
                             required property string title
                             required property string count
                             required property string severity
                             required property string action
-
-                            width: 250
-                            height: 65
-                            radius: Theme.radiusMedium
+                            width: 250; height: 65; radius: Theme.radiusMedium
                             color: filterKey === key ? Theme.surfaceHover : (severity === "ERROR" ? "#421820" : "#433614")
                             border.color: filterKey === key ? Theme.primary : Theme.border
-
                             MouseArea { anchors.fill: parent; onClicked: filterKey = key }
-
                             ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: Theme.spacingSmall
-                                spacing: 2
-
+                                anchors.fill: parent; anchors.margins: Theme.spacingSmall; spacing: 2
                                 RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: Theme.spacingSmall
+                                    Layout.fillWidth: true; spacing: Theme.spacingSmall
                                     Text { text: count; color: severity === "ERROR" ? Theme.error : Theme.warning; font.bold: true; font.pixelSize: 16 }
                                     Text { text: title; color: Theme.textPrimary; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                                 }
@@ -361,65 +301,35 @@ Item {
             }
 
             SplitView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 500
-                orientation: Qt.Vertical
+                Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumHeight: 500; orientation: Qt.Vertical
 
                 Card {
-                    SplitView.minimumHeight: 180
-                    SplitView.preferredHeight: 220
-
+                    SplitView.minimumHeight: 180; SplitView.preferredHeight: 220
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Theme.spacingMedium
-                        spacing: Theme.spacingSmall
-
-                        Text { text: "Validation Results   (row order does not affect matching)"; color: Theme.textPrimary; font.bold: true }
-
+                        anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
+                        Text { text: "Validation Results"; color: Theme.textPrimary; font.bold: true }
                         Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 30
-                            color: Theme.surfaceHover
-                            border.color: Theme.border
-
+                            Layout.fillWidth: true; Layout.preferredHeight: 30; color: Theme.surfaceHover; border.color: Theme.border
                             RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.spacingSmall
-                                anchors.rightMargin: Theme.spacingSmall
-                                spacing: Theme.spacingSmall
-
+                                anchors.fill: parent; anchors.leftMargin: Theme.spacingSmall; anchors.rightMargin: Theme.spacingSmall; spacing: Theme.spacingSmall
                                 Text { text: "Row"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 50 }
-                                Text { text: "SID"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 120 }
-                                Text { text: "Store Name"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
+                                Text { text: "Key"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 150 }
                                 Text { text: "Status"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 90 }
-                                Text { text: "Problem"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 180 }
+                                Text { text: "Message"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
                             }
                         }
-
                         ListView {
                             id: resultsListView
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            model: rows
-                            clip: true
-
+                            Layout.fillWidth: true; Layout.fillHeight: true; model: rows; clip: true
                             delegate: Rectangle {
                                 required property int index
-                                required property string row
-                                required property string sid
-                                required property string store
-                                required property string status
-                                required property string problem
-                                required property string categoriesJson
-
-                                width: resultsListView.width
-                                height: (filterKey === "" || categoriesJson.indexOf(filterKey) >= 0) ? 36 : 0
-                                visible: height > 0
+                                required property string rowNum
+                                required property string keyVal
+                                required property string statusVal
+                                required property string msgVal
+                                width: resultsListView.width; height: 36
                                 color: selected === index ? Theme.surfaceHover : (index % 2 === 0 ? Theme.background : Theme.surface)
-                                border.color: Theme.border
-                                border.width: 1
-
+                                border.color: Theme.border; border.width: 1
                                 MouseArea {
                                     anchors.fill: parent
                                     onClicked: {
@@ -429,18 +339,12 @@ Item {
                                         }
                                     }
                                 }
-
                                 RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Theme.spacingSmall
-                                    anchors.rightMargin: Theme.spacingSmall
-                                    spacing: Theme.spacingSmall
-
-                                    Text { text: row; color: Theme.textSecondary; Layout.preferredWidth: 50 }
-                                    Text { text: sid; color: Theme.textPrimary; Layout.preferredWidth: 120; elide: Text.ElideRight }
-                                    Text { text: store; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Text { text: status; color: status === "ERROR" ? Theme.error : (status === "REVIEW" ? Theme.warning : Theme.success); font.bold: true; Layout.preferredWidth: 90 }
-                                    Text { text: problem; color: Theme.textPrimary; Layout.preferredWidth: 180; elide: Text.ElideRight }
+                                    anchors.fill: parent; anchors.leftMargin: Theme.spacingSmall; anchors.rightMargin: Theme.spacingSmall; spacing: Theme.spacingSmall
+                                    Text { text: rowNum; color: Theme.textSecondary; Layout.preferredWidth: 50 }
+                                    Text { text: keyVal; color: Theme.textPrimary; Layout.preferredWidth: 150; elide: Text.ElideRight }
+                                    Text { text: statusVal; color: statusVal === "ERROR" ? Theme.error : (statusVal === "REVIEW" ? Theme.warning : Theme.success); font.bold: true; Layout.preferredWidth: 90 }
+                                    Text { text: msgVal; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
                                 }
                             }
                         }
@@ -448,17 +352,12 @@ Item {
                 }
 
                 Card {
-                    SplitView.minimumHeight: 220
-                    SplitView.fillHeight: true
-
+                    SplitView.minimumHeight: 220; SplitView.fillHeight: true
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: Theme.spacingMedium
-                        spacing: Theme.spacingSmall
-
+                        anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: "Error-aware Comparison Inspector"; color: Theme.textPrimary; font.bold: true }
+                            Text { text: "Comparison Inspector"; color: Theme.textPrimary; font.bold: true }
                             Item { Layout.fillWidth: true }
                             CheckBox {
                                 text: "Differences only"
@@ -472,47 +371,16 @@ Item {
                                 contentItem: Text { text: parent.text; color: Theme.textPrimary; leftPadding: parent.indicator.width + 4; verticalAlignment: Text.AlignVCenter }
                             }
                         }
-
                         Rectangle {
                             visible: selected >= 0
-                            Layout.fillWidth: true
-                            implicitHeight: 45
-                            radius: Theme.radiusMedium
+                            Layout.fillWidth: true; implicitHeight: 45; radius: Theme.radiusMedium
                             color: detailStatus === "ERROR" ? "#421820" : (detailStatus === "REVIEW" ? "#433614" : "#113426")
                             border.color: Theme.border
-
                             Text {
-                                anchors.fill: parent
-                                anchors.margins: Theme.spacingSmall
-                                text: detailProblem
-                                color: Theme.textPrimary
-                                wrapMode: Text.WordWrap
-                                verticalAlignment: Text.AlignVCenter
+                                anchors.fill: parent; anchors.margins: Theme.spacingSmall
+                                text: detailMessage; color: Theme.textPrimary; wrapMode: Text.WordWrap; verticalAlignment: Text.AlignVCenter
                             }
                         }
-
-                        Text { visible: related.count > 1; text: "Related uploaded records for this identity:"; color: Theme.warning; font.bold: true }
-
-                        ListView {
-                            visible: related.count > 1
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(65, related.count * 24)
-                            model: related
-                            clip: true
-
-                            delegate: RowLayout {
-                                required property string row
-                                required property string sid
-                                required property string nielsen
-                                required property string store
-                                width: ListView.view.width; height: 24; spacing: Theme.spacingSmall
-                                Text { text: "Row " + row; color: Theme.textSecondary; Layout.preferredWidth: 70 }
-                                Text { text: sid; color: Theme.textPrimary; Layout.preferredWidth: 110; elide: Text.ElideRight }
-                                Text { text: nielsen; color: Theme.info; Layout.preferredWidth: 150; elide: Text.ElideRight }
-                                Text { text: store; color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
-                            }
-                        }
-
                         RowLayout {
                             Layout.fillWidth: true; spacing: Theme.spacingSmall
                             Text { text: "Field"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 160 }
@@ -520,12 +388,9 @@ Item {
                             Text { text: "Uploaded / Updated Value"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
                             Text { text: "Result"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 120 }
                         }
-
                         ListView {
                             id: detailsListView
-                            Layout.fillWidth: true; Layout.fillHeight: true
-                            model: details; clip: true
-
+                            Layout.fillWidth: true; Layout.fillHeight: true; model: details; clip: true
                             delegate: Rectangle {
                                 required property string fieldName
                                 required property string masterValue
@@ -535,12 +400,11 @@ Item {
                                 width: detailsListView.width; height: 32
                                 color: severityText === "ERROR" ? "#421820" : (severityText === "REVIEW" ? "#433614" : "#113426")
                                 border.color: Theme.border; border.width: 1
-
                                 RowLayout {
                                     anchors.fill: parent; anchors.leftMargin: Theme.spacingSmall; anchors.rightMargin: Theme.spacingSmall; spacing: Theme.spacingSmall
                                     Text { text: fieldName; color: Theme.textPrimary; font.bold: true; Layout.preferredWidth: 160; elide: Text.ElideRight }
-                                    Text { text: masterValue === "" ? "—" : masterValue; color: masterValue === "" ? Theme.textMuted : Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight; ToolTip.visible: hoverHandlerMaster.hovered; ToolTip.text: text; HoverHandler { id: hoverHandlerMaster } }
-                                    Text { text: uploadedValue === "" ? "—" : uploadedValue; color: uploadedValue === "" ? Theme.textMuted : Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight; ToolTip.visible: hoverHandlerUpload.hovered; ToolTip.text: text; HoverHandler { id: hoverHandlerUpload } }
+                                    Text { text: masterValue === "" ? "—" : masterValue; color: masterValue === "" ? Theme.textMuted : Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text { text: uploadedValue === "" ? "—" : uploadedValue; color: uploadedValue === "" ? Theme.textMuted : Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
                                     Text { text: resultText; color: severityText === "ERROR" ? Theme.error : (severityText === "REVIEW" ? Theme.warning : Theme.success); font.bold: true; Layout.preferredWidth: 120; elide: Text.ElideRight }
                                 }
                             }
