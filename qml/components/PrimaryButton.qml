@@ -8,6 +8,7 @@ Button {
     
     implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
     implicitHeight: Theme.buttonHeight
+    hoverEnabled: true
 
     contentItem: Text {
         text: control.text
@@ -24,5 +25,9 @@ Button {
         Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     }
     
-    mouseArea.cursorShape: Qt.PointingHandCursor
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.NoButton
+        cursorShape: Qt.PointingHandCursor
+    }
 }
