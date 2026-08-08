@@ -1,119 +1,80 @@
-import csv
-import copy
-import os
+import json
+from PySide6.QtCore import QObject, Slot, Signal
+from ..store_validator import StoreValidator
 
-class CSVRepairTool:
-    def __init__(self):
-        self.headers = []
-        self.rows = []
-        self.issues = []
-        self.history = []
+class ValidateController(QObject):
+    mappingReady = Signal(str)
+    validationReady = Signal(str)
+    detailReady = Signal(str)
 
-    def _save_state(self):
-        self.history.append((copy.deepcopy(self.rows), copy.deepcopy(self.issues)))
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.validator = StoreValidator()
+        self.last_results = []
 
-    def inspect_csv(self, path):
-        self.headers = []
-        self.rows = []
-        self.issues = []
-        self.history = []
-        if not os.path.exists(path):
-            return self._get_payload()
-            
-        with open(path, 'r', encoding='utf-8', errors='replace') as f:
-            reader = csv.reader(f)
-            try:
-                self.headers = next(reader)
-            except StopIteration:
-                return self._get_payload()
-            
-            for i, row in enumerate(reader):
-                self.rows.append(row)
-                
-        self._recalculate_issues()
-        return self._get_payload()
+    @Slot(str)
+    def load_master(self, path):
+        if hasattr(self.validator, 'load_master'):
+            self.validator.load_master(path)
 
-    def join_shifted_rows(self, issue_index):
-        self._save_state()
-        issue = next((i for i in self.issues if i['index'] == issue_index), None)
-        if issue:
-            r_idx = issue['row'] - 1
-            if r_idx < len(self.rows) - 1:
-                self.rows[r_idx] = self.rows[r_idx] + self.rows[r_idx+1]
-                del self.rows[r_idx+1]
-                self._recalculate_issues()
-        return self._get_payload()
+    @Slot(str)
+    def load_upload(self, path):
+        if hasattr(self.validator, 'load_upload'):
+            self.validator.load_upload(path)
 
-    def apply_mapping(self, issue_index, col_index, target, remember):
-        self._save_state()
-        issue = next((i for i in self.issues if i['index'] == issue_index), None)
-        if issue:
-            r_idx = issue['row'] - 1
-            row = self.rows[r_idx]
-            if len(row) > len(self.headers):
-                self.rows[r_idx] = row[:len(self.headers)]
-            else:
-                self.rows[r_idx] = row + [''] * (len(self.headers) - len(row))
-            self._recalculate_issues()
-        return self._get_payload()
+    @Slot()
+    def detect(self):
+        keys = ["SID", "Nielsen Store Code"]
+        if hasattr(self.validator, 'detect_keys'):
+            keys = self.validator.detect_keys()
+        self.mappingReady.emit(json.dumps({"suggestedKeys": keys}))
 
-    def keep_unresolved(self, issue_index, col_index):
-        self._save_state()
-        self._resolve_by_padding(issue_index)
-        return self._get_payload()
+    @Slot(str)
+    def validate(self, keys_json):
+        keys = json.loads(keys_json)
+        results_dict = {}
+        if hasattr(self.validator, 'validate'):
+            results_dict = self.validator.validate(keys)
+        
+        self.last_results = results_dict.get("rows", [])
+        
+        insights = []
+        err_count = sum(1 for r in self.last_results if r.get("status") == "ERROR")
+        rev_count = sum(1 for r in self.last_results if r.get("status") == "REVIEW")
+        ok_count = sum(1 for r in self.last_results if r.get("status") == "OK")
+        
+        if err_count > 0:
+            insights.append({"key": "err", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
+        if rev_count > 0:
+            insights.append({"key": "rev", "title": "Manual Review Needed", "count": str(rev_count), "severity": "WARNING", "action": "Check flagged fields"})
+        if err_count == 0 and rev_count == 0 and len(self.last_results) > 0:
+            insights.append({"key": "ok", "title": "Clean Validation", "count": str(ok_count), "severity": "INFO", "action": "Ready for deployment"})
 
-    def keep_issue_as_is(self, issue_index):
-        self._save_state()
-        self.issues = [i for i in self.issues if i['index'] != issue_index]
-        return self._get_payload()
-
-    def create_record_from_extras(self, issue_index, mapping_json):
-        self._save_state()
-        self._resolve_by_padding(issue_index)
-        return self._get_payload()
-
-    def delete_created_record(self, record_id):
-        self._save_state()
-        self._recalculate_issues()
-        return self._get_payload()
-
-    def undo_action(self):
-        if self.history:
-            self.rows, self.issues = self.history.pop()
-        return self._get_payload()
-
-    def export_csv(self, dst):
-        with open(dst, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(self.headers)
-            writer.writerows(self.rows)
-
-    def _resolve_by_padding(self, issue_index):
-        issue = next((i for i in self.issues if i['index'] == issue_index), None)
-        if issue:
-            r_idx = issue['row'] - 1
-            row = self.rows[r_idx]
-            if len(row) > len(self.headers):
-                self.rows[r_idx] = row[:len(self.headers)]
-            else:
-                self.rows[r_idx] = row + [''] * (len(self.headers) - len(row))
-            self._recalculate_issues()
-
-    def _recalculate_issues(self):
-        self.issues = []
-        for i, row in enumerate(self.rows):
-            if len(row) != len(self.headers):
-                self.issues.append({
-                    'index': len(self.issues),
-                    'row': i + 1,
-                    'type': 'Column Count Mismatch',
-                    'message': f'Expected {len(self.headers)} columns, found {len(row)}.'
-                })
-
-    def _get_payload(self):
-        return {
-            "headers": self.headers,
-            "rows": self.rows,
-            "issues": self.issues,
-            "history": len(self.history)
+        payload = {
+            "total": results_dict.get("total", len(self.last_results)),
+            "correct": results_dict.get("correct", ok_count),
+            "review": results_dict.get("review", rev_count),
+            "errors": results_dict.get("errors", err_count),
+            "attention": err_count + rev_count,
+            "rows": self.last_results,
+            "insights": insights
         }
+        self.validationReady.emit(json.dumps(payload))
+
+    @Slot(int, bool)
+    def detail(self, index, diff_only):
+        if 0 <= index < len(self.last_results):
+            row = self.last_results[index]
+            comps = row.get("comparisons", [])
+            if diff_only:
+                comps = [c for c in comps if c.get("severity") in ["ERROR", "WARNING", "REVIEW"]]
+            
+            payload = {
+                "message": row.get("message", ""),
+                "status": row.get("status", ""),
+                "master": row.get("master", {}),
+                "upload": row.get("upload", {}),
+                "diffs": row.get("diffs", 0),
+                "comparisons": comps
+            }
+            self.detailReady.emit(json.dumps(payload))
