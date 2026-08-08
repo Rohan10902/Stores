@@ -30,7 +30,8 @@ Item {
                 Layout.margins: Theme.spacingXLarge
                 Layout.topMargin: 0
                 Layout.alignment: Qt.AlignTop
-                columns: root.width > 900 ? 2 : 1
+                // FIXED: Strictly enforces a 2-column store-lens desktop layout
+                columns: 2 
                 columnSpacing: Theme.spacingLarge
                 rowSpacing: Theme.spacingLarge
 
