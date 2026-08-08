@@ -45,9 +45,7 @@ Item {
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
             master = urlToPath(selectedFile)
-            if (typeof backend !== "undefined" && backend.validate) {
-                backend.validate.load_master(master)
-            }
+            if (typeof backend !== "undefined" && backend.validate) backend.validate.load_master(master)
         }
     }
 
@@ -57,9 +55,7 @@ Item {
         nameFilters: ["Data (*.csv *.xlsx *.xls *.xlsm *.txt *.tsv *.json *.xml)"]
         onAccepted: {
             upload = urlToPath(selectedFile)
-            if (typeof backend !== "undefined" && backend.validate) {
-                backend.validate.load_upload(upload)
-            }
+            if (typeof backend !== "undefined" && backend.validate) backend.validate.load_upload(upload)
         }
     }
 
@@ -139,98 +135,68 @@ Item {
 
     ScrollView {
         id: scrollView
-        anchors.fill: parent
-        clip: true
+        anchors.fill: parent; clip: true
 
         ColumnLayout {
             width: scrollView.availableWidth
             anchors.margins: Theme.spacingXLarge
             spacing: Theme.spacingLarge
 
-            PageTitle {
-                title: "Compare & Validate"
-                subtitle: "Row-order-independent master vs uploaded store comparison."
-                Layout.fillWidth: true
-            }
+            PageTitle { title: "Compare & Validate"; subtitle: "Row-order-independent master vs uploaded store comparison."; Layout.fillWidth: true }
 
             Card {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 140
-
+                Layout.fillWidth: true; Layout.preferredHeight: 140
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingSmall
-
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingMedium
+                        Layout.fillWidth: true; spacing: Theme.spacingMedium
                         TextField {
-                            Layout.fillWidth: true
-                            readOnly: true
-                            text: root.master
-                            placeholderText: "Master file path..."
-                            color: Theme.textPrimary
+                            Layout.fillWidth: true; readOnly: true; text: root.master
+                            placeholderText: "Master file path..."; color: Theme.textPrimary
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                         }
                         AppButton { text: "Browse Master"; onClicked: md.open() }
                     }
-
                     RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingMedium
+                        Layout.fillWidth: true; spacing: Theme.spacingMedium
                         TextField {
-                            Layout.fillWidth: true
-                            readOnly: true
-                            text: root.upload
-                            placeholderText: "Uploaded / country file path..."
-                            color: Theme.textPrimary
+                            Layout.fillWidth: true; readOnly: true; text: root.upload
+                            placeholderText: "Uploaded / country file path..."; color: Theme.textPrimary
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                         }
                         AppButton { text: "Browse Upload"; onClicked: ud.open() }
                     }
-
                     RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingMedium
+                        Layout.fillWidth: true; spacing: Theme.spacingMedium
                         Text { text: "Match by"; color: Theme.textSecondary }
                         ComboBox {
                             id: k1
-                            Layout.preferredWidth: 180
-                            model: ["SID", "Nielsen Store Code"]
-                            currentIndex: Math.max(0, model.indexOf(key1))
-                            onActivated: key1 = currentText
+                            Layout.preferredWidth: 180; model: ["SID", "Nielsen Store Code"]
+                            currentIndex: Math.max(0, model.indexOf(key1)); onActivated: key1 = currentText
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                             contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
                         }
                         Text { text: "+"; color: Theme.textSecondary }
                         ComboBox {
                             id: k2
-                            Layout.preferredWidth: 200
-                            model: ["(None)", "Nielsen Store Code", "SID"]
-                            currentIndex: Math.max(0, model.indexOf(key2))
-                            onActivated: key2 = currentText
+                            Layout.preferredWidth: 200; model: ["(None)", "Nielsen Store Code", "SID"]
+                            currentIndex: Math.max(0, model.indexOf(key2)); onActivated: key2 = currentText
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                             contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
                         }
-                        Text {
-                            text: suggestedKeys.length ? "Smart suggestion: " + suggestedKeys.join(" + ") : ""
-                            color: Theme.info; Layout.fillWidth: true; elide: Text.ElideRight
-                        }
+                        Text { text: suggestedKeys.length ? "Smart suggestion: " + suggestedKeys.join(" + ") : ""; color: Theme.info; Layout.fillWidth: true; elide: Text.ElideRight }
                         AppButton {
                             text: "Detect Columns"
                             enabled: root.master !== "" && root.upload !== ""
-                            onClicked: {
-                                if (typeof backend !== "undefined" && backend.validate) { backend.validate.detect() }
-                            }
+                            onClicked: { if (backend && backend.validate) backend.validate.detect() }
                         }
                         PrimaryButton {
                             text: "Validate"
                             enabled: root.master !== "" && root.upload !== ""
                             onClicked: {
                                 var a = [k1.currentText]
-                                if (k2.currentText !== "(None)" && k2.currentText !== k1.currentText) { a.push(k2.currentText) }
-                                if (typeof backend !== "undefined" && backend.validate) { backend.validate.validate(JSON.stringify(a)) }
+                                if (k2.currentText !== "(None)" && k2.currentText !== k1.currentText) a.push(k2.currentText)
+                                if (backend && backend.validate) backend.validate.validate(JSON.stringify(a))
                             }
                         }
                     }
@@ -238,16 +204,9 @@ Item {
             }
 
             RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spacingMedium
-
+                Layout.fillWidth: true; spacing: Theme.spacingMedium
                 Repeater {
-                    model: [
-                        ["TOTAL", total, Theme.primary],
-                        ["CORRECT", ok, Theme.success],
-                        ["REVIEW", rev, Theme.warning],
-                        ["ERROR", err, Theme.error]
-                    ]
+                    model: [ ["TOTAL", total, Theme.primary], ["CORRECT", ok, Theme.success], ["REVIEW", rev, Theme.warning], ["ERROR", err, Theme.error] ]
                     delegate: Card {
                         required property var modelData
                         Layout.fillWidth: true; Layout.preferredHeight: 70
@@ -261,10 +220,8 @@ Item {
             }
 
             Card {
-                Layout.fillWidth: true
-                Layout.preferredHeight: insights.count > 0 ? 120 : 0
+                Layout.fillWidth: true; Layout.preferredHeight: insights.count > 0 ? 120 : 0
                 visible: insights.count > 0
-
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     RowLayout {
@@ -334,9 +291,7 @@ Item {
                                     anchors.fill: parent
                                     onClicked: {
                                         selected = index
-                                        if (typeof backend !== "undefined" && backend.validate) {
-                                            backend.validate.detail(index, diff)
-                                        }
+                                        if (backend && backend.validate) backend.validate.detail(index, diff)
                                     }
                                 }
                                 RowLayout {
@@ -364,9 +319,7 @@ Item {
                                 checked: diff
                                 onToggled: {
                                     diff = checked
-                                    if (selected >= 0 && typeof backend !== "undefined" && backend.validate) {
-                                        backend.validate.detail(selected, diff)
-                                    }
+                                    if (selected >= 0 && backend && backend.validate) backend.validate.detail(selected, diff)
                                 }
                                 contentItem: Text { text: parent.text; color: Theme.textPrimary; leftPadding: parent.indicator.width + 4; verticalAlignment: Text.AlignVCenter }
                             }
