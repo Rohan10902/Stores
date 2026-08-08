@@ -23,7 +23,6 @@ Item {
             Layout.fillWidth: true
             spacing: Theme.spacingLarge
 
-            // Master File Selection
             Card {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 140
@@ -35,7 +34,7 @@ Item {
                     
                     Text { text: "Master Dataset"; color: Theme.textPrimary; font.bold: true }
                     Text { 
-                        text: validate_controller.masterFilePath !== "" ? validate_controller.masterFilePath : "No file selected." 
+                        text: typeof validate_controller !== "undefined" && validate_controller.masterFilePath !== "" ? validate_controller.masterFilePath : "No file selected." 
                         color: Theme.textSecondary; elide: Text.ElideMiddle; Layout.fillWidth: true
                     }
                     Item { Layout.fillHeight: true }
@@ -46,7 +45,6 @@ Item {
                 }
             }
 
-            // Uploaded File Selection
             Card {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 140
@@ -58,7 +56,7 @@ Item {
                     
                     Text { text: "Uploaded Dataset"; color: Theme.textPrimary; font.bold: true }
                     Text { 
-                        text: validate_controller.uploadFilePath !== "" ? validate_controller.uploadFilePath : "No file selected."
+                        text: typeof validate_controller !== "undefined" && validate_controller.uploadFilePath !== "" ? validate_controller.uploadFilePath : "No file selected."
                         color: Theme.textSecondary; elide: Text.ElideMiddle; Layout.fillWidth: true
                     }
                     Item { Layout.fillHeight: true }
@@ -70,7 +68,6 @@ Item {
             }
         }
 
-        // Action & Progress Area
         Card {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -81,8 +78,8 @@ Item {
                 spacing: Theme.spacingMedium
 
                 PrimaryButton {
-                    text: validate_controller.isProcessing ? "Processing..." : "Run Validation"
-                    enabled: validate_controller.masterFilePath !== "" && validate_controller.uploadFilePath !== "" && !validate_controller.isProcessing
+                    text: typeof validate_controller !== "undefined" && validate_controller.isProcessing ? "Processing..." : "Run Validation"
+                    enabled: typeof validate_controller !== "undefined" && validate_controller.masterFilePath !== "" && validate_controller.uploadFilePath !== "" && !validate_controller.isProcessing
                     Layout.alignment: Qt.AlignHCenter
                     onClicked: validate_controller.startValidation()
                 }
@@ -90,8 +87,8 @@ Item {
                 ProgressBar {
                     Layout.preferredWidth: 300
                     Layout.alignment: Qt.AlignHCenter
-                    visible: validate_controller.isProcessing
-                    value: validate_controller.progress
+                    visible: typeof validate_controller !== "undefined" && validate_controller.isProcessing
+                    value: typeof validate_controller !== "undefined" ? validate_controller.progress : 0
                     from: 0
                     to: 100
                 }
@@ -99,18 +96,17 @@ Item {
         }
     }
 
-    // Native File Dialogs
     FileDialog {
         id: masterFileDialog
         title: "Select Master CSV"
         nameFilters: ["CSV Files (*.csv)", "All Files (*)"]
-        onAccepted: validate_controller.setMasterFile(selectedFile)
+        onAccepted: if(typeof validate_controller !== "undefined") validate_controller.setMasterFile(selectedFile)
     }
 
     FileDialog {
         id: uploadFileDialog
         title: "Select Uploaded CSV"
         nameFilters: ["CSV Files (*.csv)", "All Files (*)"]
-        onAccepted: validate_controller.setUploadFile(selectedFile)
+        onAccepted: if(typeof validate_controller !== "undefined") validate_controller.setUploadFile(selectedFile)
     }
 }
