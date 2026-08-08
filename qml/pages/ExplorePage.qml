@@ -14,21 +14,12 @@ Item {
     property int tDisplayed: 0
     property bool tTruncated: false
 
-    function urlToPath(urlStr) {
-        var path = urlStr.toString();
-        path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os !== "windows" && !path.startsWith("/")) {
-            path = "/" + path;
-        }
-        return decodeURIComponent(path);
-    }
-
     FileDialog {
         id: fileDialog
         title: "Load Dataset for Exploration"
         nameFilters: ["Data (*.csv *.xlsx *.db *.sqlite)"]
         onAccepted: {
-            currentFile = urlToPath(selectedFile)
+            currentFile = selectedFile.toString()
             if (typeof backend !== "undefined" && backend.health) { backend.health.load_data(currentFile) }
         }
     }
@@ -127,7 +118,12 @@ Item {
                                     width: 150; height: 30; color: Theme.background; border.color: Theme.border; border.width: 1
                                     Text { 
                                         anchors.fill: parent; anchors.margins: 4
-                                        text: rowData[colName] !== undefined ? String(rowData[colName]) : (rowData[index] !== undefined ? String(rowData[index]) : "")
+                                        text: {
+                                            if (rowData === undefined || rowData === null) return "";
+                                            var val = rowData[colName];
+                                            if (val === undefined) val = rowData[index];
+                                            return val !== undefined && val !== null ? String(val) : "";
+                                        }
                                         color: Theme.textPrimary; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
                                     }
                                 }
