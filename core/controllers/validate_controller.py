@@ -39,9 +39,10 @@ class ValidateController(QObject):
         raw_rows = results_dict.get("rows", [])
         self.last_results = raw_rows
         
+        # Calculate actual metrics from real validator vocabulary
         err_count = sum(1 for r in raw_rows if r.get("status") == "ERROR")
         rev_count = sum(1 for r in raw_rows if r.get("status") == "REVIEW")
-        ok_count = sum(1 for r in raw_rows if r.get("status") in ["CORRECT", "OK"])
+        ok_count = sum(1 for r in raw_rows if r.get("status") == "CORRECT")
 
         formatted_rows = []
         for i, r in enumerate(raw_rows):
@@ -52,13 +53,14 @@ class ValidateController(QObject):
                 "message": str(r.get("message", ""))
             })
         
+        # Generate ACTUAL validation insights safely from the records
         insights = []
         if err_count > 0:
             insights.append({"key": "err", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
         if rev_count > 0:
-            insights.append({"key": "rev", "title": "Manual Review Needed", "count": str(rev_count), "severity": "WARNING", "action": "Check flagged fields"})
+            insights.append({"key": "rev", "title": "Manual Review Needed", "count": str(rev_count), "severity": "REVIEW", "action": "Check flagged fields"})
         if err_count == 0 and rev_count == 0 and len(raw_rows) > 0:
-            insights.append({"key": "ok", "title": "Clean Validation", "count": str(ok_count), "severity": "INFO", "action": "Ready for deployment"})
+            insights.append({"key": "ok", "title": "Clean Validation", "count": str(ok_count), "severity": "CORRECT", "action": "Ready for deployment"})
 
         payload = {
             "total": int(results_dict.get("total", len(raw_rows))),
