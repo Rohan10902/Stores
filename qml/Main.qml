@@ -107,7 +107,6 @@ ApplicationWindow {
         }
     }
 
-    // StackView Components
     Component { 
         id: homePage; 
         HomePage {
