@@ -1,134 +1,103 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Dialogs
 import "../components"
+import "../theme"
 
 Item {
-    id: page
-
-    FileDialog {
-        id: exploreDlg
-        fileMode: FileDialog.OpenFile
-        nameFilters: ["All files (*)","CSV (*.csv)","TSV (*.tsv)","Excel (*.xlsx *.xls *.xlsm)"]
-        onAccepted: {
-            var path = selectedFile ? selectedFile.toString() : ""
-            backend.loadData(path)
-        }
-    }
-
-    Connections {
-        target: backend
-        function onTableReady(payload) {
-            var d = JSON.parse(payload)
-            tableModel.clear()
-            headersModel.clear()
-            
-            var cols = d.columns || []
-            for (var c = 0; c < cols.length; ++c) {
-                headersModel.append({ name: cols[c] })
-            }
-            
-            var rows = d.rows || []
-            for (var r = 0; r < rows.length; ++r) {
-                tableModel.append({ rowData: rows[r] })
-            }
-            rowCountText.text = d.total + " rows"
-        }
-    }
-
-    ListModel { id: headersModel }
-    ListModel { id: tableModel }
+    id: root
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 12
+        anchors.margins: Theme.spacingXLarge
+        spacing: Theme.spacingLarge
 
-        RowLayout {
+        PageTitle {
+            title: "Query Studio"
+            subtitle: "Explore and analyze datasets using read-only queries."
             Layout.fillWidth: true
-            ColumnLayout {
-                Layout.fillWidth: true
-                PageTitle { text: "Explore & Analyze" }
-            }
-            PrimaryButton {
-                text: "Load Dataset"
-                onClicked: exploreDlg.open()
-            }
         }
 
+        // Query Input Area
         Card {
             Layout.fillWidth: true
-            implicitHeight: 140
+            Layout.preferredHeight: 160
+            hoverable: false
+
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 12
-                spacing: 8
+                anchors.margins: Theme.spacingMedium
+                spacing: Theme.spacingMedium
 
-                RowLayout {
+                Text { text: "SQL Query"; color: Theme.textPrimary; font.bold: true }
+
+                ScrollView {
                     Layout.fillWidth: true
-                    spacing: 8
-                    TextField {
-                        id: searchQuery
-                        Layout.fillWidth: true
-                        placeholderText: "Search records..."
-                        color: "#f8fafc"
-                    }
-                    ComboBox {
-                        id: colCombo
-                        model: ["All columns", "SID", "Store Name", "Banner", "ZIP"]
-                    }
-                    AppButton {
-                        text: "Search"
-                        onClicked: backend.search(searchQuery.text, colCombo.currentText)
+                    Layout.fillHeight: true
+                    clip: true
+
+                    TextArea {
+                        id: queryInput
+                        text: "SELECT * FROM store_data LIMIT 100;" // Default placeholder query
+                        color: Theme.textPrimary
+                        background: Rectangle {
+                            color: Theme.background
+                            border.color: Theme.border
+                            radius: Theme.radiusMedium
+                        }
+                        font.pixelSize: 14
+                        font.family: "Monospace"
                     }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
-                    TextField {
-                        id: sqlInput
-                        Layout.fillWidth: true
-                        text: "SELECT * FROM data LIMIT 100"
-                        color: "#f8fafc"
-                    }
+                    Item { Layout.fillWidth: true }
                     PrimaryButton {
-                        text: "Run SQL"
-                        onClicked: backend.sql(sqlInput.text)
+                        text: "Execute Query"
+                        onClicked: explorer_controller.executeQuery(queryInput.text)
                     }
                 }
             }
         }
 
+        // Data Table Output
         Card {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            hoverable: false
+
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                RowLayout {
-                    Layout.fillWidth: true
-                    Text { text: "Result Table"; color: "#f8fafc"; font.bold: true }
-                    Item { Layout.fillWidth: true }
-                    Text { id: rowCountText; text: "0 rows"; color: "#94a3b8" }
-                }
-                ListView {
+                anchors.margins: Theme.spacingMedium
+                spacing: Theme.spacingMedium
+
+                Text { text: "Results Output"; color: Theme.textPrimary; font.bold: true }
+
+                // This assumes your backend provides a QAbstractTableModel
+                TableView {
+                    id: resultsTable
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    model: tableModel
                     clip: true
+                    model: explorer_controller.queryResultsModel
+                    
+                    columnSpacing: 1
+                    rowSpacing: 1
+
                     delegate: Rectangle {
-                        width: ListView.view.width
-                        height: 28
-                        color: index % 2 ? "#0d1b2e" : "#0b1829"
-                        border.color: "#1e293b"
+                        implicitWidth: 150
+                        implicitHeight: 36
+                        color: Theme.background
+                        border.color: Theme.border
+                        
                         Text {
                             anchors.fill: parent
-                            anchors.margins: 6
-                            text: JSON.stringify(model.rowData || {})
-                            color: "#f8fafc"
+                            anchors.margins: Theme.spacingSmall
+                            text: display
+                            color: Theme.textPrimary
                             elide: Text.ElideRight
+                            verticalAlignment: Text.AlignVCenter
                         }
                     }
                 }
