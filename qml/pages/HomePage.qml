@@ -6,7 +6,6 @@ import "../theme"
 
 Item {
     id: root
-    
     signal navigateRequested(string pageId)
 
     ScrollView {
@@ -45,35 +44,30 @@ Item {
                     buttonText: "Start Validation"
                     onClicked: root.navigateRequested("compare")
                 }
-
                 DashboardCard {
                     title: "Review One File"
-                    description: "Analyze one dataset without a Master and review Nielsen code formatting."
+                    description: "Analyze one dataset without a Master and review formatting."
                     buttonText: "Open File Review"
                     onClicked: root.navigateRequested("review")
                 }
-
                 DashboardCard {
                     title: "Repair CSV / Text"
                     description: "Inspect broken records and save a reviewed copy."
                     buttonText: "Launch Repair"
                     onClicked: root.navigateRequested("repair")
                 }
-
                 DashboardCard {
                     title: "Create Store File"
                     description: "Paste tabular values into the fixed Store schema and export CSV."
                     buttonText: "Build Store"
                     onClicked: root.navigateRequested("create")
                 }
-
                 DashboardCard {
                     title: "Data Health & Statistics"
                     description: "Quality score and on-demand statistics."
                     buttonText: "View Intelligence"
                     onClicked: root.navigateRequested("health")
                 }
-
                 DashboardCard {
                     title: "Explore & Analyze"
                     description: "Search and read-only SQL with table output."
@@ -81,7 +75,6 @@ Item {
                     onClicked: root.navigateRequested("explore")
                 }
             }
-            
             Item { Layout.fillHeight: true } 
         }
     }
