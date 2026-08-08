@@ -21,7 +21,6 @@ Button {
     background: Rectangle {
         radius: Theme.radiusMedium
         color: control.pressed ? Qt.darker(Theme.primary, 1.2) : (control.hovered ? Theme.primaryHover : Theme.primary)
-        
         Behavior on color { ColorAnimation { duration: Theme.durationFast } }
     }
     
