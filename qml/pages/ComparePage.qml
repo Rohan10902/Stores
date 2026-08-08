@@ -94,7 +94,7 @@ Item {
                 for (var i = 0; i < rawRows.length; i++) {
                     var r = rawRows[i]
                     rows.append({
-                        rowNum: String(r.row || ""),
+                        rowNum: String(r.row !== undefined ? r.row : ""),
                         keyVal: String(r.key || ""),
                         statusVal: String(r.status || ""),
                         msgVal: String(r.message || "")
