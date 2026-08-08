@@ -8,7 +8,8 @@ Button {
     
     implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
     implicitHeight: Theme.buttonHeight
-    // FIXED: Use native hover behavior without overlaying a blocking MouseArea
+    
+    // Correctly set the inherited final property instead of declaring a new one
     hoverEnabled: true
 
     contentItem: Text {
