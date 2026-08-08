@@ -16,21 +16,12 @@ Item {
     
     ListModel { id: findingsModel }
 
-    function urlToPath(urlStr) {
-        var path = urlStr.toString();
-        path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os !== "windows" && !path.startsWith("/")) {
-            path = "/" + path;
-        }
-        return decodeURIComponent(path);
-    }
-
     FileDialog {
         id: fileDialog
         title: "Load Store Template"
         nameFilters: ["Data (*.csv *.xlsx)"]
         onAccepted: {
-            currentFile = urlToPath(selectedFile)
+            currentFile = selectedFile.toString()
             if (typeof backend !== "undefined" && backend.creator) { backend.creator.load_creator_file(currentFile) }
         }
     }
@@ -42,7 +33,7 @@ Item {
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
             if (typeof backend !== "undefined" && backend.creator) {
-                backend.creator.export_creator_file(JSON.stringify(tableRows), urlToPath(selectedFile))
+                backend.creator.export_creator_file(JSON.stringify(tableRows), selectedFile.toString())
             }
         }
     }
@@ -78,7 +69,6 @@ Item {
         }
 
         function onCreatorExported() {
-            // Unused manually in QML, assumed python fires global notifySignal instead.
         }
     }
 
