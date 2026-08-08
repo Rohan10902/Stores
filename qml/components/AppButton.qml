@@ -4,7 +4,6 @@ import "../theme"
 
 Button {
     id: control
-    property string text: "Button"
     
     implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
     implicitHeight: Theme.buttonHeight
@@ -26,11 +25,5 @@ Button {
         border.width: 1
         
         Behavior on border.color { ColorAnimation { duration: Theme.durationFast } }
-    }
-    
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.NoButton
-        cursorShape: Qt.PointingHandCursor
     }
 }
