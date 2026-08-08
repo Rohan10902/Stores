@@ -19,7 +19,7 @@ Item {
             
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 120
+                Layout.preferredHeight: 100
                 
                 PageTitle {
                     anchors.verticalCenter: parent.verticalCenter
@@ -34,48 +34,19 @@ Item {
                 Layout.fillWidth: true
                 Layout.margins: Theme.spacingXLarge
                 Layout.topMargin: 0
-                columns: root.width > 1200 ? 3 : (root.width > 800 ? 2 : 1)
+                Layout.alignment: Qt.AlignTop
+                columns: root.width > 900 ? 2 : 1 // STRICTLY 2 COLUMNS MAX
                 columnSpacing: Theme.spacingLarge
                 rowSpacing: Theme.spacingLarge
 
-                DashboardCard {
-                    title: "Compare & Validate"
-                    description: "Master vs Uploaded key-based comparison."
-                    buttonText: "Start Validation"
-                    onClicked: root.navigateRequested("compare")
-                }
-                DashboardCard {
-                    title: "Review One File"
-                    description: "Analyze one dataset without a Master and review formatting."
-                    buttonText: "Open File Review"
-                    onClicked: root.navigateRequested("review")
-                }
-                DashboardCard {
-                    title: "Repair CSV / Text"
-                    description: "Inspect broken records and save a reviewed copy."
-                    buttonText: "Launch Repair"
-                    onClicked: root.navigateRequested("repair")
-                }
-                DashboardCard {
-                    title: "Create Store File"
-                    description: "Paste tabular values into the fixed Store schema and export CSV."
-                    buttonText: "Build Store"
-                    onClicked: root.navigateRequested("create")
-                }
-                DashboardCard {
-                    title: "Data Health & Statistics"
-                    description: "Quality score and on-demand statistics."
-                    buttonText: "View Intelligence"
-                    onClicked: root.navigateRequested("health")
-                }
-                DashboardCard {
-                    title: "Explore & Analyze"
-                    description: "Search and read-only SQL with table output."
-                    buttonText: "Open Query Studio"
-                    onClicked: root.navigateRequested("explore")
-                }
+                DashboardCard { title: "Compare & Validate"; description: "Master vs Uploaded key-based comparison."; buttonText: "Start Validation"; onClicked: root.navigateRequested("compare") }
+                DashboardCard { title: "Review One File"; description: "Analyze one dataset without a Master and review formatting."; buttonText: "Open File Review"; onClicked: root.navigateRequested("review") }
+                DashboardCard { title: "Repair CSV / Text"; description: "Inspect broken records and save a reviewed copy."; buttonText: "Launch Repair"; onClicked: root.navigateRequested("repair") }
+                DashboardCard { title: "Create Store File"; description: "Paste tabular values into the fixed Store schema and export CSV."; buttonText: "Build Store"; onClicked: root.navigateRequested("create") }
+                DashboardCard { title: "Data Health & Statistics"; description: "Quality score and on-demand statistics."; buttonText: "View Intelligence"; onClicked: root.navigateRequested("health") }
+                DashboardCard { title: "Explore & Analyze"; description: "Search and read-only SQL with table output."; buttonText: "Open Query Studio"; onClicked: root.navigateRequested("explore") }
             }
-            Item { Layout.fillHeight: true } 
+            Item { Layout.fillHeight: true }
         }
     }
 }
