@@ -129,12 +129,13 @@ Item {
                                     model: root.previewCols.length
                                     delegate: Rectangle {
                                         required property int index
+                                        property string colName: root.previewCols[index]
                                         width: 150; height: 30
                                         color: index % 2 === 0 ? Theme.background : Theme.surfaceHover
                                         border.color: Theme.border
                                         Text { 
                                             anchors.fill: parent; anchors.margins: 4
-                                            text: rowData[index] !== undefined ? String(rowData[index]) : ""
+                                            text: rowData[colName] !== undefined ? String(rowData[colName]) : (rowData[index] !== undefined ? String(rowData[index]) : "")
                                             color: Theme.textPrimary; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
                                         }
                                     }
