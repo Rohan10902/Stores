@@ -4,7 +4,9 @@ import "../theme"
 
 Button {
     id: control
-    property string text: "Button"
+    
+    // Assign default value to the inherited final property instead of redefining it
+    text: "Button"
     
     implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
     implicitHeight: Theme.buttonHeight
