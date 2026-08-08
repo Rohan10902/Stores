@@ -4,12 +4,14 @@ import "../theme"
 
 Button {
     id: control
-    property string text: "Button"
+    
+    // Assign a default value to the inherited property instead of redefining it
+    text: "Button"
     
     implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
     implicitHeight: Theme.buttonHeight
     
-    // Correctly set the inherited final property instead of declaring a new one
+    // Enable native hover state tracking 
     hoverEnabled: true
 
     contentItem: Text {
