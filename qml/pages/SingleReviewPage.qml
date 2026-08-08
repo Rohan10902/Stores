@@ -7,7 +7,6 @@ import "../theme"
 
 Item {
     id: root
-
     property string currentFile: ""
     property int totalRecords: 0
     property int attentionCount: 0
@@ -60,10 +59,7 @@ Item {
                 findingsModel.clear()
                 var findingsList = d.findings || []
                 for (var i = 0; i < findingsList.length; i++) {
-                    findingsModel.append({
-                        msg: String(findingsList[i].message || ""),
-                        sev: String(findingsList[i].severity || "INFO")
-                    })
+                    findingsModel.append({ msg: String(findingsList[i].message || ""), sev: String(findingsList[i].severity || "INFO") })
                 }
             } catch (e) { }
         }
@@ -120,7 +116,6 @@ Item {
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     Text { text: "Data Preview"; color: Theme.textPrimary; font.bold: true }
-
                     ScrollView {
                         Layout.fillWidth: true; Layout.fillHeight: true; clip: true
                         ListView {
@@ -163,10 +158,7 @@ Item {
                             width: ListView.view.width; height: 32
                             color: sev === "ERROR" ? "#421820" : (sev === "WARNING" ? "#433614" : Theme.surfaceHover)
                             border.color: Theme.border
-                            Text {
-                                anchors.fill: parent; anchors.margins: 6
-                                text: msg; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
-                            }
+                            Text { anchors.fill: parent; anchors.margins: 6; text: msg; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                         }
                     }
                 }
