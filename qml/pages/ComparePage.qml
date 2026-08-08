@@ -33,8 +33,8 @@ Item {
     function urlToPath(urlStr) {
         var path = urlStr.toString();
         path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os !== "windows" && !path.startsWith("/")) {
-            path = "/" + path;
+        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+            path = path.substring(1);
         }
         return decodeURIComponent(path);
     }
@@ -283,14 +283,17 @@ Item {
                             required property string severity
                             required property string action
                             width: 250; height: 65; radius: Theme.radiusMedium
-                            color: filterKey === key ? Theme.surfaceHover : (severity === "ERROR" ? "#421820" : "#433614")
-                            border.color: filterKey === key ? Theme.primary : Theme.border
-                            MouseArea { anchors.fill: parent; onClicked: filterKey = key }
+                            color: filterKey === severity ? Theme.surfaceHover : (severity === "ERROR" ? "#421820" : (severity === "REVIEW" ? "#433614" : Theme.surfaceHover))
+                            border.color: filterKey === severity ? Theme.primary : Theme.border
+                            MouseArea { 
+                                anchors.fill: parent 
+                                onClicked: filterKey = severity // Binds list filtering to the exact status string
+                            }
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: Theme.spacingSmall; spacing: 2
                                 RowLayout {
                                     Layout.fillWidth: true; spacing: Theme.spacingSmall
-                                    Text { text: count; color: severity === "ERROR" ? Theme.error : Theme.warning; font.bold: true; font.pixelSize: 16 }
+                                    Text { text: count; color: severity === "ERROR" ? Theme.error : (severity === "REVIEW" ? Theme.warning : Theme.success); font.bold: true; font.pixelSize: 16 }
                                     Text { text: title; color: Theme.textPrimary; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                                 }
                                 Text { text: action; color: Theme.textSecondary; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
@@ -327,7 +330,11 @@ Item {
                                 required property string keyVal
                                 required property string statusVal
                                 required property string msgVal
-                                width: resultsListView.width; height: 36
+                                
+                                // Actual UI Filtering bound to filterKey === severity string
+                                width: resultsListView.width
+                                height: (filterKey === "" || statusVal === filterKey) ? 36 : 0
+                                visible: height > 0
                                 color: selected === index ? Theme.surfaceHover : (index % 2 === 0 ? Theme.background : Theme.surface)
                                 border.color: Theme.border; border.width: 1
                                 MouseArea {
