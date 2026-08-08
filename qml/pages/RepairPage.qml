@@ -13,21 +13,12 @@ Item {
 
     ListModel { id: issuesModel }
     
-    function urlToPath(urlStr) {
-        var path = urlStr.toString();
-        path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
-            path = path.substring(1);
-        }
-        return decodeURIComponent(path);
-    }
-
     FileDialog {
         id: fileDialog
         title: "Select CSV for Repair"
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
-            currentFile = urlToPath(selectedFile)
+            currentFile = selectedFile.toString()
             if (typeof backend !== "undefined" && backend.repair) { backend.repair.inspect_repair(currentFile) }
         }
     }
@@ -38,7 +29,7 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
-            if (typeof backend !== "undefined" && backend.repair) { backend.repair.repair(currentFile, urlToPath(selectedFile)) }
+            if (typeof backend !== "undefined" && backend.repair) { backend.repair.repair(currentFile, selectedFile.toString()) }
         }
     }
 
@@ -162,7 +153,7 @@ Item {
                         AppButton { text: "Join Shifted Rows"; onClicked: { if(backend.repair && activeIssueData) backend.repair.join_repair_rows(activeIssueData.index) } }
                         AppButton { text: "Keep Issue As-Is"; onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_issue(activeIssueData.index) } }
                         AppButton { text: "Pad Unresolved"; onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_unresolved(activeIssueData.index, 0) } }
-                        AppButton { text: "Delete Record"; onClicked: { if(backend.repair && activeIssueData) backend.repair.delete_repair_record(activeIssueData.index) } }
+                        AppButton { text: "Delete Record"; onClicked: { if(backend.repair && activeIssueData) backend.repair.delete_repair_record(String(activeIssueData.index)) } }
                         AppButton { text: "Create Record"; onClicked: { if(backend.repair && activeIssueData) backend.repair.create_repair_record(activeIssueData.index, "{}") } }
                     }
 
