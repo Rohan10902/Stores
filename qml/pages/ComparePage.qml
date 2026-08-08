@@ -541,7 +541,12 @@ Item {
                                         backend.detail(selected, diff)
                                     }
                                 }
-                                contentItem: Text { text: parent.text; color: Theme.textPrimary; leftPadding: parent.indicator.width + 4; verticalAlignment: Text.AlignVCenter }
+                                contentItem: Text { 
+                                    text: parent.text
+                                    color: Theme.textPrimary
+                                    leftPadding: parent.indicator.width + 4
+                                    verticalAlignment: Text.AlignVCenter 
+                                }
                             }
                         }
 
