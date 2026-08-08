@@ -7,6 +7,8 @@ import "../theme"
 Item {
     id: root
     
+    signal navigateRequested(string pageId)
+
     ScrollView {
         anchors.fill: parent
         contentWidth: availableWidth
@@ -41,88 +43,46 @@ Item {
                     title: "Compare & Validate"
                     description: "Master vs Uploaded key-based comparison."
                     buttonText: "Start Validation"
-                    onClicked: stackView.replace(comparePage)
+                    onClicked: root.navigateRequested("compare")
                 }
 
                 DashboardCard {
                     title: "Review One File"
                     description: "Analyze one dataset without a Master and review Nielsen code formatting."
                     buttonText: "Open File Review"
-                    onClicked: stackView.replace(reviewPage)
+                    onClicked: root.navigateRequested("review")
                 }
 
                 DashboardCard {
                     title: "Repair CSV / Text"
                     description: "Inspect broken records and save a reviewed copy."
                     buttonText: "Launch Repair"
-                    onClicked: stackView.replace(repairPage)
+                    onClicked: root.navigateRequested("repair")
                 }
 
                 DashboardCard {
                     title: "Create Store File"
                     description: "Paste tabular values into the fixed Store schema and export CSV."
                     buttonText: "Build Store"
-                    onClicked: stackView.replace(createPage)
+                    onClicked: root.navigateRequested("create")
                 }
 
                 DashboardCard {
                     title: "Data Health & Statistics"
                     description: "Quality score and on-demand statistics."
                     buttonText: "View Intelligence"
-                    onClicked: stackView.replace(healthPage)
+                    onClicked: root.navigateRequested("health")
                 }
 
                 DashboardCard {
                     title: "Explore & Analyze"
                     description: "Search and read-only SQL with table output."
                     buttonText: "Open Query Studio"
-                    onClicked: stackView.replace(explorePage)
+                    onClicked: root.navigateRequested("explore")
                 }
             }
             
-            Item { Layout.fillHeight: true } // Bottom Spacer
-        }
-    }
-
-    // Inline Component for Dashboard Cards to maintain consistency
-    component DashboardCard: Card {
-        property string title: ""
-        property string description: ""
-        property string buttonText: ""
-        signal clicked()
-
-        Layout.fillWidth: true
-        Layout.preferredHeight: 180
-        Layout.minimumWidth: 300
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Theme.spacingLarge
-            spacing: Theme.spacingMedium
-
-            Text {
-                text: parent.parent.title
-                color: Theme.textPrimary
-                font.pixelSize: 18
-                font.bold: true
-                Layout.fillWidth: true
-            }
-
-            Text {
-                text: parent.parent.description
-                color: Theme.textSecondary
-                font.pixelSize: 14
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                verticalAlignment: Text.AlignTop
-            }
-
-            PrimaryButton {
-                text: parent.parent.buttonText
-                Layout.alignment: Qt.AlignRight
-                onClicked: parent.parent.clicked()
-            }
+            Item { Layout.fillHeight: true } 
         }
     }
 }
