@@ -27,11 +27,17 @@ ApplicationWindow {
     }
 
     // FIXED: Target 'backend' (MainBackendController) and intercept 'notifySignal'
+    // In qml/Main.qml (replace the existing Connections block)
+    
     Connections {
         target: typeof backend !== "undefined" ? backend : null
         ignoreUnknownSignals: true
-        function onNotifySignal(type, message) { 
-            toastManager.show(message, type); 
+        
+        // Matches Python's notifySignal(str, str, str)
+        function onNotifySignal(title, message, level) {
+            toastManager.show(message, level);
+        }
+    } 
         }
     }
 
