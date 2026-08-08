@@ -28,13 +28,12 @@ Item {
                 anchors.margins: Theme.spacingMedium
                 spacing: Theme.spacingMedium
 
-                // Table or List view driven by the Python backend model
                 ListView {
                     id: brokenRecordsList
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: repair_controller.brokenRecordsModel // Binds to your existing Python model
+                    model: typeof repair_controller !== "undefined" ? repair_controller.brokenRecordsModel : null
                     spacing: Theme.spacingSmall
 
                     delegate: Rectangle {
@@ -65,12 +64,11 @@ Item {
 
                             PrimaryButton {
                                 text: "Auto-Fix"
-                                onClicked: repair_controller.attemptAutoFix(model.rowNumber)
+                                onClicked: if(typeof repair_controller !== "undefined") repair_controller.attemptAutoFix(model.rowNumber)
                             }
                         }
                     }
 
-                    // Empty State
                     Text {
                         anchors.centerIn: parent
                         text: "No broken records detected. You're good to go!"
@@ -85,8 +83,8 @@ Item {
                     Item { Layout.fillWidth: true }
                     PrimaryButton {
                         text: "Export Cleaned File"
-                        enabled: repair_controller.isRepairComplete
-                        onClicked: repair_controller.exportRepairedFile()
+                        enabled: typeof repair_controller !== "undefined" && repair_controller.isRepairComplete
+                        onClicked: if(typeof repair_controller !== "undefined") repair_controller.exportRepairedFile()
                     }
                 }
             }
