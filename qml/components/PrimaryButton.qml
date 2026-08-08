@@ -4,9 +4,11 @@ import "../theme"
 
 Button {
     id: control
+    property string text: "Button"
     
     implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
     implicitHeight: Theme.buttonHeight
+    // FIXED: Use native hover behavior without overlaying a blocking MouseArea
     hoverEnabled: true
 
     contentItem: Text {
