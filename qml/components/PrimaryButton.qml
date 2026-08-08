@@ -4,7 +4,6 @@ import "../theme"
 
 Button {
     id: control
-    property string text: "Button"
     
     implicitWidth: Math.max(120, contentItem.implicitWidth + Theme.spacingLarge * 2)
     implicitHeight: Theme.buttonHeight
