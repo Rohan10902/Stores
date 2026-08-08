@@ -13,7 +13,7 @@ ApplicationWindow {
     minimumWidth: 1024
     minimumHeight: 600
     visible: true
-    title: qsTr("StoreLens - Data Quality Studio")
+    title: qsTr("StoreLens 7.2.1")
     color: Theme.background
 
     property string activePageId: "dashboard"
@@ -26,18 +26,12 @@ ApplicationWindow {
         z: 100
     }
 
-    // FIXED: Target 'backend' (MainBackendController) and intercept 'notifySignal'
-    // In qml/Main.qml (replace the existing Connections block)
-    
+    // FIXED: Properly handle 3-parameter notifySignal from Python backend
     Connections {
         target: typeof backend !== "undefined" ? backend : null
         ignoreUnknownSignals: true
-        
-        // Matches Python's notifySignal(str, str, str)
         function onNotifySignal(title, message, level) {
-            toastManager.show(message, level);
-        }
-    } 
+            toastManager.show(message, level || "info")
         }
     }
 
@@ -48,7 +42,7 @@ ApplicationWindow {
         // TOP BAR
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 56
+            Layout.preferredHeight: Theme.headerHeight
             color: Theme.surface
             border.color: Theme.border
             border.width: 1
@@ -63,8 +57,8 @@ ApplicationWindow {
                 Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: Theme.border }
                 Text { text: "Data Quality Studio"; color: Theme.textSecondary; font.pixelSize: 14 }
                 Item { Layout.fillWidth: true }
-                // FIXED: Corrected Version Number
-                Text { text: "v7.2.1"; color: Theme.textSecondary; font.pixelSize: 12 }
+                // FIXED: Display the correct 7.2.1 version explicitly
+                Text { text: "v7.2.1"; color: Theme.textMuted; font.pixelSize: 12 }
             }
         }
 
@@ -73,7 +67,7 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 0
 
-            // SIDEBAR - FIXED: Compact width
+            // SIDEBAR
             Rectangle {
                 Layout.preferredWidth: Theme.sidebarWidth
                 Layout.fillHeight: true
@@ -85,11 +79,11 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
                     anchors.topMargin: Theme.spacingMedium
-                    spacing: 2 // FIXED: Reduced vertical spacing for compact look
+                    spacing: 2 
 
                     Text {
                         text: "MODULES"
-                        color: Theme.textSecondary
+                        color: Theme.textMuted
                         font.pixelSize: 11
                         font.bold: true
                         Layout.bottomMargin: Theme.spacingSmall
