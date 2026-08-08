@@ -1,4 +1,3 @@
-# bootstrap.py
 import sys
 import os
 import traceback
@@ -42,7 +41,6 @@ def setup_exception_traps():
     sys.excepthook = global_exception_trap
     qInstallMessageHandler(qt_message_trap)
 
-
 def create_application(sys_argv):
     setup_logging()
     setup_exception_traps()
@@ -85,10 +83,33 @@ def create_application(sys_argv):
         return app, engine, 1
         
     logger.info(f"Loading QML file from verified path: {main_qml}")
+    
+    # Ensure the QML engine can resolve modules (like 'theme') by adding the qml directory to import paths
+    qml_base_dir = main_qml.parent
+    engine.addImportPath(str(qml_base_dir))
+    logger.info(f"Added QML import path: {qml_base_dir}")
+
     engine.load(QUrl.fromLocalFile(str(main_qml)))
 
     if not engine.rootObjects():
         logger.critical("CRITICAL: Failed to load Main.qml root object. Check for QML syntax errors or missing module imports.")
+        
+        # --- DIAGNOSTIC BLOCK ---
+        print("\n================ QML ENGINE DIAGNOSTICS ================")
+        for warning in engine.warnings():
+            file_url = warning.url().toString()
+            line = warning.line()
+            column = warning.column()
+            desc = warning.description()
+            
+            print(f"File: {file_url}")
+            print(f"Line: {line} | Column: {column}")
+            print(f"Error: {desc}")
+            print("-" * 50)
+            logger.critical(f"QML Error [{line}:{column}] in {file_url}: {desc}")
+        print("========================================================\n")
+        # ------------------------
+        
         return app, engine, 1
 
     if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
@@ -98,7 +119,6 @@ def create_application(sys_argv):
 
     return app, engine, None
 
-
 def main():
     app, engine, exit_code = create_application(sys.argv)
     
@@ -107,7 +127,6 @@ def main():
         
     logger.info("CHECKPOINT 4: Entering main event loop (app.exec())...")
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     main()
