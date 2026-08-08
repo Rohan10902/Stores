@@ -30,7 +30,7 @@ Item {
                 
                 Text { text: "Target Dataset"; color: Theme.textPrimary; font.bold: true }
                 Text { 
-                    text: review_controller.targetFilePath !== "" ? review_controller.targetFilePath : "No file selected." 
+                    text: typeof review_controller !== "undefined" && review_controller.targetFilePath !== "" ? review_controller.targetFilePath : "No file selected." 
                     color: Theme.textSecondary; elide: Text.ElideMiddle; Layout.fillWidth: true
                 }
                 
@@ -44,15 +44,14 @@ Item {
                     }
                     Item { Layout.fillWidth: true }
                     PrimaryButton {
-                        text: review_controller.isProcessing ? "Analyzing..." : "Run Review"
-                        enabled: review_controller.targetFilePath !== "" && !review_controller.isProcessing
+                        text: typeof review_controller !== "undefined" && review_controller.isProcessing ? "Analyzing..." : "Run Review"
+                        enabled: typeof review_controller !== "undefined" && review_controller.targetFilePath !== "" && !review_controller.isProcessing
                         onClicked: review_controller.startReview()
                     }
                 }
             }
         }
 
-        // Results Area
         Card {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -70,7 +69,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: review_controller.resultsModel
+                    model: typeof review_controller !== "undefined" ? review_controller.resultsModel : null
                     spacing: Theme.spacingSmall
 
                     delegate: Rectangle {
@@ -103,10 +102,10 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: review_controller.targetFilePath === "" ? "Select a file and run a review to see results." : "No formatting issues found."
+                        text: typeof review_controller !== "undefined" && review_controller.targetFilePath === "" ? "Select a file and run a review to see results." : "No formatting issues found."
                         color: Theme.textSecondary
                         font.pixelSize: 16
-                        visible: resultsList.count === 0 && !review_controller.isProcessing
+                        visible: resultsList.count === 0 && (typeof review_controller === "undefined" || !review_controller.isProcessing)
                     }
                 }
             }
@@ -117,6 +116,6 @@ Item {
         id: targetFileDialog
         title: "Select Dataset"
         nameFilters: ["CSV Files (*.csv)", "Text Files (*.txt)", "All Files (*)"]
-        onAccepted: review_controller.setTargetFile(selectedFile)
+        onAccepted: if(typeof review_controller !== "undefined") review_controller.setTargetFile(selectedFile)
     }
 }
