@@ -10,6 +10,7 @@ class CSVRepairTool:
         self.history = []
 
     def _save_state(self):
+        # Deepcopy the current arrays to the history stack for valid Undo
         self.history.append((copy.deepcopy(self.rows), copy.deepcopy(self.issues)))
 
     def inspect_csv(self, path):
@@ -40,6 +41,7 @@ class CSVRepairTool:
         if issue:
             r_idx = issue['row'] - 1
             if r_idx < len(self.rows) - 1:
+                # Actual mutation: concatenate current row with next, then delete the next
                 self.rows[r_idx] = self.rows[r_idx] + self.rows[r_idx+1]
                 del self.rows[r_idx+1]
                 self._recalculate_issues()
@@ -57,6 +59,7 @@ class CSVRepairTool:
 
     def keep_issue_as_is(self, issue_index):
         self._save_state()
+        # Actual mutation: explicit removal from issues list, keeping rows untouched
         self.issues = [i for i in self.issues if i['index'] != issue_index]
         return self._get_payload()
 
@@ -72,6 +75,7 @@ class CSVRepairTool:
 
     def undo_action(self):
         if self.history:
+            # Actual mutation: Restore exactly to previous state arrays
             self.rows, self.issues = self.history.pop()
         return self._get_payload()
 
@@ -87,6 +91,8 @@ class CSVRepairTool:
             r_idx = issue['row'] - 1
             row = self.rows[r_idx]
             expected_len = len(self.headers)
+            
+            # Actual mutation: hard truncation or padding to align row strictly with headers
             if len(row) > expected_len:
                 self.rows[r_idx] = row[:expected_len]
             elif len(row) < expected_len:
