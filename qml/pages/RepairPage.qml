@@ -1,4 +1,3 @@
-// qml/pages/RepairPage.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -8,7 +7,6 @@ import "../theme"
 
 Item {
     id: root
-
     property string currentFile: ""
     property int selectedIssue: -1
     property var activeIssueData: null
@@ -30,9 +28,7 @@ Item {
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
             currentFile = urlToPath(selectedFile)
-            if (typeof backend !== "undefined" && backend.repair) {
-                backend.repair.inspect_repair(currentFile)
-            }
+            if (typeof backend !== "undefined" && backend.repair) { backend.repair.inspect_repair(currentFile) }
         }
     }
 
@@ -42,9 +38,7 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: ["CSV Data (*.csv)"]
         onAccepted: {
-            if (typeof backend !== "undefined" && backend.repair) {
-                backend.repair.repair(currentFile, urlToPath(selectedFile))
-            }
+            if (typeof backend !== "undefined" && backend.repair) { backend.repair.repair(currentFile, urlToPath(selectedFile)) }
         }
     }
 
@@ -60,16 +54,15 @@ Item {
                 for (var i = 0; i < issuesList.length; i++) {
                     var issue = issuesList[i]
                     issuesModel.append({
-                        issueIndex: issue.index !== undefined ? issue.index : i,
-                        rowNumber: String(issue.row || "N/A"),
-                        description: String(issue.description || "Structural Issue"),
-                        resolved: !!issue.resolved,
-                        rawJson: JSON.stringify(issue)
+                        issueIndex: i, // Assuming ordered lists since index not guaranteed
+                        rowNum: String(issue.row !== undefined ? issue.row : "N/A"),
+                        issueType: String(issue.type || "Unknown"),
+                        issueMsg: String(issue.message || "Structural Issue")
                     })
                 }
                 
                 if (selectedIssue >= 0 && selectedIssue < issuesModel.count) {
-                    activeIssueData = JSON.parse(issuesModel.get(selectedIssue).rawJson)
+                    activeIssueData = { index: selectedIssue, type: issuesModel.get(selectedIssue).issueType, message: issuesModel.get(selectedIssue).issueMsg }
                 } else {
                     activeIssueData = null
                 }
@@ -89,9 +82,7 @@ Item {
         }
 
         RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spacingMedium
-
+            Layout.fillWidth: true; spacing: Theme.spacingMedium
             TextField {
                 Layout.fillWidth: true
                 readOnly: true
@@ -109,20 +100,12 @@ Item {
         }
 
         SplitView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            orientation: Qt.Horizontal
+            Layout.fillWidth: true; Layout.fillHeight: true; orientation: Qt.Horizontal
 
             Card {
-                SplitView.minimumWidth: 280
-                SplitView.preferredWidth: 350
-                SplitView.fillHeight: true
-                
+                SplitView.minimumWidth: 280; SplitView.preferredWidth: 350; SplitView.fillHeight: true
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingSmall
-
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingSmall
                     RowLayout {
                         Layout.fillWidth: true
                         Text { text: "Detected Issues (" + issuesModel.count + ")"; color: Theme.textPrimary; font.bold: true; Layout.fillWidth: true }
@@ -132,42 +115,34 @@ Item {
                             onClicked: backend.repair.undo_repair_action()
                         }
                     }
-
                     ListView {
                         id: issuesListView
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        model: issuesModel
-                        clip: true
-                        spacing: 2
-
+                        Layout.fillWidth: true; Layout.fillHeight: true; model: issuesModel; clip: true; spacing: 2
                         delegate: Rectangle {
                             required property int index
-                            required property string rowNumber
-                            required property string description
-                            required property bool resolved
+                            required property string rowNum
+                            required property string issueType
+                            required property string issueMsg
 
-                            width: issuesListView.width
-                            height: 60
+                            width: issuesListView.width; height: 60
                             color: selectedIssue === index ? Theme.surfaceHover : Theme.surface
-                            border.color: resolved ? Theme.success : (selectedIssue === index ? Theme.primary : Theme.border)
-                            border.width: 1
-                            radius: Theme.radiusSmall
-
+                            border.color: selectedIssue === index ? Theme.primary : Theme.border
+                            border.width: 1; radius: Theme.radiusSmall
                             MouseArea {
                                 anchors.fill: parent
                                 onClicked: {
                                     selectedIssue = index
-                                    activeIssueData = JSON.parse(issuesModel.get(index).rawJson)
+                                    activeIssueData = { index: index, type: issueType, message: issueMsg }
                                 }
                             }
-
                             RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: Theme.spacingSmall
-                                Text { text: "Row " + rowNumber; font.bold: true; color: Theme.textPrimary; Layout.preferredWidth: 60 }
-                                Text { text: description; color: Theme.textSecondary; Layout.fillWidth: true; elide: Text.ElideRight; wrapMode: Text.WordWrap }
-                                Text { text: resolved ? "✓" : "!"; color: resolved ? Theme.success : Theme.warning; font.bold: true }
+                                anchors.fill: parent; anchors.margins: Theme.spacingSmall
+                                Text { text: "Row " + rowNum; font.bold: true; color: Theme.textPrimary; Layout.preferredWidth: 60 }
+                                ColumnLayout {
+                                    Layout.fillWidth: true; spacing: 2
+                                    Text { text: issueType; color: Theme.warning; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Text { text: issueMsg; color: Theme.textSecondary; elide: Text.ElideRight; Layout.fillWidth: true }
+                                }
                             }
                         }
                     }
@@ -175,81 +150,30 @@ Item {
             }
 
             Card {
-                SplitView.fillWidth: true
-                SplitView.fillHeight: true
-                visible: selectedIssue >= 0
-
+                SplitView.fillWidth: true; SplitView.fillHeight: true; visible: selectedIssue >= 0
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Theme.spacingMedium
-                    spacing: Theme.spacingLarge
-
+                    anchors.fill: parent; anchors.margins: Theme.spacingMedium; spacing: Theme.spacingLarge
                     Text { text: "Issue Resolution"; color: Theme.textPrimary; font.bold: true; font.pixelSize: 18 }
-
+                    
                     Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 60
-                        color: Theme.surfaceHover
-                        border.color: Theme.border
-                        radius: Theme.radiusMedium
-                        
+                        Layout.fillWidth: true; implicitHeight: 60; color: Theme.surfaceHover; border.color: Theme.border; radius: Theme.radiusMedium
                         Text {
-                            anchors.fill: parent
-                            anchors.margins: Theme.spacingMedium
-                            text: activeIssueData ? String(activeIssueData.description) : ""
-                            color: Theme.warning
-                            wrapMode: Text.WordWrap
-                            verticalAlignment: Text.AlignVCenter
+                            anchors.fill: parent; anchors.margins: Theme.spacingMedium
+                            text: activeIssueData ? activeIssueData.message : ""
+                            color: Theme.warning; wrapMode: Text.WordWrap; verticalAlignment: Text.AlignVCenter
                         }
                     }
 
-                    // Resolution Action Tools
                     Flow {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingMedium
-
-                        AppButton {
-                            text: "Join Shifted Rows"
-                            onClicked: { if(backend.repair && activeIssueData) backend.repair.join_repair_rows(activeIssueData.index) }
-                        }
-                        AppButton {
-                            text: "Keep Issue As-Is"
-                            onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_issue(activeIssueData.index) }
-                        }
-                        AppButton {
-                            text: "Keep Unresolved"
-                            onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_unresolved(activeIssueData.index, 0) } // Default col 0
-                        }
-                        AppButton {
-                            text: "Delete Record"
-                            onClicked: { if(backend.repair && activeIssueData) backend.repair.delete_repair_record(activeIssueData.index) }
-                        }
-                        AppButton {
-                            text: "Create Record"
-                            onClicked: { if(backend.repair && activeIssueData) backend.repair.create_repair_record(activeIssueData.index, "{}") }
-                        }
+                        Layout.fillWidth: true; spacing: Theme.spacingMedium
+                        AppButton { text: "Join Shifted Rows"; onClicked: { if(backend.repair && activeIssueData) backend.repair.join_repair_rows(activeIssueData.index) } }
+                        AppButton { text: "Keep Issue As-Is"; onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_issue(activeIssueData.index) } }
+                        AppButton { text: "Keep Unresolved"; onClicked: { if(backend.repair && activeIssueData) backend.repair.keep_repair_unresolved(activeIssueData.index, 0) } }
+                        AppButton { text: "Delete Record"; onClicked: { if(backend.repair && activeIssueData) backend.repair.delete_repair_record(activeIssueData.index) } }
+                        AppButton { text: "Create Record"; onClicked: { if(backend.repair && activeIssueData) backend.repair.create_repair_record(activeIssueData.index, "{}") } }
                     }
 
-                    Text { text: "Data Preview"; color: Theme.textSecondary; font.bold: true }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Theme.background
-                        border.color: Theme.border
-                        radius: Theme.radiusMedium
-                        
-                        ScrollView {
-                            anchors.fill: parent
-                            anchors.margins: Theme.spacingSmall
-                            clip: true
-                            Text {
-                                text: activeIssueData ? JSON.stringify(activeIssueData.data || {}, null, 2) : "No data to preview."
-                                color: Theme.textMuted
-                                wrapMode: Text.WordWrap
-                            }
-                        }
-                    }
+                    Item { Layout.fillHeight: true } 
                 }
             }
         }
