@@ -18,7 +18,6 @@ Item {
             Layout.fillWidth: true
         }
 
-        // Query Input Area
         Card {
             Layout.fillWidth: true
             Layout.preferredHeight: 160
@@ -38,7 +37,7 @@ Item {
 
                     TextArea {
                         id: queryInput
-                        text: "SELECT * FROM store_data LIMIT 100;" // Default placeholder query
+                        text: "SELECT * FROM store_data LIMIT 100;"
                         color: Theme.textPrimary
                         background: Rectangle {
                             color: Theme.background
@@ -55,13 +54,12 @@ Item {
                     Item { Layout.fillWidth: true }
                     PrimaryButton {
                         text: "Execute Query"
-                        onClicked: explorer_controller.executeQuery(queryInput.text)
+                        onClicked: if(typeof explorer_controller !== "undefined") explorer_controller.executeQuery(queryInput.text)
                     }
                 }
             }
         }
 
-        // Data Table Output
         Card {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -74,13 +72,12 @@ Item {
 
                 Text { text: "Results Output"; color: Theme.textPrimary; font.bold: true }
 
-                // This assumes your backend provides a QAbstractTableModel
                 TableView {
                     id: resultsTable
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: explorer_controller.queryResultsModel
+                    model: typeof explorer_controller !== "undefined" ? explorer_controller.queryResultsModel : null
                     
                     columnSpacing: 1
                     rowSpacing: 1
