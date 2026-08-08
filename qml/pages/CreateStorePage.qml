@@ -47,7 +47,7 @@ Item {
                         }
                         font.pixelSize: 14
                         wrapMode: Text.NoWrap
-                        onTextChanged: creator_controller.rawText = text
+                        onTextChanged: if(typeof creator_controller !== "undefined") creator_controller.rawText = text
                     }
                 }
 
@@ -55,7 +55,7 @@ Item {
                     Layout.fillWidth: true
                     
                     Text {
-                        text: creator_controller.recordCount > 0 ? "Detected " + creator_controller.recordCount + " records." : ""
+                        text: typeof creator_controller !== "undefined" && creator_controller.recordCount > 0 ? "Detected " + creator_controller.recordCount + " records." : ""
                         color: Theme.info
                         Layout.fillWidth: true
                     }
@@ -63,7 +63,7 @@ Item {
                     PrimaryButton {
                         text: "Process & Export CSV"
                         enabled: rawDataInput.text.length > 0
-                        onClicked: creator_controller.generateAndExport()
+                        onClicked: if(typeof creator_controller !== "undefined") creator_controller.generateAndExport()
                     }
                 }
             }
