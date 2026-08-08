@@ -11,12 +11,21 @@ Item {
     property var availableCols: []
     property var statsResult: null
 
+    function urlToPath(urlStr) {
+        var path = urlStr.toString();
+        path = path.replace(/^(file:\/{2,3})/, "");
+        if (Qt.platform.os !== "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+            path = path.substring(1);
+        }
+        return decodeURIComponent(path);
+    }
+
     FileDialog {
         id: fileDialog
         title: "Load Dataset for Profiling"
         nameFilters: ["Data (*.csv *.xlsx)"]
         onAccepted: {
-            currentFile = selectedFile.toString()
+            currentFile = urlToPath(selectedFile)
             if (typeof backend !== "undefined" && backend.health) { backend.health.load_data(currentFile) }
         }
     }
@@ -27,7 +36,7 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: ["HTML Report (*.html)"]
         onAccepted: {
-            if (typeof backend !== "undefined" && backend.health) { backend.health.export_health_report(selectedFile.toString()) }
+            if (typeof backend !== "undefined" && backend.health) { backend.health.export_health_report(urlToPath(selectedFile)) }
         }
     }
 
