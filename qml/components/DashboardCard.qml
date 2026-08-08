@@ -11,13 +11,15 @@ Card {
     signal clicked()
 
     Layout.fillWidth: true
-    Layout.preferredHeight: 125 // FIXED: Compact height
-    Layout.minimumWidth: 280
+    // FIXED: Hard-clamp card height metrics per requirements to prevent empty-space stretching
+    Layout.preferredHeight: 140
+    Layout.minimumHeight: 140
+    Layout.maximumHeight: 140
     Layout.alignment: Qt.AlignTop
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: Theme.spacingMedium // FIXED: Reduced padding
+        anchors.margins: Theme.spacingMedium
         spacing: Theme.spacingSmall
 
         Text {
