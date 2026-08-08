@@ -1,3 +1,4 @@
+// qml/pages/ComparePage.qml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -162,12 +163,8 @@ Item {
             spacing: Theme.spacingLarge
 
             PageTitle {
-                text: "Compare & Validate"
-                Layout.fillWidth: true
-            }
-            Text {
-                text: "Row-order-independent master vs uploaded store comparison."
-                color: Theme.textSecondary
+                title: "Compare & Validate"
+                subtitle: "Row-order-independent master vs uploaded store comparison."
                 Layout.fillWidth: true
             }
 
@@ -238,6 +235,7 @@ Item {
                             Layout.preferredWidth: 180
                             model: ["SID", "Nielsen Store Code"]
                             currentIndex: Math.max(0, model.indexOf(key1))
+                            onActivated: key1 = currentText
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                             contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
                         }
@@ -249,6 +247,7 @@ Item {
                             Layout.preferredWidth: 200
                             model: ["(None)", "Nielsen Store Code", "SID"]
                             currentIndex: Math.max(0, model.indexOf(key2))
+                            onActivated: key2 = currentText
                             background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
                             contentItem: Text { text: parent.currentIndex >= 0 ? parent.currentText : ""; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter; leftPadding: 8 }
                         }
@@ -477,7 +476,7 @@ Item {
                                 required property string categoriesJson
 
                                 width: resultsListView.width
-                                height: (filterKey === "" || JSON.parse(categoriesJson).indexOf(filterKey) >= 0) ? 36 : 0
+                                height: (filterKey === "" || categoriesJson.indexOf(filterKey) >= 0) ? 36 : 0
                                 visible: height > 0
                                 color: selected === index ? Theme.surfaceHover : (index % 2 === 0 ? Theme.background : Theme.surface)
                                 border.color: Theme.border
