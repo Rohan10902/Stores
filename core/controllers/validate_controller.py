@@ -38,6 +38,7 @@ class ValidateController(QObject):
         
         self.last_results = results_dict.get("rows", [])
         
+        # Calculate derived insights accurately based on actual result list
         insights = []
         err_count = sum(1 for r in self.last_results if r.get("status") == "ERROR")
         rev_count = sum(1 for r in self.last_results if r.get("status") == "REVIEW")
