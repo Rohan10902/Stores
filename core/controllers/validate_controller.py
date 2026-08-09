@@ -51,7 +51,6 @@ class ValidateController(QObject):
         raw_rows = results_dict.get("rows", [])
         self.last_results = raw_rows
         
-        # Derived insights generated in Python based strictly on payload contract
         err_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "ERROR")
         rev_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "REVIEW")
         ok_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "CORRECT")
@@ -65,6 +64,7 @@ class ValidateController(QObject):
                 "message": str(r.get("message", ""))
             })
         
+        # Real validation insights generation from derived metrics
         insights = []
         if err_count > 0:
             insights.append({"key": "ERROR", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
