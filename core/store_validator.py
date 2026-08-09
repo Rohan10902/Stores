@@ -1,111 +1,410 @@
-from collections import Counter, defaultdict
-from difflib import SequenceMatcher
-from .common import STORE_FIELDS, map_columns, norm_value, date_ok, binary_ok
+import os
+from collections import defaultdict
 
-try:
-    from rapidfuzz import fuzz
-    HAS_RAPIDFUZZ = True
-except ImportError:
-    HAS_RAPIDFUZZ = False
+import pandas as pd
 
-def string_similarity(a, b):
-    sa, sb = str(a or "").strip().lower(), str(b or "").strip().lower()
-    if not sa or not sb:
-        return 100.0 if sa == sb else 0.0
-    if HAS_RAPIDFUZZ:
-        return round(float(fuzz.token_sort_ratio(sa, sb)), 1)
-    return round(SequenceMatcher(None, sa, sb).ratio() * 100.0, 1)
+from .common import norm_value
+
+
+def _load_table(path):
+    if not path:
+        raise ValueError("File path cannot be empty.")
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"File not found: {path}")
+
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext == ".csv":
+        return pd.read_csv(
+            path,
+            encoding="utf-8-sig",
+            on_bad_lines="skip",
+            dtype=str,
+        ).fillna("")
+
+    if ext in (".xls", ".xlsx"):
+        return pd.read_excel(path, dtype=str).fillna("")
+
+    raise ValueError(f"Unsupported file format: {ext}")
+
+
+def _normal_name(value):
+    return (
+        str(value)
+        .strip()
+        .lower()
+        .replace("_", " ")
+        .replace("-", " ")
+    )
+
+
+def _find_column(columns, candidates):
+    normalized = {
+        _normal_name(column): column
+        for column in columns
+    }
+
+    for candidate in candidates:
+        key = _normal_name(candidate)
+        if key in normalized:
+            return normalized[key]
+
+    for column in columns:
+        n = _normal_name(column)
+        for candidate in candidates:
+            c = _normal_name(candidate)
+            if c and (c in n or n in c):
+                return column
+
+    return ""
+
+
+def _column_map(columns):
+    aliases = {
+        "SID": [
+            "SID",
+            "Store ID",
+            "StoreID",
+            "Store Id",
+            "Store Code",
+            "store_code",
+            "ID",
+        ],
+        "Nielsen Store Code": [
+            "Nielsen Store Code",
+            "Nielsen Code",
+            "Nielsen Store",
+            "Nielsen",
+        ],
+        "Store Name": [
+            "Store Name",
+            "Store",
+            "Name",
+            "store_name",
+        ],
+        "Address": [
+            "Address",
+            "address",
+        ],
+        "City": [
+            "City",
+            "city",
+        ],
+        "State": [
+            "State",
+            "state",
+        ],
+        "Pincode": [
+            "Pincode",
+            "Pin Code",
+            "Postal Code",
+            "ZIP",
+            "Zip Code",
+            "pincode",
+        ],
+        "Phone": [
+            "Phone",
+            "Mobile",
+            "Contact",
+            "phone",
+        ],
+        "Email": [
+            "Email",
+            "Mail",
+            "email",
+        ],
+        "Status": [
+            "Status",
+            "status",
+        ],
+    }
+
+    result = {}
+
+    for logical_name, candidates in aliases.items():
+        result[logical_name] = {
+            "column": _find_column(columns, candidates)
+        }
+
+    return result
+
 
 def _get(row, mapping, field):
-    c = mapping.get(field, {}).get("column", "")
-    return norm_value(row[c]) if c and c in row.index else ""
+    column = mapping.get(field, {}).get("column", "")
+
+    if not column or column not in row.index:
+        return ""
+
+    return norm_value(row[column])
+
 
 def _key(row, mapping, fields):
-    return tuple(_get(row, mapping, f).casefold() for f in fields)
+    return tuple(
+        _get(row, mapping, field)
+        for field in fields
+    )
+
 
 def suggest_keys(master, uploaded):
-    mm, um = map_columns(master.columns), map_columns(uploaded.columns)
-    available = [f for f in STORE_FIELDS if mm.get(f,{}).get("column") and um.get(f,{}).get("column")]
-    if "SID" not in available:
-        raise ValueError("SID could not be detected in one or both files.")
-    candidates = [["SID"]]
-    if "Nielsen Store Code" in available:
-        candidates.append(["SID", "Nielsen Store Code"])
+    master_map = _column_map(master.columns)
+    upload_map = _column_map(uploaded.columns)
 
-    def unique(df, mp, fields):
-        keys = [_key(r, mp, fields) for _, r in df.iterrows()]
-        keys = [k for k in keys if any(k)]
+    available = [
+        field
+        for field in ("SID", "Nielsen Store Code")
+        if master_map.get(field, {}).get("column")
+        and upload_map.get(field, {}).get("column")
+    ]
+
+    if "SID" not in available:
+        raise ValueError(
+            "SID could not be detected in one or both files."
+        )
+
+    candidates = [["SID"]]
+
+    if "Nielsen Store Code" in available:
+        candidates.append(
+            ["SID", "Nielsen Store Code"]
+        )
+
+    def unique(df, mapping, fields):
+        keys = [
+            _key(row, mapping, fields)
+            for _, row in df.iterrows()
+        ]
+
+        keys = [
+            key for key in keys
+            if any(key)
+        ]
+
         return len(keys) == len(set(keys))
 
     for fields in candidates:
-        if unique(master, mm, fields) and unique(uploaded, um, fields):
+        if (
+            unique(master, master_map, fields)
+            and unique(uploaded, upload_map, fields)
+        ):
             return fields
+
     return candidates[-1]
 
+
 def compare(master, uploaded, key_fields=None):
-    mm, um = map_columns(master.columns), map_columns(uploaded.columns)
-    key_fields = key_fields or suggest_keys(master, uploaded)
-    
+    master_map = _column_map(master.columns)
+    upload_map = _column_map(uploaded.columns)
+
+    key_fields = key_fields or suggest_keys(
+        master,
+        uploaded,
+    )
+
     master_groups = defaultdict(list)
-    upload_groups = defaultdict(list)
-    for ix, r in master.iterrows():
-        master_groups[_key(r, mm, key_fields)].append((int(ix)+2, r))
-    for ix, r in uploaded.iterrows():
-        upload_groups[_key(r, um, key_fields)].append((int(ix)+2, r))
-        
+
+    for index, row in master.iterrows():
+        key = _key(
+            row,
+            master_map,
+            key_fields,
+        )
+
+        master_groups[key].append(
+            (int(index) + 2, row)
+        )
+
     records = []
-    for ix, r in uploaded.iterrows():
-        row_no = int(ix) + 2
-        key_tuple = _key(r, um, key_fields)
-        key_str = " | ".join([_get(r, um, k) for k in key_fields if _get(r, um, k)]) or "No Key"
-        masters = master_groups.get(key_tuple, [])
-        sid = _get(r, um, "SID")
-        store = _get(r, um, "Store Name")
-        problems = []
-        details = []
+
+    for index, upload_row in uploaded.iterrows():
+        row_number = int(index) + 2
+
+        key_tuple = _key(
+            upload_row,
+            upload_map,
+            key_fields,
+        )
+
+        key_values = [
+            _get(upload_row, upload_map, field)
+            for field in key_fields
+        ]
+
+        key_string = " | ".join(
+            value for value in key_values
+            if value
+        ) or "No Key"
+
+        masters = master_groups.get(
+            key_tuple,
+            []
+        )
+
         master_dict = {}
         upload_dict = {}
-        diffs_dict = {}
+        comparisons = []
+        problems = []
 
         if masters:
-            mr = masters[0][1]
-            for f in STORE_FIELDS:
-                a, b = _get(mr, mm, f), _get(r, um, f)
-                master_dict[f] = a
-                upload_dict[f] = b
-                
-                sim = string_similarity(a, b)
-                is_diff = (a.casefold() != b.casefold())
-                diffs_dict[f] = is_diff
-                
-                res = "MATCH" if not is_diff else f"DIFFERENT ({sim}% match)"
-                if is_diff:
-                    problems.append(f"{f}: mismatch ({sim}% similarity)")
-                details.append({"field": f, "master": a, "uploaded": b, "result": res, "severity": "REVIEW" if is_diff else "OK"})
-        else:
-            for f in STORE_FIELDS:
-                u_val = _get(r, um, f)
-                upload_dict[f] = u_val
-                master_dict[f] = ""
-                diffs_dict[f] = True
-                details.append({"field": f, "master": "", "uploaded": u_val, "result": "MISSING MASTER", "severity": "ERROR"})
+            master_row = masters[0][1]
 
-        status = "CORRECT" if masters and not problems else ("REVIEW" if masters else "ERROR")
-        msg = "Exact match with Master." if status == "CORRECT" else ("; ".join(problems) if masters else "Store key not found in Master file.")
+            fields = [
+                "SID",
+                "Nielsen Store Code",
+                "Store Name",
+                "Address",
+                "City",
+                "State",
+                "Pincode",
+                "Phone",
+                "Email",
+                "Status",
+            ]
+
+            for field in fields:
+                master_value = _get(
+                    master_row,
+                    master_map,
+                    field,
+                )
+
+                upload_value = _get(
+                    upload_row,
+                    upload_map,
+                    field,
+                )
+
+                master_dict[field] = master_value
+                upload_dict[field] = upload_value
+
+                same = (
+                    master_value.casefold()
+                    == upload_value.casefold()
+                )
+
+                if same:
+                    result = "MATCH"
+                    severity = "OK"
+                else:
+                    result = "DIFFERENT"
+                    severity = "REVIEW"
+                    problems.append(
+                        f"{field}: master='{master_value}' "
+                        f"uploaded='{upload_value}'"
+                    )
+
+                comparisons.append({
+                    "field": field,
+                    "master": master_value,
+                    "uploaded": upload_value,
+                    "result": result,
+                    "severity": severity,
+                })
+
+            status = (
+                "CORRECT"
+                if not problems
+                else "REVIEW"
+            )
+
+            message = (
+                "Exact match with Master."
+                if status == "CORRECT"
+                else "; ".join(problems)
+            )
+
+        else:
+            fields = [
+                "SID",
+                "Nielsen Store Code",
+                "Store Name",
+                "Address",
+                "City",
+                "State",
+                "Pincode",
+                "Phone",
+                "Email",
+                "Status",
+            ]
+
+            for field in fields:
+                upload_value = _get(
+                    upload_row,
+                    upload_map,
+                    field,
+                )
+
+                master_dict[field] = ""
+                upload_dict[field] = upload_value
+
+                comparisons.append({
+                    "field": field,
+                    "master": "",
+                    "uploaded": upload_value,
+                    "result": "MISSING MASTER",
+                    "severity": "ERROR",
+                })
+
+            status = "ERROR"
+            message = (
+                "Store key not found in Master file."
+            )
+
+        diff_count = sum(
+            1
+            for item in comparisons
+            if item["severity"] != "OK"
+        )
 
         records.append({
-            "row": row_no,
-            "key": key_str,
+            "row": row_number,
+            "key": key_string,
             "status": status,
-            "message": msg,
+            "message": message,
             "master": master_dict,
             "upload": upload_dict,
-            "diffs": diffs_dict,
-            "comparisons": details
+            "diffs": diff_count,
+            "comparisons": comparisons,
         })
 
-    return mm, um, records, key_fields
+    return records, key_fields
 
-def validation_insights(records):
-    attention = sum(1 for r in records if r["status"] in ("ERROR", "REVIEW"))
-    return {"groups": [], "attention": attention}
+
+class StoreValidator:
+    def __init__(self):
+        self.master = None
+        self.upload = None
+
+    def load_master(self, path):
+        self.master = _load_table(path)
+
+    def load_upload(self, path):
+        self.upload = _load_table(path)
+
+    def detect_keys(self):
+        if self.master is None or self.upload is None:
+            return ["SID", "Nielsen Store Code"]
+
+        return suggest_keys(
+            self.master,
+            self.upload,
+        )
+
+    def validate(self, keys):
+        if self.master is None:
+            raise ValueError("Master dataset has not been loaded.")
+
+        if self.upload is None:
+            raise ValueError("Uploaded dataset has not been loaded.")
+
+        records, key_fields = compare(
+            self.master,
+            self.upload,
+            keys or None,
+        )
+
+        return {
+            "total": len(records),
+            "rows": records,
+            "keys": key_fields,
+        }
