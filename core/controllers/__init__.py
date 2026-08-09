@@ -41,20 +41,35 @@ class MainBackendController(QObject):
 
         self.async_runner = AsyncRunner(threadpool)
 
-        self.notify = (
-            lambda title, msg, level="info":
-            self.notifySignal.emit(title, msg, level)
+        self.notify = lambda title, message, level="info": (
+            self.notifySignal.emit(
+                str(title),
+                str(message),
+                str(level)
+            )
         )
 
-        self.say = (
-            lambda msg:
-            self.saySignal.emit(msg)
+        self.say = lambda message: (
+            self.saySignal.emit(str(message))
         )
 
-        self.fail = (
-            lambda title, msg:
-            self.notifySignal.emit(title, msg, "error")
+        self.fail = lambda title, message: (
+            self.notifySignal.emit(
+                str(title),
+                str(message),
+                "error"
+            )
         )
+
+        # ---------------------------------------------------------
+        # Nested controllers exposed directly to QML:
+        #
+        # backend.validate.*
+        # backend.repair.*
+        # backend.review.*
+        # backend.creator.*
+        # backend.health.*
+        # ---------------------------------------------------------
 
         self.validate = ValidateController(
             self.async_runner,
