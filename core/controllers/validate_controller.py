@@ -1,113 +1,348 @@
 import json
-from PySide6.QtCore import QObject, Slot, Signal, QUrl
-try:
-    from ..store_validator import StoreValidator
-except ImportError:
-    StoreValidator = None
 
-def _to_local_file(url_str):
-    url = QUrl(url_str)
+from PySide6.QtCore import QObject, Slot, Signal, QUrl
+
+from ..store_validator import StoreValidator
+
+
+def _to_local_file(value):
+    value = str(value or "")
+
+    url = QUrl(value)
+
     if url.isLocalFile():
         return url.toLocalFile()
-    return url_str
+
+    return value
+
 
 class ValidateController(QObject):
     mappingReady = Signal(str)
     validationReady = Signal(str)
     detailReady = Signal(str)
 
-    def __init__(self, async_runner, notify, fail, parent=None):
+    def __init__(
+        self,
+        async_runner,
+        notify,
+        fail,
+        parent=None,
+    ):
         super().__init__(parent)
+
         self.async_runner = async_runner
         self.notify = notify
         self.fail = fail
-        self.validator = StoreValidator() if StoreValidator else None
+
+        self.validator = StoreValidator()
         self.last_results = []
 
     @Slot(str)
     def load_master(self, path):
-        if self.validator and hasattr(self.validator, 'load_master'):
-            self.validator.load_master(_to_local_file(path))
+        try:
+            self.validator.load_master(
+                _to_local_file(path)
+            )
+
+            if self.notify:
+                self.notify(
+                    "Master Loaded",
+                    "Master dataset loaded successfully.",
+                    "success",
+                )
+
+        except Exception as exc:
+            if self.fail:
+                self.fail(
+                    "Master Load Error",
+                    str(exc),
+                )
 
     @Slot(str)
     def load_upload(self, path):
-        if self.validator and hasattr(self.validator, 'load_upload'):
-            self.validator.load_upload(_to_local_file(path))
+        try:
+            self.validator.load_upload(
+                _to_local_file(path)
+            )
+
+            if self.notify:
+                self.notify(
+                    "Upload Loaded",
+                    "Uploaded dataset loaded successfully.",
+                    "success",
+                )
+
+        except Exception as exc:
+            if self.fail:
+                self.fail(
+                    "Upload Load Error",
+                    str(exc),
+                )
 
     @Slot()
     def detect(self):
-        keys = ["SID", "Nielsen Store Code"]
-        if self.validator and hasattr(self.validator, 'detect_keys'):
+        try:
             keys = self.validator.detect_keys()
-        self.mappingReady.emit(json.dumps({"suggestedKeys": keys}))
+
+            self.mappingReady.emit(
+                json.dumps({
+                    "suggestedKeys": keys
+                })
+            )
+
+        except Exception as exc:
+            if self.fail:
+                self.fail(
+                    "Detection Error",
+                    str(exc),
+                )
 
     @Slot(str)
     def validate(self, keys_json):
-        keys = json.loads(keys_json)
-        results_dict = {}
-        if self.validator and hasattr(self.validator, 'validate'):
-            results_dict = self.validator.validate(keys)
-        
-        raw_rows = results_dict.get("rows", [])
-        self.last_results = raw_rows
-        
-        err_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "ERROR")
-        rev_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "REVIEW")
-        ok_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "CORRECT")
+        try:
+            keys = json.loads(
+                keys_json or "[]"
+            )
 
-        formatted_rows = []
-        for i, r in enumerate(raw_rows):
-            formatted_rows.append({
-                "row": int(r.get("row", i + 1)),
-                "key": str(r.get("key", "")),
-                "status": str(r.get("status", "UNKNOWN")).upper(),
-                "message": str(r.get("message", ""))
-            })
-        
-        # Real validation insights generation from derived metrics
-        insights = []
-        if err_count > 0:
-            insights.append({"key": "ERROR", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
-        if rev_count > 0:
-            insights.append({"key": "REVIEW", "title": "Manual Review Needed", "count": str(rev_count), "severity": "REVIEW", "action": "Check flagged fields"})
-        if err_count == 0 and rev_count == 0 and len(formatted_rows) > 0:
-            insights.append({"key": "CORRECT", "title": "Clean Validation", "count": str(ok_count), "severity": "CORRECT", "action": "Ready for deployment"})
+            if not isinstance(keys, list):
+                raise ValueError(
+                    "Validation keys must be a JSON array."
+                )
 
-        payload = {
-            "total": int(results_dict.get("total", len(formatted_rows))),
-            "correct": ok_count,
-            "review": rev_count,
-            "errors": err_count,
-            "attention": int(err_count + rev_count),
-            "rows": formatted_rows,
-            "insights": insights
-        }
-        self.validationReady.emit(json.dumps(payload))
+            results = self.validator.validate(
+                keys
+            )
 
-    @Slot(int, bool)
-    def detail(self, index, diff_only):
-        if 0 <= index < len(self.last_results):
-            row = self.last_results[index]
-            comps = row.get("comparisons", [])
-            if diff_only:
-                comps = [c for c in comps if str(c.get("severity", "")).upper() in ["ERROR", "WARNING", "REVIEW"]]
-            
-            formatted_comps = []
-            for c in comps:
-                formatted_comps.append({
-                    "field": str(c.get("field", "")),
-                    "master": str(c.get("master", "")),
-                    "uploaded": str(c.get("uploaded", "")),
-                    "result": str(c.get("result", "")),
-                    "severity": str(c.get("severity", "")).upper()
+            raw_rows = results.get(
+                "rows",
+                [],
+            )
+
+            self.last_results = raw_rows
+
+            correct = sum(
+                1
+                for row in raw_rows
+                if str(
+                    row.get("status", "")
+                ).upper() == "CORRECT"
+            )
+
+            review = sum(
+                1
+                for row in raw_rows
+                if str(
+                    row.get("status", "")
+                ).upper() == "REVIEW"
+            )
+
+            errors = sum(
+                1
+                for row in raw_rows
+                if str(
+                    row.get("status", "")
+                ).upper() == "ERROR"
+            )
+
+            formatted_rows = []
+
+            for index, row in enumerate(
+                raw_rows
+            ):
+                formatted_rows.append({
+                    "row": int(
+                        row.get(
+                            "row",
+                            index + 1,
+                        )
+                    ),
+                    "key": str(
+                        row.get("key", "")
+                    ),
+                    "status": str(
+                        row.get(
+                            "status",
+                            "UNKNOWN",
+                        )
+                    ).upper(),
+                    "message": str(
+                        row.get(
+                            "message",
+                            "",
+                        )
+                    ),
+                })
+
+            insights = []
+
+            if errors:
+                insights.append({
+                    "key": "ERROR",
+                    "title": "Critical Mismatches",
+                    "count": str(errors),
+                    "severity": "ERROR",
+                    "action": "Review errors immediately",
+                })
+
+            if review:
+                insights.append({
+                    "key": "REVIEW",
+                    "title": "Manual Review Needed",
+                    "count": str(review),
+                    "severity": "REVIEW",
+                    "action": "Check flagged fields",
+                })
+
+            if correct:
+                insights.append({
+                    "key": "CORRECT",
+                    "title": "Correct Matches",
+                    "count": str(correct),
+                    "severity": "CORRECT",
+                    "action": "No action required",
                 })
 
             payload = {
-                "message": str(row.get("message", "")),
-                "status": str(row.get("status", "")).upper(),
-                "master": dict(row.get("master", {})),
-                "upload": dict(row.get("upload", {})),
-                "diffs": int(row.get("diffs", 0)),
-                "comparisons": formatted_comps
+                "total": len(formatted_rows),
+                "correct": correct,
+                "review": review,
+                "errors": errors,
+                "attention": review + errors,
+                "rows": formatted_rows,
+                "insights": insights,
             }
-            self.detailReady.emit(json.dumps(payload))
+
+            self.validationReady.emit(
+                json.dumps(payload)
+            )
+
+        except Exception as exc:
+            if self.fail:
+                self.fail(
+                    "Validation Error",
+                    str(exc),
+                )
+
+            self.validationReady.emit(
+                json.dumps({
+                    "total": 0,
+                    "correct": 0,
+                    "review": 0,
+                    "errors": 1,
+                    "attention": 1,
+                    "rows": [],
+                    "insights": [],
+                })
+            )
+
+    @Slot(int, bool)
+    def detail(self, index, diff_only):
+        try:
+            if not (
+                0 <= index < len(
+                    self.last_results
+                )
+            ):
+                return
+
+            row = self.last_results[index]
+
+            comparisons = list(
+                row.get(
+                    "comparisons",
+                    [],
+                )
+            )
+
+            if diff_only:
+                comparisons = [
+                    item
+                    for item in comparisons
+                    if str(
+                        item.get(
+                            "severity",
+                            "",
+                        )
+                    ).upper()
+                    not in ("OK", "")
+                ]
+
+            formatted = []
+
+            for item in comparisons:
+                formatted.append({
+                    "field": str(
+                        item.get(
+                            "field",
+                            "",
+                        )
+                    ),
+                    "master": str(
+                        item.get(
+                            "master",
+                            "",
+                        )
+                    ),
+                    "uploaded": str(
+                        item.get(
+                            "uploaded",
+                            "",
+                        )
+                    ),
+                    "result": str(
+                        item.get(
+                            "result",
+                            "",
+                        )
+                    ),
+                    "severity": str(
+                        item.get(
+                            "severity",
+                            "",
+                        )
+                    ).upper(),
+                })
+
+            payload = {
+                "message": str(
+                    row.get(
+                        "message",
+                        "",
+                    )
+                ),
+                "status": str(
+                    row.get(
+                        "status",
+                        "",
+                    )
+                ).upper(),
+                "master": dict(
+                    row.get(
+                        "master",
+                        {},
+                    )
+                ),
+                "upload": dict(
+                    row.get(
+                        "upload",
+                        {},
+                    )
+                ),
+                "diffs": sum(
+                    1
+                    for item in formatted
+                    if item["severity"] != "OK"
+                ),
+                "comparisons": formatted,
+            }
+
+            self.detailReady.emit(
+                json.dumps(payload)
+            )
+
+        except Exception as exc:
+            if self.fail:
+                self.fail(
+                    "Detail Error",
+                    str(exc),
+                )
