@@ -1,6 +1,9 @@
 import json
 from PySide6.QtCore import QObject, Slot, Signal, QUrl
-from ..store_validator import StoreValidator
+try:
+    from ..store_validator import StoreValidator
+except ImportError:
+    StoreValidator = None
 
 def _to_local_file(url_str):
     url = QUrl(url_str)
@@ -13,25 +16,28 @@ class ValidateController(QObject):
     validationReady = Signal(str)
     detailReady = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, async_runner, notify, fail, parent=None):
         super().__init__(parent)
-        self.validator = StoreValidator()
+        self.async_runner = async_runner
+        self.notify = notify
+        self.fail = fail
+        self.validator = StoreValidator() if StoreValidator else None
         self.last_results = []
 
     @Slot(str)
     def load_master(self, path):
-        if hasattr(self.validator, 'load_master'):
+        if self.validator and hasattr(self.validator, 'load_master'):
             self.validator.load_master(_to_local_file(path))
 
     @Slot(str)
     def load_upload(self, path):
-        if hasattr(self.validator, 'load_upload'):
+        if self.validator and hasattr(self.validator, 'load_upload'):
             self.validator.load_upload(_to_local_file(path))
 
     @Slot()
     def detect(self):
         keys = ["SID", "Nielsen Store Code"]
-        if hasattr(self.validator, 'detect_keys'):
+        if self.validator and hasattr(self.validator, 'detect_keys'):
             keys = self.validator.detect_keys()
         self.mappingReady.emit(json.dumps({"suggestedKeys": keys}))
 
@@ -39,12 +45,13 @@ class ValidateController(QObject):
     def validate(self, keys_json):
         keys = json.loads(keys_json)
         results_dict = {}
-        if hasattr(self.validator, 'validate'):
+        if self.validator and hasattr(self.validator, 'validate'):
             results_dict = self.validator.validate(keys)
         
         raw_rows = results_dict.get("rows", [])
         self.last_results = raw_rows
         
+        # Derived insights generated in Python based strictly on payload contract
         err_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "ERROR")
         rev_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "REVIEW")
         ok_count = sum(1 for r in raw_rows if str(r.get("status", "")).upper() == "CORRECT")
@@ -58,7 +65,6 @@ class ValidateController(QObject):
                 "message": str(r.get("message", ""))
             })
         
-        # Real validation insights generation
         insights = []
         if err_count > 0:
             insights.append({"key": "ERROR", "title": "Critical Mismatches", "count": str(err_count), "severity": "ERROR", "action": "Review errors immediately"})
