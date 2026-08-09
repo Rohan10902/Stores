@@ -1,27 +1,24 @@
-# core/async_runner.py
-from PySide6.QtCore import QThreadPool
-from core.utils.worker import Worker
-from core.utils.logger import get_logger
-
-logger = get_logger("AsyncRunner")
+from PySide6.QtCore import QObject
 
 
-class AsyncRunner:
+class AsyncRunner(QObject):
     """
-    Manages background execution threads safely using QThreadPool and Worker.
-    """
-    def __init__(self, threadpool: QThreadPool = None):
-        self.threadpool = threadpool or QThreadPool.globalInstance()
+    Lightweight async runner wrapper.
 
-    def run_async(self, name: str, task_fn, callback_fn=None, error_callback_fn=None):
-        worker = Worker(task_fn)
-        
-        if callback_fn:
-            worker.signals.finished.connect(callback_fn)
-            
-        if error_callback_fn:
-            worker.signals.error.connect(error_callback_fn)
-        else:
-            worker.signals.error.connect(lambda err_tuple: logger.error(f"Task '{name}' failed: {err_tuple[1]}"))
-            
-        self.threadpool.start(worker)
+    This class keeps the controller API consistent while allowing
+    a QThreadPool to be supplied by the application.
+    """
+
+    def __init__(self, threadpool=None, parent=None):
+        super().__init__(parent)
+        self.threadpool = threadpool
+
+    def run(self, fn, *args, **kwargs):
+        """
+        Execute a callable.
+
+        This fallback implementation executes synchronously.
+        A production async implementation can replace this later
+        without changing the controller construction API.
+        """
+        return fn(*args, **kwargs)
