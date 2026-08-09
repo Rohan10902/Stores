@@ -12,22 +12,26 @@ try:
 except ImportError:
 
     class AsyncRunner:
-        """
-        Fallback AsyncRunner used when the optional async_runner
-        module is unavailable.
-        """
-
         def __init__(self, threadpool=None):
             self.threadpool = threadpool
 
+        def run(self, fn, on_success=None, on_error=None):
+            try:
+                result = fn()
+
+                if on_success:
+                    on_success(result)
+
+                return result
+
+            except Exception as exc:
+                if on_error:
+                    on_error(exc)
+                else:
+                    raise
+
 
 class MainBackendController(QObject):
-    """
-    Main application controller.
-
-    This class creates and exposes the individual feature controllers
-    used by the StoreLens UI.
-    """
 
     notifySignal = Signal(str, str, str)
     saySignal = Signal(str)
@@ -56,13 +60,6 @@ class MainBackendController(QObject):
         # Feature controllers
         # ---------------------------------------------------------
 
-        self.repair = RepairController(
-            self.async_runner,
-            self.notify,
-            self.fail,
-            parent=self
-        )
-
         self.validate = ValidateController(
             self.async_runner,
             self.notify,
@@ -70,10 +67,16 @@ class MainBackendController(QObject):
             parent=self
         )
 
-        self.health = HealthController(
+        self.repair = RepairController(
             self.async_runner,
             self.notify,
-            self.say,
+            self.fail,
+            parent=self
+        )
+
+        self.review = ReviewController(
+            self.async_runner,
+            self.notify,
             parent=self
         )
 
@@ -84,9 +87,10 @@ class MainBackendController(QObject):
             parent=self
         )
 
-        self.review = ReviewController(
+        self.health = HealthController(
             self.async_runner,
             self.notify,
+            self.say,
             parent=self
         )
 
