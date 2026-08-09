@@ -78,7 +78,7 @@ Item {
         }
 
         function onCreatorExported() {
-            // Usually managed by central notifications
+            // Managed via Python notifying central toast overlay natively
         }
     }
 
