@@ -17,13 +17,15 @@ class RepairController(QObject):
         self.notify = notify
         self.fail = fail
         self.tool = CSVRepairTool()
+        self.current_file = ""
 
     def _emit_state(self, payload):
         self.repairReady.emit(json.dumps(payload))
 
     @Slot(str)
     def inspect_repair(self, path):
-        self._emit_state(self.tool.inspect_csv(_to_local_file(path)))
+        self.current_file = _to_local_file(path)
+        self._emit_state(self.tool.inspect_csv(self.current_file))
 
     @Slot(int)
     def join_repair_rows(self, issue_index):
@@ -55,6 +57,13 @@ class RepairController(QObject):
 
     @Slot(str, str)
     def repair(self, src, dst):
-        self.tool.export_csv(_to_local_file(dst))
+        src_path = _to_local_file(src)
+        dst_path = _to_local_file(dst)
+        
+        # Load implicitly if saving a path that wasn't proactively inspected
+        if not self.tool.rows or self.current_file != src_path:
+            self.inspect_repair(src_path)
+            
+        self.tool.export_csv(dst_path)
         if self.notify:
             self.notify("Success", "Repaired CSV exported successfully.", "success")
