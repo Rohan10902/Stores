@@ -1,45 +1,70 @@
-# core/controllers/review_controller.py
 import json
-from PySide6.QtCore import QObject, Signal
+import csv
+import shutil
+from PySide6.QtCore import QObject, Slot, Signal, QUrl
 
-from core.common import read_table
-from core.file_creator import review_dataframe
-from core.utils.helpers import local_path, free_memory
-
+def _to_local_file(url_str):
+    url = QUrl(url_str)
+    if url.isLocalFile():
+        return url.toLocalFile()
+    return url_str
 
 class ReviewController(QObject):
     singleReviewReady = Signal(str)
 
-    def __init__(self, async_runner, notify_cb):
-        super().__init__()
+    def __init__(self, async_runner, notify_cb, parent=None):
+        super().__init__(parent)
         self.async_runner = async_runner
         self.notify = notify_cb
-
+        
+    @Slot(str)
     def review_single_file(self, path):
-        free_memory()
+        local_path = _to_local_file(path)
+        findings = []
+        preview_cols = []
+        preview_rows = []
+        total = 0
+        attn = 0
+        
+        try:
+            with open(local_path, 'r', encoding='utf-8', errors='replace') as f:
+                reader = csv.reader(f)
+                try:
+                    preview_cols = next(reader)
+                except StopIteration:
+                    pass
+                
+                for row in reader:
+                    total += 1
+                    if total <= 50:
+                        preview_rows.append(row)
+                    
+                    if len(row) != len(preview_cols):
+                        findings.append({"message": f"Row {total}: Column count mismatch.", "severity": "ERROR"})
+                        attn += 1
+                    elif not any(row):
+                        findings.append({"message": f"Row {total}: Completely empty.", "severity": "WARNING"})
+                        attn += 1
+                        
+        except Exception as e:
+            findings.append({"message": f"Failed to read file: {str(e)}", "severity": "ERROR"})
+            attn += 1
 
-        def task():
-            df = read_table(local_path(path))
-            res = review_dataframe(df)
-            payload = {
-                "totalRecords": res.get("recordCount", len(df)),
-                "attentionCount": res.get("issueCount", 0),
-                "previewColumns": [str(c) for c in df.columns],
-                "previewRows": df.head(100).fillna("").to_dict(orient="records"),
-                "findings": [{"message": f"Row {r['row']}: {'; '.join(r['issues'])}"} for r in res.get("rows", []) if r.get("issues")]
-            }
-            return json.dumps(payload), len(df)
-
-        def on_complete(result):
-            payload, count = result
-            self.singleReviewReady.emit(payload)
-            self.notify("Analysis Ready", f"Reviewed {count:,} store records.", "info")
-
-        self.async_runner.run_async("review_single", task, on_complete)
-
+        payload = {
+            "totalRecords": total,
+            "attentionCount": attn,
+            "previewColumns": preview_cols,
+            "previewRows": preview_rows,
+            "findings": findings
+        }
+        self.singleReviewReady.emit(json.dumps(payload))
+        
+    @Slot(str, str)
     def export_single_review(self, src, dst):
-        def task():
-            df = read_table(local_path(src))
-            df.to_csv(local_path(dst), index=False, encoding="utf-8-sig")
-
-        self.async_runner.run_async("export_single", task, lambda _: self.notify("Export Complete", "Exported reviewed copy.", "success"))
+        try:
+            shutil.copy2(_to_local_file(src), _to_local_file(dst))
+            if self.notify:
+                self.notify("Success", "Review exported successfully.", "success")
+        except Exception as e:
+            if self.notify:
+                self.notify("Export Failed", str(e), "error")
