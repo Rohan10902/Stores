@@ -1,3 +1,5 @@
+# core/csv_repair.py
+
 import copy
 import csv
 import json
@@ -5,8 +7,59 @@ import os
 import uuid
 
 
-class CSVRepairTool:
+def robust_csv_parse(path):
+    """
+    Robust CSV parser.
 
+    - Uses the first row as the authoritative header.
+    - Truncates rows with extra columns.
+    - Pads rows with missing columns using empty strings.
+    - Returns a dictionary containing headers and rows.
+    """
+
+    if not path:
+        raise ValueError("CSV path cannot be empty.")
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"File not found: {path}")
+
+    with open(
+        path,
+        "r",
+        encoding="utf-8",
+        errors="replace",
+        newline="",
+    ) as file:
+        reader = csv.reader(file)
+
+        try:
+            headers = next(reader)
+        except StopIteration:
+            return {
+                "headers": [],
+                "rows": [],
+            }
+
+        expected_columns = len(headers)
+        rows = []
+
+        for row in reader:
+            if len(row) > expected_columns:
+                row = row[:expected_columns]
+            elif len(row) < expected_columns:
+                row = row + [""] * (
+                    expected_columns - len(row)
+                )
+
+            rows.append(row)
+
+    return {
+        "headers": headers,
+        "rows": rows,
+    }
+
+
+class CSVRepairTool:
     def __init__(self):
         self.headers = []
         self.rows = []
@@ -22,9 +75,7 @@ class CSVRepairTool:
                 copy.deepcopy(self.rows),
                 copy.deepcopy(self.row_ids),
                 copy.deepcopy(self.issues),
-                copy.deepcopy(
-                    self.created_records
-                ),
+                copy.deepcopy(self.created_records),
             )
         )
 
@@ -48,7 +99,6 @@ class CSVRepairTool:
             errors="replace",
             newline="",
         ) as file:
-
             reader = csv.reader(file)
 
             try:
@@ -66,10 +116,7 @@ class CSVRepairTool:
 
         return self._get_payload()
 
-    def join_shifted_rows(
-        self,
-        issue_index,
-    ):
+    def join_shifted_rows(self, issue_index):
         self._save_state()
 
         issue = next(
@@ -87,8 +134,7 @@ class CSVRepairTool:
         row_index = issue["row"] - 1
 
         if not (
-            0 <= row_index
-            < len(self.rows) - 1
+            0 <= row_index < len(self.rows) - 1
         ):
             return self._get_payload()
 
@@ -148,15 +194,11 @@ class CSVRepairTool:
 
         value = row[col_index]
 
-        # Remove the source value first.
         del row[col_index]
 
-        # Removing a source before the target
-        # shifts the target one position left.
         if col_index < target_index:
             target_index -= 1
 
-        # Make sure the target exists.
         if target_index >= len(row):
             row.extend(
                 [""] * (
@@ -166,8 +208,6 @@ class CSVRepairTool:
                 )
             )
 
-        # Insert the mapped value at the
-        # authoritative target position.
         row.insert(
             target_index,
             value,
@@ -201,8 +241,7 @@ class CSVRepairTool:
         self.issues = [
             issue
             for issue in self.issues
-            if issue["index"]
-            != issue_index
+            if issue["index"] != issue_index
         ]
 
         return self._get_payload()
@@ -252,14 +291,11 @@ class CSVRepairTool:
 
         if isinstance(mapping, dict):
             for target_column, value in mapping.items():
-
                 if target_column not in self.headers:
                     continue
 
-                target_index = (
-                    self.headers.index(
-                        target_column
-                    )
+                target_index = self.headers.index(
+                    target_column
                 )
 
                 new_row[target_index] = (
@@ -267,7 +303,6 @@ class CSVRepairTool:
                     if value is None
                     else str(value)
                 )
-
         else:
             mapping = {}
 
@@ -307,15 +342,17 @@ class CSVRepairTool:
 
         self._recalculate_issues()
 
-        self.issues.append({
-            "index": record_id,
-            "row": insert_index + 1,
-            "type": "Created Record",
-            "message": (
-                f"Created new record "
-                f"(ID: {record_id})"
-            ),
-        })
+        self.issues.append(
+            {
+                "index": record_id,
+                "row": insert_index + 1,
+                "type": "Created Record",
+                "message": (
+                    f"Created new record "
+                    f"(ID: {record_id})"
+                ),
+            }
+        )
 
         return self._get_payload()
 
@@ -361,8 +398,7 @@ class CSVRepairTool:
         self.issues = [
             issue
             for issue in self.issues
-            if issue.get("index")
-            != record_id
+            if issue.get("index") != record_id
         ]
 
         self._recalculate_issues()
@@ -394,7 +430,6 @@ class CSVRepairTool:
             newline="",
             encoding="utf-8",
         ) as file:
-
             writer = csv.writer(file)
 
             writer.writerow(
@@ -429,7 +464,6 @@ class CSVRepairTool:
             return
 
         expected = len(self.headers)
-
         row = self.rows[row_index]
 
         if len(row) > expected:
@@ -462,18 +496,19 @@ class CSVRepairTool:
         for index, row in enumerate(
             self.rows
         ):
-
             if len(row) != expected:
-                self.issues.append({
-                    "index": len(self.issues),
-                    "row": index + 1,
-                    "type": "Structural Mismatch",
-                    "message": (
-                        f"Expected {expected} "
-                        f"columns, found "
-                        f"{len(row)}."
-                    ),
-                })
+                self.issues.append(
+                    {
+                        "index": len(self.issues),
+                        "row": index + 1,
+                        "type": "Structural Mismatch",
+                        "message": (
+                            f"Expected {expected} "
+                            f"columns, found "
+                            f"{len(row)}."
+                        ),
+                    }
+                )
 
         for created_issue in created:
             record_id = created_issue.get(
