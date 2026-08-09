@@ -1040,6 +1040,11 @@ Item {
                                         required property var modelData
                                         required property int index
 
+                                        readonly property var rowData:
+                                            modelData
+                                        readonly property int rowIndex:
+                                            index
+
                                         height:
                                             42
 
@@ -1062,15 +1067,9 @@ Item {
                                                         42
 
                                                     color:
-                                                        modelData === ""
+                                                        parent.rowIndex % 2 === 0
                                                             ? Theme.background
-                                                            : (
-                                                                parent &&
-                                                                parent.parent &&
-                                                                parent.parent.index % 2 === 0
-                                                                    ? Theme.background
-                                                                    : Theme.surface
-                                                              )
+                                                            : Theme.surface
 
                                                     border.color:
                                                         Theme.border
@@ -1081,7 +1080,7 @@ Item {
 
                                                         text:
                                                             root.cellValue(
-                                                                modelData,
+                                                                parent.rowData,
                                                                 index
                                                             )
 
@@ -1116,7 +1115,7 @@ Item {
 
                                                         onEditingFinished: {
                                                             root.setCell(
-                                                                parent.parent.parent.index,
+                                                                parent.rowIndex,
                                                                 index,
                                                                 text
                                                             )

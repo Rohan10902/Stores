@@ -69,6 +69,30 @@ Item {
         )
     }
 
+    function cellValue(row, columnIndex) {
+        if (row === null || row === undefined)
+            return ""
+
+        if (Array.isArray(row)) {
+            if (columnIndex < row.length &&
+                    row[columnIndex] !== null &&
+                    row[columnIndex] !== undefined) {
+                return String(row[columnIndex])
+            }
+            return ""
+        }
+
+        if (typeof row === "object") {
+            var column = root.previewColumns[columnIndex]
+            var value = row[column]
+            return value === null || value === undefined
+                    ? ""
+                    : String(value)
+        }
+
+        return ""
+    }
+
     // =========================================================
     // FILE DIALOGS
     // =========================================================
@@ -962,29 +986,11 @@ Item {
                                                             anchors.rightMargin:
                                                                 Theme.spacingSmall
 
-                                                            text: {
-                                                                var row =
-                                                                    modelData
-
-                                                                if (row === null ||
-                                                                        row === undefined) {
-                                                                    return ""
-                                                                }
-
-                                                                if (Array.isArray(row)) {
-                                                                    return ""
-                                                                }
-
-                                                                return String(
-                                                                    row[
-                                                                        parent
-                                                                            .parent
-                                                                            .modelData
-                                                                            ? modelData
-                                                                            : ""
-                                                                    ] || ""
+                                                            text:
+                                                                root.cellValue(
+                                                                    parent.parent.modelData,
+                                                                    index
                                                                 )
-                                                            }
 
                                                             color:
                                                                 Theme.textPrimary

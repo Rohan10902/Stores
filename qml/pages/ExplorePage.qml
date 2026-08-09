@@ -935,6 +935,11 @@ Item {
                                         required property var modelData
                                         required property int index
 
+                                        readonly property var rowData:
+                                            modelData
+                                        readonly property int rowIndex:
+                                            index
+
                                         width:
                                             tableColumn.width
 
@@ -960,9 +965,7 @@ Item {
                                                         40
 
                                                     color:
-                                                        parent &&
-                                                        parent.parent &&
-                                                        parent.parent.index % 2 === 0
+                                                        parent.rowIndex % 2 === 0
                                                             ? Theme.background
                                                             : Theme.surface
 
@@ -981,7 +984,7 @@ Item {
 
                                                         text:
                                                             root.rowValue(
-                                                                parent.parent.modelData,
+                                                                parent.rowData,
                                                                 modelData
                                                             )
 

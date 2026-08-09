@@ -1,8 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import "../qml/components"
-import "../qml/theme"
+import "./components"
+import "./theme"
 
 ApplicationWindow {
     id: root
@@ -333,7 +333,7 @@ ApplicationWindow {
                     // =============================================
 
                     Loader {
-                        active: true
+                        active: root.currentPage === 0
                         source: "pages/HomePage.qml"
 
                         onLoaded: {
@@ -350,7 +350,7 @@ ApplicationWindow {
                     // =============================================
 
                     Loader {
-                        active: true
+                        active: root.currentPage === 1
                         source: "pages/ComparePage.qml"
                     }
 
@@ -359,7 +359,7 @@ ApplicationWindow {
                     // =============================================
 
                     Loader {
-                        active: true
+                        active: root.currentPage === 2
                         source: "pages/RepairPage.qml"
                     }
 
@@ -368,7 +368,7 @@ ApplicationWindow {
                     // =============================================
 
                     Loader {
-                        active: true
+                        active: root.currentPage === 3
                         source: "pages/SingleReviewPage.qml"
                     }
 
@@ -377,7 +377,7 @@ ApplicationWindow {
                     // =============================================
 
                     Loader {
-                        active: true
+                        active: root.currentPage === 4
                         source: "pages/CreateStorePage.qml"
                     }
 
@@ -386,7 +386,7 @@ ApplicationWindow {
                     // =============================================
 
                     Loader {
-                        active: true
+                        active: root.currentPage === 5
                         source: "pages/ExplorePage.qml"
                     }
 
@@ -395,7 +395,7 @@ ApplicationWindow {
                     // =============================================
 
                     Loader {
-                        active: true
+                        active: root.currentPage === 6
                         source: "pages/HealthPage.qml"
                     }
                 }

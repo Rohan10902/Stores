@@ -1047,6 +1047,18 @@ Item {
                             }
 
                             AppButton {
+                                text: "Map Column"
+
+                                enabled:
+                                    root.selectedIssue >= 0 &&
+                                    root.selectedSourceColumn >= 0 &&
+                                    root.headers.length > 0
+
+                                onClicked:
+                                    columnMappingDialog.open()
+                            }
+
+                            AppButton {
                                 text: "Create Record"
 
                                 enabled:
@@ -1054,6 +1066,29 @@ Item {
 
                                 onClicked:
                                     mappingDialog.open()
+                            }
+
+                            AppButton {
+                                text: "Delete Record"
+
+                                visible:
+                                    root.selectedType === "Created Record"
+
+                                enabled:
+                                    visible &&
+                                    root.selectedIssue >= 0
+
+                                onClicked: {
+                                    var issue =
+                                        root.selectedIssueObject()
+
+                                    if (issue &&
+                                            root.backendAvailable()) {
+                                        backend.repair.delete_repair_record(
+                                            String(issue.index || "")
+                                        )
+                                    }
+                                }
                             }
 
                             Item {
@@ -1223,6 +1258,123 @@ Item {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================
+    // COLUMN MAPPING DIALOG
+    // =========================================================
+
+    Dialog {
+        id: columnMappingDialog
+
+        title: "Map Repair Column"
+
+        modal: true
+
+        width: 500
+        height: 310
+
+        anchors.centerIn: parent
+
+        background: Rectangle {
+            color: Theme.surface
+            border.color: Theme.border
+            radius: Theme.radiusMedium
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Theme.spacingLarge
+            spacing: Theme.spacingMedium
+
+            Text {
+                text: "Move the selected source value into the target column."
+                color: Theme.textPrimary
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text:
+                    root.selectedSourceColumn >= 0 &&
+                    root.selectedSourceColumn < root.headers.length
+                        ? "Source: " + root.headers[root.selectedSourceColumn]
+                        : "Select a source column first."
+                color: Theme.textSecondary
+                font.pixelSize: 11
+                Layout.fillWidth: true
+            }
+
+            ComboBox {
+                id: targetColumnCombo
+
+                Layout.fillWidth: true
+
+                model: root.headers
+
+                currentIndex:
+                    root.selectedTargetColumn !== ""
+                        ? Math.max(0, root.headers.indexOf(root.selectedTargetColumn))
+                        : 0
+
+                background: Rectangle {
+                    color: Theme.background
+                    border.color: Theme.border
+                    radius: Theme.radiusMedium
+                }
+            }
+
+            CheckBox {
+                id: rememberMapping
+
+                text: "Remember this mapping"
+
+                checked: false
+
+                contentItem: Text {
+                    text: parent.text
+                    color: Theme.textPrimary
+                    verticalAlignment: Text.AlignVCenter
+                    leftPadding: parent.indicator.width + Theme.spacingSmall
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+
+                Item { Layout.fillWidth: true }
+
+                AppButton {
+                    text: "Cancel"
+                    onClicked: columnMappingDialog.close()
+                }
+
+                PrimaryButton {
+                    text: "Apply Mapping"
+
+                    enabled:
+                        root.selectedIssue >= 0 &&
+                        root.selectedSourceColumn >= 0 &&
+                        targetColumnCombo.currentIndex >= 0
+
+                    onClicked: {
+                        var issue = root.selectedIssueObject()
+
+                        if (issue && root.backendAvailable()) {
+                            backend.repair.apply_repair_mapping(
+                                Number(issue.index || 0),
+                                root.selectedSourceColumn,
+                                String(targetColumnCombo.currentText || ""),
+                                rememberMapping.checked
+                            )
+                        }
+
+                        rememberMapping.checked = false
+                        columnMappingDialog.close()
                     }
                 }
             }
