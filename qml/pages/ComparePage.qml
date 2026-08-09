@@ -375,6 +375,8 @@ Item {
 
         clip: true
 
+        contentWidth: availableWidth
+
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
         ColumnLayout {

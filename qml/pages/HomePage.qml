@@ -13,6 +13,8 @@ Item {
         anchors.fill: parent
         clip: true
 
+        contentWidth: availableWidth
+
         ColumnLayout {
             width: scrollView.availableWidth
             spacing: Theme.spacingLarge

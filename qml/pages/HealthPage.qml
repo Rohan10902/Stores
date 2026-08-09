@@ -227,9 +227,13 @@ Item {
     }
 
     ScrollView {
+        id: scrollView
+
         anchors.fill: parent
 
         clip: true
+
+        contentWidth: availableWidth
 
         ScrollBar.vertical.policy:
             ScrollBar.AsNeeded
@@ -238,7 +242,7 @@ Item {
             id: page
 
             width:
-                parent.width
+                scrollView.availableWidth
 
             spacing:
                 Theme.spacingLarge
