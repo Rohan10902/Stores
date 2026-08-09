@@ -127,6 +127,7 @@ Item {
                                     width: 150; height: 30; color: Theme.background; border.color: Theme.border; border.width: 1
                                     Text { 
                                         anchors.fill: parent; anchors.margins: 4
+                                        // Safely handles native row array fallback or python dict mapping
                                         text: {
                                             if (rowData === undefined || rowData === null) return "";
                                             var val = rowData[colName];
