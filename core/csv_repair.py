@@ -1,216 +1,512 @@
-import csv
 import copy
-import os
+import csv
 import json
+import os
+import uuid
+
 
 class CSVRepairTool:
+
     def __init__(self):
         self.headers = []
         self.rows = []
+        self.row_ids = []
         self.issues = []
         self.history = []
         self.created_records = {}
         self.record_counter = 10000
 
     def _save_state(self):
-        # Deepcopy the arrays and mapping to history for accurate undo
-        self.history.append((copy.deepcopy(self.rows), copy.deepcopy(self.issues), copy.deepcopy(self.created_records)))
+        self.history.append(
+            (
+                copy.deepcopy(self.rows),
+                copy.deepcopy(self.row_ids),
+                copy.deepcopy(self.issues),
+                copy.deepcopy(
+                    self.created_records
+                ),
+            )
+        )
 
     def inspect_csv(self, path):
         self.headers = []
         self.rows = []
+        self.row_ids = []
         self.issues = []
         self.history = []
         self.created_records = {}
-        
+
         if not os.path.exists(path):
-            return self._get_payload()
-            
-        with open(path, 'r', encoding='utf-8', errors='replace') as f:
-            reader = csv.reader(f)
+            raise FileNotFoundError(
+                f"File not found: {path}"
+            )
+
+        with open(
+            path,
+            "r",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as file:
+
+            reader = csv.reader(file)
+
             try:
                 self.headers = next(reader)
             except StopIteration:
                 return self._get_payload()
-            
+
             for row in reader:
                 self.rows.append(row)
-                
+                self.row_ids.append(
+                    str(uuid.uuid4())
+                )
+
         self._recalculate_issues()
+
         return self._get_payload()
 
-    def join_shifted_rows(self, issue_index):
+    def join_shifted_rows(
+        self,
+        issue_index,
+    ):
         self._save_state()
-        issue = next((i for i in self.issues if i['index'] == issue_index), None)
-        if issue:
-            r_idx = issue['row'] - 1
-            if 0 <= r_idx < len(self.rows) - 1:
-                # Real mutation: concatenate list values and delete the consumed next row
-                self.rows[r_idx] = self.rows[r_idx] + self.rows[r_idx+1]
-                del self.rows[r_idx+1]
-                self._recalculate_issues()
-        return self._get_payload()
 
-    def apply_mapping(self, issue_index, col_index, target, remember):
-        self._save_state()
-        issue = next((i for i in self.issues if i['index'] == issue_index), None)
-        if issue:
-            r_idx = issue['row'] - 1
-            row = self.rows[r_idx]
-            
-            # Real mutation: Remap a value from col_index to the target header index
-            if target in self.headers and 0 <= col_index < len(row):
-                t_idx = self.headers.index(target)
-                val = row[col_index]
-                
-                if t_idx >= len(row):
-                    row.extend([''] * (t_idx - len(row) + 1))
-                row[t_idx] = val
-                
-                # Strip the extra column if it sat outside the header bounds
-                if col_index >= len(self.headers):
-                    del row[col_index]
+        issue = next(
+            (
+                item
+                for item in self.issues
+                if item["index"] == issue_index
+            ),
+            None,
+        )
 
-            self._resolve_by_padding(issue_index)
-        return self._get_payload()
-
-    def keep_unresolved(self, issue_index, col_index):
-        self._save_state()
-        self._resolve_by_padding(issue_index)
-        return self._get_payload()
-
-    def keep_issue_as_is(self, issue_index):
-        self._save_state()
-        # Real mutation: explicitly drop the issue from active list without mutating row
-        self.issues = [i for i in self.issues if i['index'] != issue_index]
-        return self._get_payload()
-
-    def create_record_from_extras(self, issue_index, mapping_json):
-        self._save_state()
-        issue = next((i for i in self.issues if i['index'] == issue_index), None)
-        if issue:
-            r_idx = issue['row'] - 1
-            row = self.rows[r_idx]
-            expected_len = len(self.headers)
-            
-            try:
-                mapping = json.loads(mapping_json)
-            except Exception:
-                mapping = {}
-            
-            new_row = [''] * expected_len
-            
-            # Real mutation: extract defined map or grab all trailing extras
-            if mapping:
-                for target_col, src_val in mapping.items():
-                    if target_col in self.headers:
-                        new_row[self.headers.index(target_col)] = str(src_val)
-            elif len(row) > expected_len:
-                extras = row[expected_len:]
-                new_row = extras + [''] * max(0, expected_len - len(extras))
-                new_row = new_row[:expected_len]
-
-            # Track deterministic ID for deletion mapping
-            record_id = self.record_counter
-            self.record_counter += 1
-            self.created_records[record_id] = new_row
-            
-            # Splice into dataset
-            self.rows.insert(r_idx + 1, new_row)
-            if len(self.rows[r_idx]) > expected_len:
-                self.rows[r_idx] = self.rows[r_idx][:expected_len]
-                
-            self._recalculate_issues()
-            
-            # Append deterministic pseudo-issue to represent the creation
-            self.issues.append({
-                "index": record_id,
-                "row": r_idx + 2,
-                "type": "Created Record",
-                "message": f"Created new record (ID: {record_id})"
-            })
-            
-        return self._get_payload()
-
-    def delete_created_record(self, record_id):
-        self._save_state()
-        try:
-            r_id = int(record_id)
-        except ValueError:
+        if issue is None:
             return self._get_payload()
-            
-        target_row = self.created_records.get(r_id)
-        if target_row:
-            # Deterministic deletion by object identity mapping
-            for idx, r in enumerate(self.rows):
-                if r is target_row:
-                    del self.rows[idx]
-                    break
-            del self.created_records[r_id]
-            self.issues = [i for i in self.issues if i.get('index') != r_id]
-            self._recalculate_issues()
-            
+
+        row_index = issue["row"] - 1
+
+        if not (
+            0 <= row_index
+            < len(self.rows) - 1
+        ):
+            return self._get_payload()
+
+        self.rows[row_index] = (
+            self.rows[row_index]
+            + self.rows[row_index + 1]
+        )
+
+        del self.rows[row_index + 1]
+        del self.row_ids[row_index + 1]
+
+        self._recalculate_issues()
+
+        return self._get_payload()
+
+    def apply_mapping(
+        self,
+        issue_index,
+        col_index,
+        target,
+        remember,
+    ):
+        self._save_state()
+
+        issue = next(
+            (
+                item
+                for item in self.issues
+                if item["index"] == issue_index
+            ),
+            None,
+        )
+
+        if issue is None:
+            return self._get_payload()
+
+        row_index = issue["row"] - 1
+
+        if not (
+            0 <= row_index < len(self.rows)
+        ):
+            return self._get_payload()
+
+        row = self.rows[row_index]
+
+        if not (
+            0 <= col_index < len(row)
+        ):
+            return self._get_payload()
+
+        if target not in self.headers:
+            return self._get_payload()
+
+        target_index = self.headers.index(
+            target
+        )
+
+        value = row[col_index]
+
+        # Remove the source value first.
+        del row[col_index]
+
+        # Removing a source before the target
+        # shifts the target one position left.
+        if col_index < target_index:
+            target_index -= 1
+
+        # Make sure the target exists.
+        if target_index >= len(row):
+            row.extend(
+                [""] * (
+                    target_index
+                    - len(row)
+                    + 1
+                )
+            )
+
+        # Insert the mapped value at the
+        # authoritative target position.
+        row.insert(
+            target_index,
+            value,
+        )
+
+        self._resolve_by_padding(
+            issue_index
+        )
+
+        return self._get_payload()
+
+    def keep_unresolved(
+        self,
+        issue_index,
+        col_index,
+    ):
+        self._save_state()
+
+        self._resolve_by_padding(
+            issue_index
+        )
+
+        return self._get_payload()
+
+    def keep_issue_as_is(
+        self,
+        issue_index,
+    ):
+        self._save_state()
+
+        self.issues = [
+            issue
+            for issue in self.issues
+            if issue["index"]
+            != issue_index
+        ]
+
+        return self._get_payload()
+
+    def create_record_from_extras(
+        self,
+        issue_index,
+        mapping_json,
+    ):
+        self._save_state()
+
+        issue = next(
+            (
+                item
+                for item in self.issues
+                if item["index"] == issue_index
+            ),
+            None,
+        )
+
+        if issue is None:
+            return self._get_payload()
+
+        row_index = issue["row"] - 1
+
+        if not (
+            0 <= row_index < len(self.rows)
+        ):
+            return self._get_payload()
+
+        try:
+            mapping = json.loads(
+                mapping_json or "{}"
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
+            mapping = {}
+
+        expected = len(self.headers)
+
+        new_row = [
+            ""
+            for _ in range(expected)
+        ]
+
+        if isinstance(mapping, dict):
+            for target_column, value in mapping.items():
+
+                if target_column not in self.headers:
+                    continue
+
+                target_index = (
+                    self.headers.index(
+                        target_column
+                    )
+                )
+
+                new_row[target_index] = (
+                    ""
+                    if value is None
+                    else str(value)
+                )
+
+        else:
+            mapping = {}
+
+        if not mapping:
+            source = self.rows[row_index]
+
+            if len(source) > expected:
+                extras = source[expected:]
+
+                for index, value in enumerate(
+                    extras[:expected]
+                ):
+                    new_row[index] = value
+
+        record_id = self.record_counter
+        self.record_counter += 1
+
+        record_uuid = str(
+            uuid.uuid4()
+        )
+
+        self.created_records[
+            record_id
+        ] = record_uuid
+
+        insert_index = row_index + 1
+
+        self.rows.insert(
+            insert_index,
+            new_row,
+        )
+
+        self.row_ids.insert(
+            insert_index,
+            record_uuid,
+        )
+
+        self._recalculate_issues()
+
+        self.issues.append({
+            "index": record_id,
+            "row": insert_index + 1,
+            "type": "Created Record",
+            "message": (
+                f"Created new record "
+                f"(ID: {record_id})"
+            ),
+        })
+
+        return self._get_payload()
+
+    def delete_created_record(
+        self,
+        record_id,
+    ):
+        self._save_state()
+
+        try:
+            record_id = int(record_id)
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return self._get_payload()
+
+        record_uuid = (
+            self.created_records.get(
+                record_id
+            )
+        )
+
+        if not record_uuid:
+            return self._get_payload()
+
+        if record_uuid not in self.row_ids:
+            return self._get_payload()
+
+        row_index = (
+            self.row_ids.index(
+                record_uuid
+            )
+        )
+
+        del self.rows[row_index]
+        del self.row_ids[row_index]
+
+        del self.created_records[
+            record_id
+        ]
+
+        self.issues = [
+            issue
+            for issue in self.issues
+            if issue.get("index")
+            != record_id
+        ]
+
+        self._recalculate_issues()
+
         return self._get_payload()
 
     def undo_action(self):
-        if self.history:
-            # Real mutation: Restore exactly to previous arrays and mappings
-            self.rows, self.issues, self.created_records = self.history.pop()
+        if not self.history:
+            return self._get_payload()
+
+        (
+            self.rows,
+            self.row_ids,
+            self.issues,
+            self.created_records,
+        ) = self.history.pop()
+
         return self._get_payload()
 
     def export_csv(self, dst):
-        # Writes CURRENT mutated rows
-        with open(dst, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(self.headers)
-            writer.writerows(self.rows)
+        if not dst:
+            raise ValueError(
+                "Destination path cannot be empty."
+            )
 
-    def _resolve_by_padding(self, issue_index):
-        issue = next((i for i in self.issues if i['index'] == issue_index), None)
-        if issue:
-            r_idx = issue['row'] - 1
-            row = self.rows[r_idx]
-            expected_len = len(self.headers)
-            
-            # Base structural mutation: pad or truncate row length
-            if len(row) > expected_len:
-                self.rows[r_idx] = row[:expected_len]
-            elif len(row) < expected_len:
-                self.rows[r_idx] = row + [''] * (expected_len - len(row))
-            self._recalculate_issues()
+        with open(
+            dst,
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as file:
+
+            writer = csv.writer(file)
+
+            writer.writerow(
+                self.headers
+            )
+
+            writer.writerows(
+                self.rows
+            )
+
+    def _resolve_by_padding(
+        self,
+        issue_index,
+    ):
+        issue = next(
+            (
+                item
+                for item in self.issues
+                if item["index"] == issue_index
+            ),
+            None,
+        )
+
+        if issue is None:
+            return
+
+        row_index = issue["row"] - 1
+
+        if not (
+            0 <= row_index < len(self.rows)
+        ):
+            return
+
+        expected = len(self.headers)
+
+        row = self.rows[row_index]
+
+        if len(row) > expected:
+            self.rows[row_index] = (
+                row[:expected]
+            )
+
+        elif len(row) < expected:
+            self.rows[row_index] = (
+                row
+                + [""] * (
+                    expected - len(row)
+                )
+            )
+
+        self._recalculate_issues()
 
     def _recalculate_issues(self):
-        # Retain mapped created records explicitly outside of recalculation
-        created_issues = [i for i in self.issues if i['type'] == 'Created Record']
+        created = [
+            copy.deepcopy(issue)
+            for issue in self.issues
+            if issue.get("type")
+            == "Created Record"
+        ]
+
         self.issues = []
-        expected_len = len(self.headers)
-        
-        for i, row in enumerate(self.rows):
-            if len(row) != expected_len:
+
+        expected = len(self.headers)
+
+        for index, row in enumerate(
+            self.rows
+        ):
+
+            if len(row) != expected:
                 self.issues.append({
-                    'index': len(self.issues),
-                    'row': i + 1,
-                    'type': 'Structural Mismatch',
-                    'message': f'Expected {expected_len} columns, found {len(row)}.'
+                    "index": len(self.issues),
+                    "row": index + 1,
+                    "type": "Structural Mismatch",
+                    "message": (
+                        f"Expected {expected} "
+                        f"columns, found "
+                        f"{len(row)}."
+                    ),
                 })
-                
-        # Offset normal issues to avoid collision with record_counter
-        for i, iss in enumerate(self.issues):
-            iss['index'] = i
-            
-        for cr in created_issues:
-            target_row = self.created_records.get(cr['index'])
-            if target_row:
-                for idx, r in enumerate(self.rows):
-                    if r is target_row:
-                        cr['row'] = idx + 1
-                        self.issues.append(cr)
-                        break
+
+        for created_issue in created:
+            record_id = created_issue.get(
+                "index"
+            )
+
+            record_uuid = (
+                self.created_records.get(
+                    record_id
+                )
+            )
+
+            if (
+                record_uuid
+                and record_uuid in self.row_ids
+            ):
+                created_issue["row"] = (
+                    self.row_ids.index(
+                        record_uuid
+                    )
+                    + 1
+                )
+
+                self.issues.append(
+                    created_issue
+                )
 
     def _get_payload(self):
         return {
             "headers": self.headers,
             "rows": self.rows,
             "issues": self.issues,
-            "history": len(self.history)
+            "history": len(
+                self.history
+            ),
         }
