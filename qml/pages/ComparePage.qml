@@ -33,7 +33,7 @@ Item {
     function urlToPath(urlStr) {
         var path = urlStr.toString();
         path = path.replace(/^(file:\/{2,3})/, "");
-        if (Qt.platform.os === "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
+        if (Qt.platform.os !== "windows" && path.charAt(0) === '/' && path.charAt(2) === ':') {
             path = path.substring(1);
         }
         return decodeURIComponent(path);
