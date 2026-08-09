@@ -13,8 +13,11 @@ class CreatorController(QObject):
     creatorReady = Signal(str)  
     creatorExported = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, async_runner, notify, say, parent=None):
         super().__init__(parent)
+        self.async_runner = async_runner
+        self.notify = notify
+        self.say = say
         self.current_headers = []
         self.current_rows = []
 
@@ -63,5 +66,5 @@ class CreatorController(QObject):
             writer.writerows(rows)
         
         self.creatorExported.emit()
-        if self.parent() and hasattr(self.parent(), 'notifySignal'):
-            self.parent().notifySignal.emit("Success", "Store records exported successfully.", "success")
+        if self.notify:
+            self.notify("Success", "Store records exported successfully.", "success")
