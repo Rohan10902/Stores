@@ -56,10 +56,6 @@ class MainBackendController(QObject):
             self.notifySignal.emit(title, msg, "error")
         )
 
-        # ---------------------------------------------------------
-        # Feature controllers
-        # ---------------------------------------------------------
-
         self.validate = ValidateController(
             self.async_runner,
             self.notify,
