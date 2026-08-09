@@ -135,6 +135,7 @@ Item {
                                         border.color: Theme.border
                                         Text { 
                                             anchors.fill: parent; anchors.margins: 4
+                                            // Secure fallback handling array row format AND dict row format natively
                                             text: {
                                                 if (rowData === undefined || rowData === null) return "";
                                                 var val = rowData[colName];
