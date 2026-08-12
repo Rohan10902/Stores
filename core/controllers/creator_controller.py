@@ -27,11 +27,11 @@ class CreatorController(QObject):
 
     @Slot(str)
     def load_creator_file(self, path):
-        self.current_headers = []
-        self.current_rows = []
+        local_path = _to_local_file(path)
 
-        try:
-            local_path = _to_local_file(path)
+        def task():
+            headers = []
+            rows = []
 
             with open(
                 local_path,
@@ -42,12 +42,16 @@ class CreatorController(QObject):
             ) as file:
                 reader = csv.reader(file)
                 try:
-                    self.current_headers = next(reader)
+                    headers = next(reader)
                 except StopIteration:
-                    self.current_headers = []
-                    self.current_rows = []
-                else:
-                    self.current_rows = list(reader)
+                    return headers, rows
+
+                rows = list(reader)
+
+            return headers, rows
+
+        def success(result):
+            self.current_headers, self.current_rows = result
 
             self.creatorLoaded.emit(
                 json.dumps({
@@ -63,7 +67,10 @@ class CreatorController(QObject):
                     "success",
                 )
 
-        except Exception as exc:
+        def error(exc):
+            self.current_headers = []
+            self.current_rows = []
+
             if self.notify:
                 self.notify(
                     "Load Failed",
@@ -78,9 +85,11 @@ class CreatorController(QObject):
                 })
             )
 
+        self.async_runner.run(task, success, error)
+
     @Slot(str)
     def validate_creator(self, rows_json):
-        try:
+        def task():
             rows = json.loads(rows_json or "[]")
 
             if not isinstance(rows, list):
@@ -111,14 +120,19 @@ class CreatorController(QObject):
                         "severity": "ERROR",
                     })
 
+            return len(rows), findings
+
+        def success(result):
+            count, findings = result
+
             self.creatorReady.emit(
                 json.dumps({
-                    "count": len(rows),
+                    "count": count,
                     "findings": findings,
                 })
             )
 
-        except Exception as exc:
+        def error(exc):
             if self.notify:
                 self.notify(
                     "Validation Error",
@@ -136,18 +150,25 @@ class CreatorController(QObject):
                 })
             )
 
+        self.async_runner.run(task, success, error)
+
     @Slot(str, str)
     def export_creator_file(self, rows_json, dst):
-        try:
-            rows = json.loads(rows_json or "[]")
+        rows = json.loads(rows_json or "[]")
 
-            if not isinstance(rows, list):
-                raise ValueError(
-                    "Creator rows must be a JSON array."
+        if not isinstance(rows, list):
+            if self.notify:
+                self.notify(
+                    "Export Error",
+                    "Creator rows must be a JSON array.",
+                    "error",
                 )
+            return
 
-            local_dst = _to_local_file(dst)
+        local_dst = _to_local_file(dst)
+        headers = list(self.current_headers)
 
+        def task():
             with open(
                 local_dst,
                 "w",
@@ -155,9 +176,10 @@ class CreatorController(QObject):
                 encoding="utf-8",
             ) as file:
                 writer = csv.writer(file)
-                writer.writerow(self.current_headers)
+                writer.writerow(headers)
                 writer.writerows(rows)
 
+        def success(_result):
             self.creatorExported.emit()
 
             if self.notify:
@@ -167,10 +189,12 @@ class CreatorController(QObject):
                     "success",
                 )
 
-        except Exception as exc:
+        def error(exc):
             if self.notify:
                 self.notify(
                     "Export Error",
                     str(exc),
                     "error",
                 )
+
+        self.async_runner.run(task, success, error)
