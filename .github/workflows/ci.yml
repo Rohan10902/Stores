@@ -34,9 +34,9 @@ jobs:
         run: |
           python -m pytest tests/test_durability.py -v --tb=short
 
-      - name: Run Performance Benchmarks
+      - name: Run CSV Performance Benchmarks
         run: |
-          python -m pytest tests/test_durability.py --benchmark-enable --benchmark-save=ci-benchmarks
+          python -m pytest tests/test_performance.py --benchmark-enable --benchmark-save=ci-benchmarks
 
       - name: Run Automated Startup Integration Test
         env:
