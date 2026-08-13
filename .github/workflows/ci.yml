@@ -46,7 +46,19 @@ jobs:
           if ($failed) { throw "QML lint failed." }
 
       - name: Execute Full Test Suite
-        run: python -m pytest tests/ -v --tb=short
+        shell: pwsh
+        run: |
+          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml 2>&1 | Tee-Object -FilePath pytest-output.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Test Diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: StoreLens-Test-Diagnostics
+          path: |
+            pytest-output.txt
+            test-results.xml
 
       - name: Application Startup Smoke Test
         shell: pwsh
