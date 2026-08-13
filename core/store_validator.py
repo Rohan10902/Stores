@@ -3,32 +3,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import os
 
 import pandas as pd
 
-from .common import MATCH_FIELDS, STORE_FIELDS, canonicalize_columns, clean_value, norm_value
+from .common import MATCH_FIELDS, STORE_FIELDS, canonicalize_columns, clean_value, norm_value, read_table
 
 
 def _load_table(path: str) -> pd.DataFrame:
     if not path:
         raise ValueError("File path cannot be empty.")
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"File not found: {path}")
-    ext = os.path.splitext(path)[1].lower()
-    if ext == ".csv":
-        frame = pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False, on_bad_lines="error")
-    elif ext in (".tsv", ".txt"):
-        frame = pd.read_csv(path, sep="\t", encoding="utf-8-sig", dtype=str, keep_default_na=False, on_bad_lines="error")
-    elif ext in (".xls", ".xlsx", ".xlsm"):
-        frame = pd.read_excel(path, dtype=str).fillna("")
-    elif ext == ".json":
-        frame = pd.read_json(path).fillna("")
-    elif ext == ".xml":
-        frame = pd.read_xml(path).fillna("")
-    else:
-        raise ValueError(f"Unsupported file format: {ext}")
-    return canonicalize_columns(frame.fillna(""))
+    dataframe = read_table(path)
+    return canonicalize_columns(dataframe.fillna("").astype(str))
 
 
 def _get(row, mapping, field):
@@ -67,14 +52,11 @@ def suggest_keys(master, uploaded):
     for fields in candidates:
         if unique(master, fields) and unique(uploaded, fields):
             return fields
-    # A non-unique identity is still useful for diagnosis, but comparison will
-    # explicitly report ambiguity instead of selecting the first record.
     return candidates[-1]
 
 
 def _comparison_fields(master, uploaded):
     fields = [field for field in STORE_FIELDS if field in master.columns or field in uploaded.columns]
-    # Keep common legacy comparison fields visible where present.
     for field in ("Email", "Status"):
         if field in master.columns or field in uploaded.columns:
             fields.append(field)
