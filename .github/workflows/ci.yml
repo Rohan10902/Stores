@@ -52,7 +52,7 @@ jobs:
         shell: pwsh
         env:
           STORELENS_CI_STARTUP_TEST: "1"
-          STORELENS_STARTUP_MARKER: "${{ github.workspace }}\startup-smoke.marker"
+          STORELENS_STARTUP_MARKER: "${{ github.workspace }}/startup-smoke.marker"
           QT_QPA_PLATFORM: "offscreen"
         run: |
           Remove-Item startup-smoke.marker -ErrorAction SilentlyContinue
