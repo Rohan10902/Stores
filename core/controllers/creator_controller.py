@@ -5,7 +5,7 @@ import tempfile
 
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
 
-from ..common import STORE_FIELDS, clean_value
+from ..common import STORE_FIELDS, clean_value, read_table
 from ..file_creator import creator_validate, export_creator
 
 
@@ -59,26 +59,32 @@ class CreatorController(QObject):
         local_path = _to_local_file(path)
 
         def task():
-            with open(local_path, "r", encoding="utf-8-sig", newline="") as file:
-                reader = csv.reader(file)
-                try:
-                    headers = next(reader)
-                except StopIteration:
-                    return [], []
-                return headers, list(reader)
+            frame = read_table(local_path)
+            headers = [str(column) for column in frame.columns]
+            rows = frame.fillna("").astype(str).values.tolist()
+            return headers, rows
 
         def success(result):
             self.current_headers, self.current_rows = result
-            self.creatorLoaded.emit(json.dumps({"headers": self.current_headers, "rows": self.current_rows}))
+            self.creatorLoaded.emit(json.dumps({
+                "headers": self.current_headers,
+                "rows": self.current_rows,
+                "total": len(self.current_rows),
+            }))
             if self.notify:
-                self.notify("Template Loaded", "Store template loaded successfully.", "success")
+                self.notify("File Imported", f"Loaded {len(self.current_rows)} records and {len(self.current_headers)} columns.", "success")
 
         def error(exc):
             self.current_headers = []
             self.current_rows = []
             if self.notify:
-                self.notify("Load Failed", str(exc), "error")
-            self.creatorLoaded.emit(json.dumps({"headers": [], "rows": []}))
+                self.notify("Import Failed", str(exc), "error")
+            self.creatorLoaded.emit(json.dumps({
+                "headers": [],
+                "rows": [],
+                "total": 0,
+                "error": str(exc),
+            }))
 
         self.async_runner.run(task, success, error)
 
