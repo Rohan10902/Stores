@@ -10,18 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common import (
-    ALIASES,
-    STORE_FIELDS,
-    canonical_field,
-    clean_value,
-    date_ok,
-    norm_name,
-    norm_value,
-    parse_delimited_text,
-)
+from .common import STORE_FIELDS, canonical_field, clean_value, date_ok, norm_value, parse_delimited_text
 
-BOOLEAN_FIELDS: tuple[str, ...] = ()
 REQUIRED_FIELDS = ("Store Name", "SID", "Nielsen Store Code")
 
 
@@ -40,18 +30,14 @@ def normalize_nielsen(value, width: int) -> str:
     return value.zfill(int(width)) if value.isdigit() else value
 
 
-def _canonical_field(value) -> str:
-    return canonical_field(value)
-
-
 def _detect_structure(df: pd.DataFrame) -> dict:
     columns = [str(column) for column in df.columns]
-    horizontal = sum(1 for column in columns if _canonical_field(column))
+    horizontal = sum(1 for column in columns if canonical_field(column))
     vertical = []
     for column in df.columns:
         matches = []
         for ix, value in df[column].items():
-            field = _canonical_field(value)
+            field = canonical_field(value)
             if field:
                 matches.append((int(ix) + 2, field))
         if len(matches) >= 2:
@@ -60,22 +46,9 @@ def _detect_structure(df: pd.DataFrame) -> dict:
         return {"kind": "HORIZONTAL", "confidence": "HIGH", "message": "Standard row-based table detected."}
     if vertical:
         key_col, matches = max(vertical, key=lambda item: len(item[1]))
-        fields = []
-        for _, field in matches:
-            if field not in fields:
-                fields.append(field)
-        return {
-            "kind": "VERTICAL",
-            "confidence": "HIGH" if len(fields) >= 3 else "MEDIUM",
-            "message": f"Vertical key/value layout detected in '{key_col}'. Review the structure before treating rows as store records.",
-            "fields": fields,
-            "keyColumn": str(key_col),
-        }
-    return {
-        "kind": "UNKNOWN",
-        "confidence": "LOW",
-        "message": "The file does not look like a standard horizontal store table.",
-    }
+        fields = list(dict.fromkeys(field for _, field in matches))
+        return {"kind": "VERTICAL", "confidence": "HIGH" if len(fields) >= 3 else "MEDIUM", "message": f"Vertical key/value layout detected in '{key_col}'. Review the structure before treating rows as store records.", "fields": fields, "keyColumn": str(key_col)}
+    return {"kind": "UNKNOWN", "confidence": "LOW", "message": "The file does not look like a standard horizontal store table."}
 
 
 def _suggested_width(codes) -> int:
@@ -96,6 +69,7 @@ def creator_validate(rows: list[dict]) -> list[dict]:
     findings = []
     seen_sid: dict[str, int] = {}
     seen_nielsen: dict[str, int] = {}
+    seen_composite: dict[tuple[str, str], int] = {}
 
     for index, row in enumerate(rows):
         row_no = index + 1
@@ -111,18 +85,26 @@ def creator_validate(rows: list[dict]) -> list[dict]:
                 findings.append({"row": row_no, "field": field, "value": "", "message": "Required value", "severity": "ERROR"})
 
         sid_key = norm_value(values["SID"])
+        nielsen_key = norm_value(values["Nielsen Store Code"])
+        composite = (sid_key, nielsen_key)
+
         if sid_key:
             if sid_key in seen_sid:
-                findings.append({"row": row_no, "field": "SID", "value": values["SID"], "message": f"Duplicate SID; first seen on row {seen_sid[sid_key]}", "severity": "ERROR"})
+                findings.append({"row": row_no, "field": "SID", "value": values["SID"], "message": f"Repeated SID; first seen on row {seen_sid[sid_key]}. Repeated SIDs are allowed when identity is disambiguated by Nielsen Store Code.", "severity": "REVIEW"})
             else:
                 seen_sid[sid_key] = row_no
 
-        nielsen_key = norm_value(values["Nielsen Store Code"])
         if nielsen_key:
             if nielsen_key in seen_nielsen:
                 findings.append({"row": row_no, "field": "Nielsen Store Code", "value": values["Nielsen Store Code"], "message": f"Duplicate Nielsen Store Code; first seen on row {seen_nielsen[nielsen_key]}", "severity": "ERROR"})
             else:
                 seen_nielsen[nielsen_key] = row_no
+
+        if sid_key and nielsen_key:
+            if composite in seen_composite:
+                findings.append({"row": row_no, "field": "SID + Nielsen Store Code", "value": f"{values['SID']} + {values['Nielsen Store Code']}", "message": f"Duplicate composite identity; first seen on row {seen_composite[composite]}", "severity": "ERROR"})
+            else:
+                seen_composite[composite] = row_no
 
         if values["Pincode"] and (not values["Pincode"].isdigit() or not 4 <= len(values["Pincode"]) <= 10):
             findings.append({"row": row_no, "field": "Pincode", "value": values["Pincode"], "message": "Pincode must contain 4–10 digits", "severity": "ERROR"})
@@ -142,17 +124,8 @@ def creator_validate(rows: list[dict]) -> list[dict]:
 def review_dataframe(df: pd.DataFrame) -> dict:
     structure = _detect_structure(df)
     if structure["kind"] != "HORIZONTAL":
-        return {
-            "rows": [{"row": 1, "severity": "REVIEW", "issues": [structure["message"]]}],
-            "issueCount": 1,
-            "findingCount": 1,
-            "suggestedNielsenWidth": 0,
-            "columns": [str(c) for c in df.columns],
-            "structure": structure,
-            "recordCount": 1 if structure["kind"] == "VERTICAL" else int(len(df)),
-        }
-
-    canonical = df.rename(columns={c: _canonical_field(c) or str(c) for c in df.columns})
+        return {"rows": [{"row": 1, "severity": "REVIEW", "issues": [structure["message"]]}], "issueCount": 1, "findingCount": 1, "suggestedNielsenWidth": 0, "columns": [str(c) for c in df.columns], "structure": structure, "recordCount": 1 if structure["kind"] == "VERTICAL" else int(len(df))}
+    canonical = df.rename(columns={c: canonical_field(c) or str(c) for c in df.columns})
     codes = [clean_value(value) for value in canonical.get("Nielsen Store Code", []) if clean_value(value)]
     suggested = _suggested_width(codes)
     rows = []
@@ -173,15 +146,7 @@ def review_dataframe(df: pd.DataFrame) -> dict:
         if item["issues"]:
             item["severity"] = "REVIEW"
         rows.append(item)
-    return {
-        "rows": rows,
-        "issueCount": sum(bool(item["issues"]) for item in rows),
-        "findingCount": sum(len(item["issues"]) for item in rows),
-        "suggestedNielsenWidth": suggested,
-        "columns": [str(c) for c in df.columns],
-        "structure": structure,
-        "recordCount": int(len(df)),
-    }
+    return {"rows": rows, "issueCount": sum(bool(item["issues"]) for item in rows), "findingCount": sum(len(item["issues"]) for item in rows), "suggestedNielsenWidth": suggested, "columns": [str(c) for c in df.columns], "structure": structure, "recordCount": int(len(df))}
 
 
 def export_creator(rows: list[dict], dst: str) -> str:
