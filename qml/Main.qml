@@ -156,16 +156,48 @@ ApplicationWindow {
                     Loader {
                         active: root.currentPage === 0
                         source: "pages/HomePage.qml"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
                         onLoaded: {
                             if (item && item.navigateRequested) item.navigateRequested.connect(root.navigateTo)
                         }
                     }
-                    Loader { active: root.currentPage === 1; source: "pages/ComparePage.qml" }
-                    Loader { active: root.currentPage === 2; source: "pages/RepairPage.qml" }
-                    Loader { active: root.currentPage === 3; source: "pages/SingleReviewPage.qml" }
-                    Loader { active: root.currentPage === 4; source: "pages/CreateStorePage.qml" }
-                    Loader { active: root.currentPage === 5; source: "pages/ExplorePage.qml" }
-                    Loader { active: root.currentPage === 6; source: "pages/HealthPage.qml" }
+                    Loader {
+                        active: root.currentPage === 1
+                        source: "pages/ComparePage.qml"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                    }
+                    Loader {
+                        active: root.currentPage === 2
+                        source: "pages/RepairPage.qml"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                    }
+                    Loader {
+                        active: root.currentPage === 3
+                        source: "pages/SingleReviewPage.qml"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                    }
+                    Loader {
+                        active: root.currentPage === 4
+                        source: "pages/CreateStorePage.qml"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                    }
+                    Loader {
+                        active: root.currentPage === 5
+                        source: "pages/ExplorePage.qml"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                    }
+                    Loader {
+                        active: root.currentPage === 6
+                        source: "pages/HealthPage.qml"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                    }
                 }
             }
         }
