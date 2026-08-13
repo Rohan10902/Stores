@@ -231,12 +231,15 @@ Item {
     }
 
     ScrollView {
+        id: scrollView
         anchors.fill: parent
         clip: true
+        contentWidth: availableWidth
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
         ColumnLayout {
-            width: parent.width
+            id: page
+            width: scrollView.availableWidth
             spacing: Theme.spacingLarge
 
             PageTitle {
