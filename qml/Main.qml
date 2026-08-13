@@ -45,6 +45,7 @@ ApplicationWindow {
     property var uploadPreviewRows: []
     property int uploadPreviewTotal: 0
     property int previewMode: 0
+    property bool previewVisible: false
 
     function navigateTo(pageId) {
         var index = pageIds.indexOf(pageId)
@@ -58,21 +59,27 @@ ApplicationWindow {
     function parsePreview(payload, isMaster) {
         try {
             var data = JSON.parse(payload || "{}")
+            var columns = Array.isArray(data.columns) ? data.columns : []
+            var rows = Array.isArray(data.rows) ? data.rows : []
+
             if (isMaster) {
-                masterPreviewColumns = data.columns || []
-                masterPreviewRows = data.rows || []
+                masterPreviewColumns = columns
+                masterPreviewRows = rows
                 masterPreviewTotal = Number(data.total || 0)
                 previewMode = 0
             } else {
-                uploadPreviewColumns = data.columns || []
-                uploadPreviewRows = data.rows || []
+                uploadPreviewColumns = columns
+                uploadPreviewRows = rows
                 uploadPreviewTotal = Number(data.total || 0)
                 previewMode = 1
             }
-            if (currentPage === 1 && (data.columns || []).length > 0)
+
+            if (columns.length > 0) {
+                previewVisible = true
                 previewDialog.open()
+            }
         } catch (error) {
-            // Keep the application usable if preview payload is invalid.
+            previewVisible = false
         }
     }
 
@@ -88,11 +95,16 @@ ApplicationWindow {
         return previewMode === 0 ? masterPreviewTotal : uploadPreviewTotal
     }
 
-    function previewCell(row, index) {
-        if (!Array.isArray(row) || index < 0 || index >= row.length)
+    function previewCell(row, columnIndex) {
+        if (!Array.isArray(row) || columnIndex < 0 || columnIndex >= row.length)
             return ""
-        var value = row[index]
+        var value = row[columnIndex]
         return value === null || value === undefined ? "" : String(value)
+    }
+
+    function closePreview() {
+        previewVisible = false
+        previewDialog.close()
     }
 
     Component.onCompleted: currentPage = 0
@@ -133,16 +145,21 @@ ApplicationWindow {
         parent: Overlay.overlay
         modal: true
         focus: true
+        visible: root.previewVisible
         width: Math.min(root.width - 120, 1250)
         height: Math.min(root.height - 120, 690)
-        anchors.centerIn: Overlay.overlay
+        x: Math.round((root.width - width) / 2)
+        y: Math.round((root.height - height) / 2)
         padding: 0
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        onClosed: root.previewVisible = false
 
         background: Rectangle {
             color: Theme.surface
             radius: Theme.radiusLarge
-            border.color: Theme.border
+            border.color: Theme.primary
+            border.width: 1
         }
 
         contentItem: ColumnLayout {
@@ -150,7 +167,7 @@ ApplicationWindow {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 66
+                Layout.preferredHeight: 70
                 color: Theme.surfaceHover
                 radius: Theme.radiusLarge
 
@@ -167,19 +184,19 @@ ApplicationWindow {
                         Text {
                             text: root.previewMode === 0 ? "Master Dataset Preview" : "Uploaded Dataset Preview"
                             color: Theme.textPrimary
-                            font.pixelSize: 17
+                            font.pixelSize: 18
                             font.bold: true
                         }
 
                         Text {
-                            text: root.previewTotal.toLocaleString() + " records  •  " + root.previewColumns.length + " columns  •  first " + root.previewRows.length + " rows shown"
+                            text: root.previewTotal().toLocaleString() + " records  •  " + root.previewColumns().length + " columns  •  first " + root.previewRows().length + " rows shown"
                             color: Theme.textSecondary
                             font.pixelSize: 11
                         }
                     }
 
                     ComboBox {
-                        Layout.preferredWidth: 180
+                        Layout.preferredWidth: 190
                         model: ["Master Dataset", "Uploaded Dataset"]
                         currentIndex: root.previewMode
                         onActivated: root.previewMode = currentIndex
@@ -187,7 +204,7 @@ ApplicationWindow {
 
                     AppButton {
                         text: "Close"
-                        onClicked: previewDialog.close()
+                        onClicked: root.closePreview()
                     }
                 }
             }
@@ -204,38 +221,36 @@ ApplicationWindow {
                 clip: true
 
                 Flickable {
+                    id: previewFlickable
                     anchors.fill: parent
                     anchors.margins: 1
                     clip: true
-                    contentWidth: Math.max(width, root.previewColumns.length * 170)
-                    contentHeight: previewRowsColumn.height + 40
+                    contentWidth: Math.max(width, root.previewColumns().length * 170)
+                    contentHeight: previewColumn.height
                     boundsBehavior: Flickable.StopAtBounds
 
                     ScrollBar.vertical: ScrollBar {}
                     ScrollBar.horizontal: ScrollBar {}
 
                     Column {
-                        id: previewRowsColumn
-                        width: Math.max(parent.width, root.previewColumns.length * 170)
-                        spacing: 1
+                        id: previewColumn
+                        width: Math.max(previewFlickable.width, root.previewColumns().length * 170)
+                        spacing: 0
 
                         Rectangle {
-                            width: previewRowsColumn.width
-                            height: 38
+                            width: previewColumn.width
+                            height: 40
                             color: Theme.surfaceHover
                             border.color: Theme.border
 
                             Row {
                                 anchors.fill: parent
-                                spacing: 0
-
                                 Repeater {
-                                    model: root.previewColumns
-
+                                    model: root.previewColumns()
                                     delegate: Rectangle {
                                         required property string modelData
                                         width: 170
-                                        height: 38
+                                        height: 40
                                         color: "transparent"
                                         border.color: Theme.border
 
@@ -244,7 +259,7 @@ ApplicationWindow {
                                             anchors.leftMargin: Theme.spacingSmall
                                             anchors.rightMargin: Theme.spacingSmall
                                             text: modelData
-                                            color: Theme.textSecondary
+                                            color: Theme.textPrimary
                                             font.bold: true
                                             font.pixelSize: 11
                                             elide: Text.ElideRight
@@ -256,22 +271,19 @@ ApplicationWindow {
                         }
 
                         Repeater {
-                            model: root.previewRows
-
+                            model: root.previewRows()
                             delegate: Rectangle {
                                 required property var modelData
-                                width: previewRowsColumn.width
+                                required property int index
+                                width: previewColumn.width
                                 height: 36
                                 color: index % 2 === 0 ? Theme.background : Theme.surface
                                 border.color: Theme.border
 
                                 Row {
                                     anchors.fill: parent
-                                    spacing: 0
-
                                     Repeater {
-                                        model: root.previewColumns.length
-
+                                        model: root.previewColumns().length
                                         delegate: Rectangle {
                                             required property int index
                                             width: 170
@@ -283,7 +295,7 @@ ApplicationWindow {
                                                 anchors.fill: parent
                                                 anchors.leftMargin: Theme.spacingSmall
                                                 anchors.rightMargin: Theme.spacingSmall
-                                                text: root.previewCell(modelData, index)
+                                                text: root.previewCell(parent.parent.parent.modelData, index)
                                                 color: Theme.textPrimary
                                                 font.pixelSize: 11
                                                 elide: Text.ElideRight
@@ -386,51 +398,13 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     currentIndex: root.currentPage
 
-                    Loader {
-                        active: root.currentPage === 0
-                        source: "pages/HomePage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        onLoaded: {
-                            if (item && item.navigateRequested) item.navigateRequested.connect(root.navigateTo)
-                        }
-                    }
-                    Loader {
-                        active: root.currentPage === 1
-                        source: "pages/ComparePage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-                    Loader {
-                        active: root.currentPage === 2
-                        source: "pages/RepairPage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-                    Loader {
-                        active: root.currentPage === 3
-                        source: "pages/SingleReviewPage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-                    Loader {
-                        active: root.currentPage === 4
-                        source: "pages/CreateStorePage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-                    Loader {
-                        active: root.currentPage === 5
-                        source: "pages/ExplorePage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
-                    Loader {
-                        active: root.currentPage === 6
-                        source: "pages/HealthPage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
+                    Loader { active: root.currentPage === 0; source: "pages/HomePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true; onLoaded: { if (item && item.navigateRequested) item.navigateRequested.connect(root.navigateTo) } }
+                    Loader { active: root.currentPage === 1; source: "pages/ComparePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { active: root.currentPage === 2; source: "pages/RepairPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { active: root.currentPage === 3; source: "pages/SingleReviewPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { active: root.currentPage === 4; source: "pages/CreateStorePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { active: root.currentPage === 5; source: "pages/ExplorePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { active: root.currentPage === 6; source: "pages/HealthPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
                 }
             }
         }
