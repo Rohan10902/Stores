@@ -42,9 +42,18 @@ class ProductionHardeningTests(unittest.TestCase):
             })
         findings = creator_validate(rows)
         messages = [item["message"] for item in findings]
-        self.assertTrue(any("Duplicate SID" in message for message in messages))
+        self.assertTrue(any("Duplicate Nielsen Store Code" in message for message in messages))
+        self.assertTrue(any("Duplicate composite identity" in message for message in messages))
         self.assertTrue(any("Pincode" in message for message in messages))
         self.assertTrue(any("Phone" in message for message in messages))
+
+    def test_repeated_sid_is_allowed_when_nielsen_code_differs(self):
+        rows = []
+        for code in ("N1", "N2"):
+            row = {field: "" for field in STORE_FIELDS}
+            row.update({"Store Name": "Example", "SID": "S1", "Nielsen Store Code": code})
+            rows.append(row)
+        self.assertEqual(creator_validate(rows), [])
 
     def test_ambiguous_master_match_is_never_silently_selected(self):
         master = pd.DataFrame([
