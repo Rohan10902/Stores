@@ -3,7 +3,7 @@ from collections import defaultdict
 
 import pandas as pd
 
-from .common import norm_value
+from .common import norm_value, read_table
 
 
 def _load_table(path):
@@ -13,20 +13,8 @@ def _load_table(path):
     if not os.path.exists(path):
         raise FileNotFoundError(f"File not found: {path}")
 
-    ext = os.path.splitext(path)[1].lower()
-
-    if ext == ".csv":
-        return pd.read_csv(
-            path,
-            encoding="utf-8-sig",
-            on_bad_lines="skip",
-            dtype=str,
-        ).fillna("")
-
-    if ext in (".xls", ".xlsx"):
-        return pd.read_excel(path, dtype=str).fillna("")
-
-    raise ValueError(f"Unsupported file format: {ext}")
+    dataframe = read_table(path)
+    return dataframe.fillna("").astype(str)
 
 
 def _normal_name(value):
