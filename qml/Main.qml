@@ -38,6 +38,14 @@ ApplicationWindow {
         "health"
     ]
 
+    property var masterPreviewColumns: []
+    property var masterPreviewRows: []
+    property int masterPreviewTotal: 0
+    property var uploadPreviewColumns: []
+    property var uploadPreviewRows: []
+    property int uploadPreviewTotal: 0
+    property int previewMode: 0
+
     function navigateTo(pageId) {
         var index = pageIds.indexOf(pageId)
         if (index >= 0) currentPage = index
@@ -45,6 +53,46 @@ ApplicationWindow {
 
     function navigateToIndex(index) {
         if (index >= 0 && index < pageIds.length) currentPage = index
+    }
+
+    function parsePreview(payload, isMaster) {
+        try {
+            var data = JSON.parse(payload || "{}")
+            if (isMaster) {
+                masterPreviewColumns = data.columns || []
+                masterPreviewRows = data.rows || []
+                masterPreviewTotal = Number(data.total || 0)
+                previewMode = 0
+            } else {
+                uploadPreviewColumns = data.columns || []
+                uploadPreviewRows = data.rows || []
+                uploadPreviewTotal = Number(data.total || 0)
+                previewMode = 1
+            }
+            if (currentPage === 1 && (data.columns || []).length > 0)
+                previewDialog.open()
+        } catch (error) {
+            // Keep the application usable if preview payload is invalid.
+        }
+    }
+
+    function previewColumns() {
+        return previewMode === 0 ? masterPreviewColumns : uploadPreviewColumns
+    }
+
+    function previewRows() {
+        return previewMode === 0 ? masterPreviewRows : uploadPreviewRows
+    }
+
+    function previewTotal() {
+        return previewMode === 0 ? masterPreviewTotal : uploadPreviewTotal
+    }
+
+    function previewCell(row, index) {
+        if (!Array.isArray(row) || index < 0 || index >= row.length)
+            return ""
+        var value = row[index]
+        return value === null || value === undefined ? "" : String(value)
     }
 
     Component.onCompleted: currentPage = 0
@@ -64,6 +112,191 @@ ApplicationWindow {
         function onSaySignal(message) {
             var text = String(message || "").trim()
             if (text !== "") toast.show(text, "info")
+        }
+    }
+
+    Connections {
+        target: typeof backend !== "undefined" && backend.validate !== undefined ? backend.validate : null
+        ignoreUnknownSignals: true
+
+        function onMasterPreviewReady(payload) {
+            root.parsePreview(payload, true)
+        }
+
+        function onUploadPreviewReady(payload) {
+            root.parsePreview(payload, false)
+        }
+    }
+
+    Popup {
+        id: previewDialog
+        parent: Overlay.overlay
+        modal: true
+        focus: true
+        width: Math.min(root.width - 120, 1250)
+        height: Math.min(root.height - 120, 690)
+        anchors.centerIn: Overlay.overlay
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: Theme.surface
+            radius: Theme.radiusLarge
+            border.color: Theme.border
+        }
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spacingMedium
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 66
+                color: Theme.surfaceHover
+                radius: Theme.radiusLarge
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingLarge
+                    anchors.rightMargin: Theme.spacingMedium
+                    spacing: Theme.spacingMedium
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Text {
+                            text: root.previewMode === 0 ? "Master Dataset Preview" : "Uploaded Dataset Preview"
+                            color: Theme.textPrimary
+                            font.pixelSize: 17
+                            font.bold: true
+                        }
+
+                        Text {
+                            text: root.previewTotal.toLocaleString() + " records  •  " + root.previewColumns.length + " columns  •  first " + root.previewRows.length + " rows shown"
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    ComboBox {
+                        Layout.preferredWidth: 180
+                        model: ["Master Dataset", "Uploaded Dataset"]
+                        currentIndex: root.previewMode
+                        onActivated: root.previewMode = currentIndex
+                    }
+
+                    AppButton {
+                        text: "Close"
+                        onClicked: previewDialog.close()
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.leftMargin: Theme.spacingMedium
+                Layout.rightMargin: Theme.spacingMedium
+                Layout.bottomMargin: Theme.spacingMedium
+                color: Theme.background
+                border.color: Theme.border
+                radius: Theme.radiusMedium
+                clip: true
+
+                Flickable {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    clip: true
+                    contentWidth: Math.max(width, root.previewColumns.length * 170)
+                    contentHeight: previewRowsColumn.height + 40
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.horizontal: ScrollBar {}
+
+                    Column {
+                        id: previewRowsColumn
+                        width: Math.max(parent.width, root.previewColumns.length * 170)
+                        spacing: 1
+
+                        Rectangle {
+                            width: previewRowsColumn.width
+                            height: 38
+                            color: Theme.surfaceHover
+                            border.color: Theme.border
+
+                            Row {
+                                anchors.fill: parent
+                                spacing: 0
+
+                                Repeater {
+                                    model: root.previewColumns
+
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        width: 170
+                                        height: 38
+                                        color: "transparent"
+                                        border.color: Theme.border
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Theme.spacingSmall
+                                            anchors.rightMargin: Theme.spacingSmall
+                                            text: modelData
+                                            color: Theme.textSecondary
+                                            font.bold: true
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: root.previewRows
+
+                            delegate: Rectangle {
+                                required property var modelData
+                                width: previewRowsColumn.width
+                                height: 36
+                                color: index % 2 === 0 ? Theme.background : Theme.surface
+                                border.color: Theme.border
+
+                                Row {
+                                    anchors.fill: parent
+                                    spacing: 0
+
+                                    Repeater {
+                                        model: root.previewColumns.length
+
+                                        delegate: Rectangle {
+                                            required property int index
+                                            width: 170
+                                            height: 36
+                                            color: "transparent"
+                                            border.color: Theme.border
+
+                                            Text {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: Theme.spacingSmall
+                                                anchors.rightMargin: Theme.spacingSmall
+                                                text: root.previewCell(modelData, index)
+                                                color: Theme.textPrimary
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
