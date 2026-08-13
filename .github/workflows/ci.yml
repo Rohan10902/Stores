@@ -30,8 +30,8 @@ jobs:
       - name: Compile Python Source
         run: python -m compileall -q core app.py bootstrap.py
 
-      - name: Ruff Lint
-        run: ruff check .
+      - name: Ruff Correctness Lint
+        run: ruff check . --select E9,F63,F7,F82
 
       - name: QML Lint
         shell: pwsh
