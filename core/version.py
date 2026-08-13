@@ -1,0 +1,3 @@
+APP_NAME = "StoreLens"
+APP_VERSION = "7.3.0"
+APP_VERSION_TUPLE = (7, 3, 0, 0)
