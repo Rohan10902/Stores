@@ -1,10 +1,10 @@
-name: validate-and-build
+name: StoreLens Windows Release Candidate
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master, production-hardening]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   build:
@@ -14,36 +14,81 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11.9'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: pip
 
       - name: Install Dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          if (Test-Path "requirements.txt") { pip install -r requirements.txt }
-          pip install pyinstaller pytest pytest-benchmark psutil
+          pip install -r requirements.txt
+          pip install pyinstaller pytest pytest-benchmark psutil ruff
 
-      - name: Lint Source Code
+      - name: Compile Python Source
+        run: python -m compileall -q core app.py bootstrap.py
+
+      - name: Python Correctness Lint
+        run: ruff check . --select E9,F63,F7,F82
+
+      - name: QML Lint
+        shell: pwsh
         run: |
-          # Add your specific linting command here (e.g., flake8 or pylint)
-          echo "Linting complete."
+          $qmllint = Get-ChildItem "$env:pythonLocation\Lib\site-packages\PySide6" -Filter "qmllint.exe" -Recurse | Select-Object -First 1
+          if (-not $qmllint) { throw "qmllint.exe was not found in the PySide6 installation." }
+          $failed = $false
+          Get-ChildItem qml -Filter *.qml -Recurse | ForEach-Object {
+            & $qmllint.FullName -I qml $_.FullName
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { throw "QML lint failed." }
 
       - name: Execute Test Suite
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Python UI Startup Smoke Test
+        shell: pwsh
+        env:
+          STORELENS_CI_STARTUP_TEST: "1"
+          QT_QPA_PLATFORM: "offscreen"
         run: |
-          # Run tests if the directory exists
-          if (Test-Path "tests") { python -m pytest tests/ } else { echo "No tests found, skipping." }
+          $output = & python bootstrap.py 2>&1
+          $output | Tee-Object -FilePath source-startup.log
+          if ($LASTEXITCODE -ne 0) { throw "Source startup smoke test failed." }
+          if (-not ($output -match "STORELENS_STARTUP_OK")) { throw "Source startup marker missing." }
 
       - name: Build Windows Executable
+        shell: pwsh
         run: |
-          # The crucial fix: --add-data "qml;qml" ensures the UI folder is bundled into the build
-          pyinstaller --noconfirm --onedir --windowed --add-data "qml;qml" bootstrap.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name StoreLens --add-data "qml;qml" bootstrap.py
+
+      - name: Packaged Executable Startup Smoke Test
+        shell: pwsh
+        env:
+          STORELENS_CI_STARTUP_TEST: "1"
+          QT_QPA_PLATFORM: "offscreen"
+        run: |
+          $exe = Resolve-Path "dist\StoreLens\StoreLens.exe"
+          $out = Join-Path $PWD "packaged-startup.out"
+          $err = Join-Path $PWD "packaged-startup.err"
+          $process = Start-Process -FilePath $exe -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+          Get-Content $out -ErrorAction SilentlyContinue
+          Get-Content $err -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) { throw "Packaged executable exited with code $($process.ExitCode)." }
+          if (-not ((Get-Content $out -Raw) -match "STORELENS_STARTUP_OK")) { throw "Packaged startup marker missing." }
+
+      - name: Generate SHA-256 Checksum
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse dist\StoreLens -File | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-File dist\StoreLens\SHA256SUMS.txt
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StoreLens-Windows-Build
-          # Uploads the final folder containing the executable and the _internal folder
-          path: dist/bootstrap/
+          name: StoreLens-Windows-RC
+          path: |
+            dist/StoreLens/
+            packaged-startup.out
+            packaged-startup.err
