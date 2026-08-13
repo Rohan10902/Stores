@@ -52,7 +52,7 @@ jobs:
         shell: pwsh
         env:
           STORELENS_CI_STARTUP_TEST: "1"
-          STORELENS_STARTUP_MARKER: "${{ github.workspace }}\source-startup.marker"
+          STORELENS_STARTUP_MARKER: "${{ github.workspace }}/source-startup.marker"
           QT_QPA_PLATFORM: "offscreen"
         run: |
           Remove-Item source-startup.marker -ErrorAction SilentlyContinue
@@ -70,7 +70,7 @@ jobs:
         shell: pwsh
         env:
           STORELENS_CI_STARTUP_TEST: "1"
-          STORELENS_STARTUP_MARKER: "${{ github.workspace }}\packaged-startup.marker"
+          STORELENS_STARTUP_MARKER: "${{ github.workspace }}/packaged-startup.marker"
           QT_QPA_PLATFORM: "offscreen"
         run: |
           Remove-Item packaged-startup.marker -ErrorAction SilentlyContinue
