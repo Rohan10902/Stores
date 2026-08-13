@@ -62,7 +62,7 @@ jobs:
       - name: Build Windows Executable
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name StoreLens --add-data "qml;qml" bootstrap.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name StoreLens --version-file version_info.txt --add-data "qml;qml" bootstrap.py
 
       - name: Packaged Executable Startup Smoke Test
         shell: pwsh
