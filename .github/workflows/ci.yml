@@ -52,9 +52,11 @@ jobs:
         shell: pwsh
         env:
           STORELENS_CI_STARTUP_TEST: "1"
+          STORELENS_STARTUP_MARKER: "${{ github.workspace }}\startup-smoke.marker"
           QT_QPA_PLATFORM: "offscreen"
         run: |
+          Remove-Item startup-smoke.marker -ErrorAction SilentlyContinue
           $output = & python bootstrap.py 2>&1
           $output | Tee-Object -FilePath startup-smoke.log
           if ($LASTEXITCODE -ne 0) { throw "Application startup smoke test failed." }
-          if (-not ($output -match "STORELENS_STARTUP_OK")) { throw "Startup success marker was not emitted." }
+          if (-not (Test-Path startup-smoke.marker)) { throw "Startup marker file was not created." }
