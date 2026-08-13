@@ -2,6 +2,7 @@
 
 import copy
 import csv
+import json
 import os
 import tempfile
 import uuid
@@ -38,6 +39,7 @@ class CSVRepairTool:
         self.history = []
         self.created_records = {}
         self.record_counter = 10000
+        self.current_source = ""
 
     def _save_state(self):
         self.history.append((copy.deepcopy(self.rows), copy.deepcopy(self.row_ids), copy.deepcopy(self.issues), copy.deepcopy(self.created_records)))
@@ -49,6 +51,7 @@ class CSVRepairTool:
         self.issues = []
         self.history = []
         self.created_records = {}
+        self.current_source = os.path.abspath(path)
         if not os.path.exists(path):
             raise FileNotFoundError(f"File not found: {path}")
         with open(path, "r", encoding="utf-8", errors="replace", newline="") as file:
@@ -171,9 +174,8 @@ class CSVRepairTool:
     def export_csv(self, dst):
         if not dst:
             raise ValueError("Destination path cannot be empty.")
-        source = os.path.abspath(self.current_source) if hasattr(self, "current_source") else None
         destination = os.path.abspath(dst)
-        if source and source == destination:
+        if self.current_source and os.path.abspath(self.current_source) == destination:
             raise ValueError("Export destination cannot overwrite the source file.")
         parent = os.path.dirname(destination) or "."
         os.makedirs(parent, exist_ok=True)
