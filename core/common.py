@@ -101,13 +101,22 @@ def canonicalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def _read_csv_strict(path: str) -> pd.DataFrame:
     # Let pandas surface malformed CSV instead of silently dropping records.
-    return pd.read_csv(
-        path,
-        encoding="utf-8-sig",
-        dtype=str,
-        keep_default_na=False,
-        on_bad_lines="error",
-    )
+    try:
+        return pd.read_csv(
+            path,
+            encoding="utf-8-sig",
+            dtype=str,
+            keep_default_na=False,
+            on_bad_lines="error",
+        )
+    except UnicodeDecodeError:
+        return pd.read_csv(
+            path,
+            encoding="cp1252",
+            dtype=str,
+            keep_default_na=False,
+            on_bad_lines="error",
+        )
 
 
 def read_table(file_path: str) -> pd.DataFrame:
@@ -126,8 +135,10 @@ def read_table(file_path: str) -> pd.DataFrame:
     try:
         if ext == ".csv":
             return _read_csv_strict(str(path))
-        if ext in {".tsv", ".txt"}:
+        if ext == ".tsv":
             return pd.read_csv(str(path), sep="\t", encoding="utf-8-sig", dtype=str, keep_default_na=False, on_bad_lines="error")
+        if ext == ".txt":
+            return pd.read_csv(str(path), sep=None, engine="python", encoding="utf-8-sig", dtype=str, keep_default_na=False, on_bad_lines="error")
         if ext in {".xls", ".xlsx", ".xlsm"}:
             return pd.read_excel(str(path), dtype=str).fillna("")
         if ext == ".json":
