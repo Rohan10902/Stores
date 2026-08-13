@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common import STORE_FIELDS, canonical_field, clean_value, date_ok, norm_value, parse_delimited_text
+from .common import STORE_FIELDS, binary_ok, canonical_field, clean_value, date_ok, norm_value, parse_delimited_text
 
 REQUIRED_FIELDS = ("Store Name", "SID", "Nielsen Store Code")
 
@@ -64,8 +64,19 @@ def _row_has_data(row: dict) -> bool:
     return any(clean_value(row.get(field, "")) for field in STORE_FIELDS)
 
 
+def _validate_choice(findings, row_no, field, value, allowed):
+    if value and norm_value(value) not in allowed:
+        findings.append({
+            "row": row_no,
+            "field": field,
+            "value": value,
+            "message": f"Allowed values: {', '.join(sorted(allowed))}",
+            "severity": "ERROR",
+        })
+
+
 def creator_validate(rows: list[dict]) -> list[dict]:
-    """Validate Store Builder rows using the canonical schema."""
+    """Validate Store Builder rows using the canonical 14-column schema."""
     findings = []
     seen_nielsen: dict[str, int] = {}
     seen_composite: dict[tuple[str, str], int] = {}
@@ -99,13 +110,14 @@ def creator_validate(rows: list[dict]) -> list[dict]:
             else:
                 seen_composite[composite] = row_no
 
-        if values["Pincode"] and (not values["Pincode"].isdigit() or not 4 <= len(values["Pincode"]) <= 10):
-            findings.append({"row": row_no, "field": "Pincode", "value": values["Pincode"], "message": "Pincode must contain 4–10 digits", "severity": "ERROR"})
+        zip_value = values["ZIP"]
+        if zip_value and (not zip_value.isdigit() or not 3 <= len(zip_value) <= 12):
+            findings.append({"row": row_no, "field": "ZIP", "value": zip_value, "message": "ZIP must contain 3–12 digits", "severity": "ERROR"})
 
-        if values["Phone"]:
-            phone_digits = "".join(ch for ch in values["Phone"] if ch.isdigit())
-            if len(phone_digits) < 7 or len(phone_digits) > 15:
-                findings.append({"row": row_no, "field": "Phone", "value": values["Phone"], "message": "Phone must contain 7–15 digits", "severity": "ERROR"})
+        _validate_choice(findings, row_no, "Active / Inactive", values["Active / Inactive"], {"active", "inactive"})
+        for field in ("Is Census", "Is Exceptions"):
+            if values[field] and not binary_ok(values[field]):
+                findings.append({"row": row_no, "field": field, "value": values[field], "message": "Use Yes/No, True/False, or 1/0", "severity": "ERROR"})
 
         for field in ("Trip Received", "Last Trip"):
             if values[field] and not date_ok(values[field]):
@@ -136,6 +148,10 @@ def review_dataframe(df: pd.DataFrame) -> dict:
                 value = clean_value(record.get(field, ""))
                 if value and not date_ok(value):
                     item["issues"].append(f"{field}: invalid date '{value}'")
+        if "ZIP" in canonical.columns:
+            value = clean_value(record.get("ZIP", ""))
+            if value and (not value.isdigit() or not 3 <= len(value) <= 12):
+                item["issues"].append(f"ZIP: invalid value '{value}'")
         if item["issues"]:
             item["severity"] = "REVIEW"
         rows.append(item)
