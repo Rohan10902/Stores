@@ -67,7 +67,6 @@ def _row_has_data(row: dict) -> bool:
 def creator_validate(rows: list[dict]) -> list[dict]:
     """Validate Store Builder rows using the canonical schema."""
     findings = []
-    seen_sid: dict[str, int] = {}
     seen_nielsen: dict[str, int] = {}
     seen_composite: dict[tuple[str, str], int] = {}
 
@@ -87,12 +86,6 @@ def creator_validate(rows: list[dict]) -> list[dict]:
         sid_key = norm_value(values["SID"])
         nielsen_key = norm_value(values["Nielsen Store Code"])
         composite = (sid_key, nielsen_key)
-
-        if sid_key:
-            if sid_key in seen_sid:
-                findings.append({"row": row_no, "field": "SID", "value": values["SID"], "message": f"Repeated SID; first seen on row {seen_sid[sid_key]}. Repeated SIDs are allowed when identity is disambiguated by Nielsen Store Code.", "severity": "REVIEW"})
-            else:
-                seen_sid[sid_key] = row_no
 
         if nielsen_key:
             if nielsen_key in seen_nielsen:
