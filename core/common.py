@@ -1,176 +1,222 @@
 # core/common.py
+"""Shared data-model, normalization, and safe table-loading primitives."""
+
+from __future__ import annotations
+
+import csv
+import json
 import os
+from pathlib import Path
+
 import pandas as pd
+
 from core.utils.logger import get_logger
 
 logger = get_logger("Common")
 
-# Standard store field definitions required by store_validator.py
+# Canonical Store Builder / creator export schema.
+# Keep this list authoritative: UI, validation, creator, and export all consume it.
 STORE_FIELDS = [
-    "store_code", "store_name", "address", "city",
-    "state", "pincode", "phone", "email", "status"
+    "Store Name",
+    "SID",
+    "Banner",
+    "Nielsen Store Code",
+    "Trip Received",
+    "Last Trip",
+    "Address 1",
+    "Address 2",
+    "City",
+    "State",
+    "Pincode",
+    "Phone",
 ]
 
-# Common column field variations mapping for file creation and validation
+# Fields that can participate in identity matching. The canonical schema remains
+# the source of truth; matching only uses fields that are present in both files.
+MATCH_FIELDS = [
+    "SID",
+    "Nielsen Store Code",
+]
+
 ALIASES = {
-    "code": "store_code",
-    "store code": "store_code",
-    "store_id": "store_code",
-    "id": "store_code",
-    "name": "store_name",
-    "store name": "store_name",
-    "store": "store_name",
-    "addr": "address",
-    "street": "address",
-    "town": "city",
-    "province": "state",
-    "postal code": "pincode",
-    "zip": "pincode",
-    "zipcode": "pincode",
-    "mobile": "phone",
-    "contact": "phone",
-    "mail": "email"
+    "Store Name": ["store name", "store", "name", "store_name"],
+    "SID": ["sid", "store id", "storeid", "store code", "store_id", "id"],
+    "Banner": ["banner", "brand"],
+    "Nielsen Store Code": ["nielsen store code", "nielsen code", "nielsen store", "nielsen"],
+    "Trip Received": ["trip received", "trip_received"],
+    "Last Trip": ["last trip", "last_trip"],
+    "Address 1": ["address 1", "address1", "address", "addr", "street"],
+    "Address 2": ["address 2", "address2", "address line 2"],
+    "City": ["city", "town"],
+    "State": ["state", "province"],
+    "Pincode": ["pincode", "pin code", "postal code", "zip", "zipcode", "postcode"],
+    "Phone": ["phone", "mobile", "contact", "telephone"],
+}
+
+# Legacy aliases retained for datasets created by earlier StoreLens versions.
+LEGACY_ALIASES = {
+    "store_code": "SID",
+    "store_name": "Store Name",
+    "address": "Address 1",
+    "city": "City",
+    "state": "State",
+    "pincode": "Pincode",
+    "phone": "Phone",
+    "status": "Banner",
+    "email": "Phone",
 }
 
 
+def _normal_header(value: object) -> str:
+    return " ".join(str(value or "").strip().lower().replace("_", " ").replace("-", " ").split())
+
+
+def canonical_field(value: object) -> str:
+    """Return the canonical field name for a header, or an empty string."""
+    normalized = _normal_header(value)
+    if not normalized:
+        return ""
+    for field in STORE_FIELDS:
+        if normalized == _normal_header(field):
+            return field
+        if any(normalized == _normal_header(alias) for alias in ALIASES.get(field, [])):
+            return field
+    legacy = LEGACY_ALIASES.get(normalized)
+    return legacy or ""
+
+
+def canonicalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename recognizable columns to the canonical schema without dropping unknowns."""
+    if df is None or df.empty:
+        return df
+    mapping = {}
+    used = set()
+    for column in df.columns:
+        target = canonical_field(column)
+        if target and target not in used:
+            mapping[column] = target
+            used.add(target)
+    return df.rename(columns=mapping)
+
+
+def _read_csv_strict(path: str) -> pd.DataFrame:
+    # Let pandas surface malformed CSV instead of silently dropping records.
+    try:
+        return pd.read_csv(
+            path,
+            encoding="utf-8-sig",
+            dtype=str,
+            keep_default_na=False,
+            on_bad_lines="error",
+        )
+    except UnicodeDecodeError:
+        return pd.read_csv(
+            path,
+            encoding="cp1252",
+            dtype=str,
+            keep_default_na=False,
+            on_bad_lines="error",
+        )
+
+
 def read_table(file_path: str) -> pd.DataFrame:
-    """Read a supported dataset without silently dropping malformed records."""
+    """Read supported tabular formats without silently losing malformed rows."""
     if not file_path:
         raise ValueError("No file path was provided to the reader.")
-
-    if not os.path.exists(file_path):
+    path = Path(file_path)
+    if not path.exists():
         raise FileNotFoundError(f"The file does not exist: {file_path}")
-
-    if not os.path.isfile(file_path):
+    if not path.is_file():
         raise ValueError(f"The selected path is not a file: {file_path}")
-
-    if not os.access(file_path, os.R_OK):
+    if not os.access(path, os.R_OK):
         raise PermissionError(f"Permission denied. Cannot read file: {file_path}")
 
-    ext = os.path.splitext(file_path)[1].lower()
-
+    ext = path.suffix.lower()
     try:
         if ext == ".csv":
-            try:
-                return pd.read_csv(
-                    file_path,
-                    encoding="utf-8-sig",
-                    on_bad_lines="error",
-                )
-            except UnicodeDecodeError:
-                return pd.read_csv(
-                    file_path,
-                    encoding="cp1252",
-                    on_bad_lines="error",
-                )
-
+            return _read_csv_strict(str(path))
         if ext == ".tsv":
-            return pd.read_csv(
-                file_path,
-                sep="\t",
-                encoding="utf-8-sig",
-                on_bad_lines="error",
-            )
-
+            return pd.read_csv(str(path), sep="\t", encoding="utf-8-sig", dtype=str, keep_default_na=False, on_bad_lines="error")
         if ext == ".txt":
-            return pd.read_csv(
-                file_path,
-                sep=None,
-                engine="python",
-                encoding="utf-8-sig",
-                on_bad_lines="error",
-            )
-
-        if ext in (".xls", ".xlsx", ".xlsm"):
-            return pd.read_excel(file_path)
-
-        raise ValueError(
-            f"Unsupported file format: {ext}. "
-            "Please use .csv, .tsv, .txt, .xls, .xlsx, or .xlsm."
-        )
-
-    except PermissionError as pe:
-        logger.error(f"File locked by another process: {file_path}")
-        raise PermissionError(
-            "The file is currently open in another program (like Excel). "
-            "Please close it and try again."
-        ) from pe
-    except (pd.errors.EmptyDataError, pd.errors.ParserError) as parse_err:
-        logger.error(
-            f"Malformed or empty file parsing error at {file_path}: {parse_err}"
-        )
-        raise ValueError(
-            "The file is malformed, corrupted, or has inconsistent columns. "
-            "No rows were silently discarded."
-        ) from parse_err
+            return pd.read_csv(str(path), sep=None, engine="python", encoding="utf-8-sig", dtype=str, keep_default_na=False, on_bad_lines="error")
+        if ext in {".xls", ".xlsx", ".xlsm"}:
+            return pd.read_excel(str(path), dtype=str).fillna("")
+        if ext == ".json":
+            data = pd.read_json(str(path))
+            return data.fillna("")
+        if ext == ".xml":
+            return pd.read_xml(str(path)).fillna("")
+        raise ValueError("Unsupported file format. Use CSV, TSV/TXT, Excel, JSON, or XML.")
+    except PermissionError as exc:
+        logger.error("File locked or inaccessible: %s", file_path)
+        raise PermissionError("The file is currently open or inaccessible. Close it and try again.") from exc
+    except (pd.errors.EmptyDataError, pd.errors.ParserError, ValueError) as exc:
+        logger.error("Malformed input %s: %s", file_path, exc)
+        raise ValueError(f"The file could not be read safely: {exc}") from exc
 
 
 def json_value(val):
-    """
-    Safely converts pandas/numpy data types to JSON-serializable Python native types.
-    Prevents TypeError crashes during json.dumps().
-    """
     try:
         if pd.isna(val):
             return ""
         if isinstance(val, (int, float, str, bool)):
             return val
         return str(val)
-    except (ValueError, TypeError) as err:
-        logger.warning(f"Failed to parse cell value, converting to string: {err}")
+    except (ValueError, TypeError):
         return str(val)
 
 
 def map_columns(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
-    """
-    Maps DataFrame columns according to a given dictionary mapping.
-    """
     if df is None or df.empty:
         return df
     try:
         return df.rename(columns=mapping)
     except (TypeError, ValueError) as err:
-        logger.error(f"Error mapping columns: {err}")
-        return df
+        logger.error("Error mapping columns: %s", err)
+        raise ValueError(f"Invalid column mapping: {err}") from err
+
+
+def clean_value(val) -> str:
+    """Trim a value without changing case or identifier leading zeroes."""
+    if val is None:
+        return ""
+    try:
+        if pd.isna(val):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(val).strip()
 
 
 def norm_value(val) -> str:
-    """
-    Normalizes string values for comparison (strips whitespace and lowers case).
-    """
-    if pd.isna(val):
-        return ""
-    try:
-        return str(val).strip().lower()
-    except (ValueError, TypeError):
-        return ""
+    return clean_value(val).casefold()
 
 
 def norm_name(val) -> str:
-    """
-    Normalizes names/strings for file creation matching.
-    """
     return norm_value(val)
 
 
 def date_ok(val) -> bool:
-    """
-    Validates whether a value represents a valid date format.
-    """
-    if pd.isna(val) or not str(val).strip():
+    text = clean_value(val)
+    if not text:
         return False
     try:
-        pd.to_datetime(val)
-        return True
+        parsed = pd.to_datetime(text, errors="raise")
+        return not pd.isna(parsed)
     except (ValueError, TypeError):
         return False
 
 
 def binary_ok(val) -> bool:
-    """
-    Validates whether a value represents a valid binary indicator (Yes/No, 1/0, True/False).
-    """
-    if pd.isna(val):
-        return False
     norm = norm_value(val)
-    return norm in ["1", "0", "true", "false", "yes", "no", "y", "n"]
+    return norm in {"1", "0", "true", "false", "yes", "no", "y", "n"}
+
+
+def parse_delimited_text(text: str) -> list[list[str]]:
+    """Parse clipboard text with the stdlib CSV parser, including quoted commas."""
+    text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    if not text.strip():
+        return []
+    sample = text[:4096]
+    delimiter = "\t" if "\t" in sample else ","
+    return [row for row in csv.reader(text.splitlines(), delimiter=delimiter)]

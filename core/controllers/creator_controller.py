@@ -1,7 +1,12 @@
 import csv
 import json
+import os
+import tempfile
 
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
+
+from ..common import STORE_FIELDS, clean_value
+from ..file_creator import creator_validate, export_creator
 
 
 def _to_local_file(value):
@@ -10,6 +15,29 @@ def _to_local_file(value):
     if url.isLocalFile():
         return url.toLocalFile()
     return value
+
+
+def _atomic_csv(rows, headers, destination):
+    destination = str(destination)
+    parent = os.path.dirname(os.path.abspath(destination)) or "."
+    os.makedirs(parent, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=".storelens-export-", suffix=".tmp", dir=parent)
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.writer(file)
+            writer.writerow(headers)
+            for row in rows:
+                values = list(row) if isinstance(row, (list, tuple)) else []
+                writer.writerow(values[:len(headers)] + [""] * max(0, len(headers) - len(values)))
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_name, destination)
+    except Exception:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
+        raise
 
 
 class CreatorController(QObject):
@@ -31,16 +59,13 @@ class CreatorController(QObject):
         local_path = _to_local_file(path)
 
         def task():
-            headers = []
-            rows = []
-            with open(local_path, "r", encoding="utf-8", errors="replace", newline="") as file:
+            with open(local_path, "r", encoding="utf-8-sig", newline="") as file:
                 reader = csv.reader(file)
                 try:
                     headers = next(reader)
                 except StopIteration:
-                    return headers, rows
-                rows = list(reader)
-            return headers, rows
+                    return [], []
+                return headers, list(reader)
 
         def success(result):
             self.current_headers, self.current_rows = result
@@ -63,44 +88,42 @@ class CreatorController(QObject):
             rows = json.loads(rows_json or "[]")
             if not isinstance(rows, list):
                 raise ValueError("Creator rows must be a JSON array.")
-            findings = []
-            for index, row in enumerate(rows):
-                if not isinstance(row, list):
-                    findings.append({"message": f"Row {index + 1}: Invalid row structure.", "severity": "ERROR"})
+            normalized = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    normalized.append(row)
                     continue
-                if not any(str(value).strip() for value in row):
-                    continue
-                if not row or not str(row[0]).strip():
-                    findings.append({"message": f"Row {index + 1}: Primary ID is empty", "severity": "ERROR"})
-            return len(rows), findings
+                normalized.append({field: clean_value(row.get(field, "")) for field in STORE_FIELDS})
+            findings = creator_validate(normalized)
+            return len(normalized), findings
 
         def success(result):
             count, findings = result
-            self.creatorReady.emit(json.dumps({"count": count, "findings": findings}))
+            self.creatorReady.emit(json.dumps({"count": len(findings), "rows": count, "findings": findings}))
 
         def error(exc):
             if self.notify:
                 self.notify("Validation Error", str(exc), "error")
-            self.creatorReady.emit(json.dumps({"count": 0, "findings": [{"message": str(exc), "severity": "ERROR"}]}))
+            self.creatorReady.emit(json.dumps({"count": 1, "rows": 0, "findings": [{"row": 0, "field": "SYSTEM", "message": str(exc), "severity": "ERROR"}]}))
 
         self.async_runner.run(task, success, error)
 
     @Slot(str, str)
     def export_creator_file(self, rows_json, dst):
-        rows = json.loads(rows_json or "[]")
-        if not isinstance(rows, list):
+        try:
+            rows = json.loads(rows_json or "[]")
+            if not isinstance(rows, list):
+                raise ValueError("Creator rows must be a JSON array.")
+        except Exception as exc:
             if self.notify:
-                self.notify("Export Error", "Creator rows must be a JSON array.", "error")
+                self.notify("Export Error", str(exc), "error")
             return
 
         local_dst = _to_local_file(dst)
-        headers = list(self.current_headers)
+        headers = list(self.current_headers) or list(STORE_FIELDS)
 
         def task():
-            with open(local_dst, "w", newline="", encoding="utf-8") as file:
-                writer = csv.writer(file)
-                writer.writerow(headers)
-                writer.writerows(rows)
+            _atomic_csv(rows, headers, local_dst)
 
         def success(_result):
             self.creatorExported.emit()
@@ -118,24 +141,24 @@ class CreatorController(QObject):
         try:
             rows = json.loads(rows_json or "[]")
             headers = json.loads(headers_json or "[]")
+            if not isinstance(rows, list) or not isinstance(headers, list) or headers != STORE_FIELDS:
+                raise ValueError("Store Builder must export the canonical StoreLens schema.")
         except Exception as exc:
             if self.notify:
                 self.notify("Export Error", str(exc), "error")
             return
 
-        if not isinstance(rows, list) or not isinstance(headers, list) or not headers:
-            if self.notify:
-                self.notify("Export Error", "Invalid Store Builder data.", "error")
-            return
-
         local_dst = _to_local_file(dst)
 
         def task():
-            with open(local_dst, "w", newline="", encoding="utf-8-sig") as file:
-                writer = csv.writer(file)
-                writer.writerow(headers)
-                for row in rows:
-                    writer.writerow(list(row)[:len(headers)] + [""] * max(0, len(headers) - len(row)))
+            dict_rows = []
+            for row in rows:
+                values = list(row) if isinstance(row, list) else []
+                dict_rows.append({headers[i]: clean_value(values[i]) if i < len(values) else "" for i in range(len(headers))})
+            findings = creator_validate(dict_rows)
+            if findings:
+                raise ValueError(f"Export blocked: {len(findings)} validation finding(s) remain. Validate and fix the rows first.")
+            return export_creator(dict_rows, local_dst)
 
         def success(_result):
             self.builderExported.emit()

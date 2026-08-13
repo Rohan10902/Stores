@@ -1,132 +1,130 @@
 import sys
 import os
 import traceback
-import logging
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QUrl, QThreadPool, qInstallMessageHandler, QtMsgType
 from PySide6.QtQml import QQmlApplicationEngine
 
-from core.utils.logger import setup_logging, get_logger
+from core.utils.logger import setup_logging, get_logger, log_directory
 from core.controllers import MainBackendController
 
-# Handle path resolution correctly for compiled executables vs script execution
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     BASE = Path(sys.executable).resolve().parent
 else:
     BASE = Path(__file__).resolve().parent
 
 logger = get_logger("Bootstrap")
 
-logging.basicConfig(
-    filename='startup_debug.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+
+def _startup_marker_path() -> Path:
+    configured = os.environ.get("STORELENS_STARTUP_MARKER", "").strip()
+    if configured:
+        return Path(configured)
+    return log_directory() / "startup.marker"
+
+
+def _write_startup_marker() -> None:
+    marker = _startup_marker_path()
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("STORELENS_STARTUP_OK\n", encoding="utf-8")
+    except OSError as exc:
+        logger.error("Unable to write startup marker: %s", exc)
+    if sys.stdout is not None:
+        print("STORELENS_STARTUP_OK", flush=True)
+
 
 def setup_exception_traps():
     def global_exception_trap(exctype, value, tb):
         err_text = "".join(traceback.format_exception(exctype, value, tb))
-        logger.critical(f"[CRITICAL EXCEPTION PREVENTED]:\n{err_text}")
-        sys.stdout.flush()
+        logger.critical("[UNHANDLED EXCEPTION]:\n%s", err_text)
+        if sys.stdout is not None:
+            sys.stdout.flush()
 
     def qt_message_trap(mode, context, message):
         if mode == QtMsgType.QtFatalMsg:
-            logger.critical(f"[QT FATAL SUPPRESSED]: {message}")
+            logger.critical("[QT FATAL]: %s", message)
         elif mode == QtMsgType.QtCriticalMsg:
-            logger.error(f"[QT CRITICAL]: {message}")
-        sys.stdout.flush()
+            logger.error("[QT CRITICAL]: %s", message)
+        if sys.stdout is not None:
+            sys.stdout.flush()
 
     sys.excepthook = global_exception_trap
     qInstallMessageHandler(qt_message_trap)
 
+
 def create_application(sys_argv):
     setup_logging()
     setup_exception_traps()
-    
-    logger.info("CHECKPOINT 1: Starting application initialization...")
+    marker = _startup_marker_path()
+    try:
+        marker.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    logger.info("Starting StoreLens initialization")
     app = QApplication(sys_argv)
     engine = QQmlApplicationEngine()
 
-    # --- FIXED DIAGNOSTIC CODE ---
-    # Wire up the QML warnings signal BEFORE loading anything to catch all component errors
     def handle_qml_warnings(warnings):
         for warning in warnings:
-            # Safely handle PySide6 QQmlError properties/methods
-            url = warning.url().toLocalFile() if hasattr(warning.url(), 'toLocalFile') else warning.url().toString()
-            line = warning.line()
-            column = warning.column()
-            desc = warning.description()
-            
-            error_msg = f"QML WARNING/ERROR: {url}:{line}:{column} - {desc}"
-            logger.critical(error_msg)
-            print(error_msg, file=sys.stderr)
+            url = warning.url().toLocalFile() if hasattr(warning.url(), "toLocalFile") else warning.url().toString()
+            message = f"QML: {url}:{warning.line()}:{warning.column()} - {warning.description()}"
+            logger.error(message)
+            if sys.stderr is not None:
+                print(message, file=sys.stderr, flush=True)
 
     engine.warnings.connect(handle_qml_warnings)
-    # -----------------------------
 
-    # Configure hardware-aware threadpool
     threadpool = QThreadPool.globalInstance()
     threadpool.setMaxThreadCount(max(2, os.cpu_count() or 4))
-
-    logger.info("CHECKPOINT 2: Setting up QML engine and controllers...")
     backend = MainBackendController(threadpool=threadpool)
     engine.rootContext().setContextProperty("backend", backend)
 
     def cleanup_resources():
-        logger.info("Application shutting down. Intercepting background workers...")
-        threadpool.clear() 
-        if not threadpool.waitForDone(2000):
-            logger.warning("Some background tasks were forcibly terminated during shutdown.")
-        logger.info("Resource cleanup complete. Safe to destroy QML Engine.")
+        logger.info("Application shutting down; waiting for background workers")
+        threadpool.clear()
+        if not threadpool.waitForDone(3000):
+            logger.warning("Background workers did not finish within shutdown grace period")
 
     app.aboutToQuit.connect(cleanup_resources)
 
-    logger.info("CHECKPOINT 3: Loading Main.qml...")
-    
-    # Robust multi-path search for Main.qml across build layouts
     possible_paths = [
         BASE / "qml" / "Main.qml",
         BASE / "_internal" / "qml" / "Main.qml",
-        Path(sys.executable).resolve().parent / "qml" / "Main.qml" if getattr(sys, 'frozen', False) else None,
-        Path(sys.executable).resolve().parent / "_internal" / "qml" / "Main.qml" if getattr(sys, 'frozen', False) else None,
+        Path(sys.executable).resolve().parent / "qml" / "Main.qml" if getattr(sys, "frozen", False) else None,
+        Path(sys.executable).resolve().parent / "_internal" / "qml" / "Main.qml" if getattr(sys, "frozen", False) else None,
     ]
-    
-    main_qml = next((p for p in possible_paths if p and p.exists()), None)
-    
+    main_qml = next((path for path in possible_paths if path and path.exists()), None)
     if not main_qml:
-        logger.critical(f"CRITICAL: Main.qml not found in any expected paths. Checked: {[str(p) for p in possible_paths if p]}")
+        logger.critical("Main.qml not found. Checked: %s", [str(path) for path in possible_paths if path])
         return app, engine, 1
-        
-    logger.info(f"Loading QML file from verified path: {main_qml}")
-    
-    qml_base_dir = main_qml.parent
-    engine.addImportPath(str(qml_base_dir))
-    logger.info(f"Added QML import path: {qml_base_dir}")
 
-    # The engine will emit warnings() automatically if this fails to load/parse
+    engine.addImportPath(str(main_qml.parent))
+    logger.info("Loading Main.qml from %s", main_qml)
     engine.load(QUrl.fromLocalFile(str(main_qml)))
 
     if not engine.rootObjects():
-        logger.critical("CRITICAL: Failed to load Main.qml root object. See terminal or log for the exact QML errors caught by the diagnostic handler.")
+        logger.critical("Main.qml failed to create a root object")
         return app, engine, 1
 
     if os.environ.get("STORELENS_CI_STARTUP_TEST") == "1":
-        print("STORELENS_STARTUP_OK")
-        sys.stdout.flush()
+        app.processEvents()
+        _write_startup_marker()
         return app, engine, 0
 
     return app, engine, None
 
+
 def main():
     app, engine, exit_code = create_application(sys.argv)
-    
     if exit_code is not None:
         sys.exit(exit_code)
-        
-    logger.info("CHECKPOINT 4: Entering main event loop (app.exec())...")
+    logger.info("Entering Qt event loop")
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

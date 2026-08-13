@@ -1,10 +1,10 @@
-name: StoreLens Rigorous CI & Stress Suite
+name: StoreLens Production CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master, production-hardening]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   rigorous-test-suite:
@@ -14,32 +14,61 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11.9'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: pip
 
-      - name: Install Dependencies & Test Tools
+      - name: Install Dependencies and Test Tools
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          if (Test-Path "requirements.txt") { pip install -r requirements.txt }
-          pip install pytest pytest-benchmark psutil
+          pip install -r requirements.txt
+          pip install pytest pytest-benchmark psutil ruff
 
-      - name: Run Unit & Regression Test Suite
+      - name: Compile Python Source
+        run: python -m compileall -q core app.py bootstrap.py
+
+      - name: Ruff Correctness Lint
+        run: ruff check . --select E9,F63,F7,F82
+
+      - name: QML Lint
+        shell: pwsh
         run: |
-          python -m pytest tests/test_regressions.py -v --tb=short
+          $qmllint = Get-ChildItem "$env:pythonLocation\Lib\site-packages\PySide6" -Filter "qmllint.exe" -Recurse | Select-Object -First 1
+          if (-not $qmllint) { throw "qmllint.exe was not found in the PySide6 installation." }
+          $failed = $false
+          Get-ChildItem qml -Filter *.qml -Recurse | ForEach-Object {
+            & $qmllint.FullName -I qml $_.FullName
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { throw "QML lint failed." }
 
-      - name: Run Durability & Memory Stress Tests
+      - name: Execute Full Test Suite
+        shell: pwsh
         run: |
-          python -m pytest tests/test_durability.py -v --tb=short
+          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml 2>&1 | Tee-Object -FilePath pytest-output.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run CSV Performance Benchmarks
-        run: |
-          python -m pytest tests/test_performance.py --benchmark-enable --benchmark-save=ci-benchmarks
+      - name: Upload Test Diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: StoreLens-Test-Diagnostics
+          path: |
+            pytest-output.txt
+            test-results.xml
 
-      - name: Run Automated Startup Integration Test
+      - name: Application Startup Smoke Test
+        shell: pwsh
         env:
           STORELENS_CI_STARTUP_TEST: "1"
+          STORELENS_STARTUP_MARKER: "${{ github.workspace }}/startup-smoke.marker"
+          QT_QPA_PLATFORM: "offscreen"
         run: |
-          python bootstrap.py
+          Remove-Item startup-smoke.marker -ErrorAction SilentlyContinue
+          $output = & python bootstrap.py 2>&1
+          $output | Tee-Object -FilePath startup-smoke.log
+          if ($LASTEXITCODE -ne 0) { throw "Application startup smoke test failed." }
+          if (-not (Test-Path startup-smoke.marker)) { throw "Startup marker file was not created." }
