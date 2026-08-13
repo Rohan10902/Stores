@@ -1,8 +1,9 @@
-import csv
 import json
 import shutil
 
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
+
+from core.common import read_table
 
 
 def _to_local_file(value):
@@ -25,49 +26,34 @@ class ReviewController(QObject):
     def review_single_file(self, path):
         try:
             local_path = _to_local_file(path)
-            findings = []
-            preview_cols = []
-            preview_rows = []
-            total = 0
+            dataframe = read_table(local_path)
+
+            preview_cols = [str(column) for column in dataframe.columns]
+            preview_rows = (
+                dataframe.head(50)
+                .fillna("")
+                .astype(str)
+                .values
+                .tolist()
+            )
+            total = int(len(dataframe))
             attention = 0
+            findings = []
 
-            with open(
-                local_path,
-                "r",
-                encoding="utf-8",
-                errors="replace",
-                newline="",
-            ) as file:
-                reader = csv.reader(file)
-
-                try:
-                    preview_cols = next(reader)
-                except StopIteration:
-                    preview_cols = []
-
-                for row in reader:
-                    total += 1
-
-                    if total <= 50:
-                        preview_rows.append(row)
-
-                    if len(row) != len(preview_cols):
-                        findings.append({
-                            "message": (
-                                f"Row {total}: Column count mismatch."
-                            ),
-                            "severity": "ERROR",
-                        })
-                        attention += 1
-
-                    elif not any(str(value).strip() for value in row):
-                        findings.append({
-                            "message": (
-                                f"Row {total}: Completely empty."
-                            ),
-                            "severity": "WARNING",
-                        })
-                        attention += 1
+            expected_columns = len(preview_cols)
+            for index, row in enumerate(preview_rows, start=2):
+                if len(row) != expected_columns:
+                    findings.append({
+                        "message": f"Row {index}: Column count mismatch.",
+                        "severity": "ERROR",
+                    })
+                    attention += 1
+                elif not any(str(value).strip() for value in row):
+                    findings.append({
+                        "message": f"Row {index}: Completely empty.",
+                        "severity": "WARNING",
+                    })
+                    attention += 1
 
             self.singleReviewReady.emit(
                 json.dumps({
@@ -76,7 +62,7 @@ class ReviewController(QObject):
                     "previewColumns": preview_cols,
                     "previewRows": preview_rows,
                     "findings": findings,
-                })
+                }, default=str)
             )
 
             if self.notify:
