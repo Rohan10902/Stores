@@ -187,12 +187,15 @@ Item {
     }
 
     ScrollView {
+        id: scrollView
         anchors.fill: parent
         clip: true
+        contentWidth: availableWidth
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
         ColumnLayout {
-            width: parent.width
+            id: page
+            width: scrollView.availableWidth
             spacing: Theme.spacingLarge
 
             PageTitle {
@@ -292,7 +295,7 @@ Item {
                                             height: 38; color: "transparent"; border.color: Theme.border
                                             TextField {
                                                 anchors.fill: parent; anchors.margins: 1
-                                                text: root.rows[modelData ? parent.parent.parent.index : parent.parent.parent.index][index]
+                                                text: root.rows[parent.parent.parent.index][index]
                                                 color: Theme.textPrimary; font.pixelSize: 11; leftPadding: 7; rightPadding: 7; selectByMouse: true
                                                 background: Rectangle { color: "transparent"; border.color: parent.activeFocus ? Theme.primary : "transparent" }
                                                 onEditingFinished: root.setCell(parent.parent.parent.index, index, text)
