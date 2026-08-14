@@ -307,6 +307,7 @@ Item {
                     }
 
                     Rectangle {
+                        id: headerViewport
                         Layout.fillWidth: true
                         Layout.preferredHeight: root.previewColumns.length > 0 ? 40 : 0
                         visible: root.previewColumns.length > 0
@@ -315,17 +316,20 @@ Item {
                         clip: true
 
                         Flickable {
+                            id: headerFlick
                             anchors.fill: parent
                             contentWidth: Math.max(width, root.previewColumns.length * root.columnWidth)
                             contentHeight: height
-                            clip: true
+                            contentX: previewFlick.contentX
                             interactive: false
+                            clip: true
 
                             Row {
                                 id: headerRow
-                                width: Math.max(headerViewport.width, root.previewColumns.length * root.columnWidth)
+                                width: Math.max(headerFlick.width, root.previewColumns.length * root.columnWidth)
                                 height: 40
                                 spacing: 0
+
                                 Repeater {
                                     model: root.previewColumns
                                     delegate: Rectangle {
@@ -348,7 +352,6 @@ Item {
                                     }
                                 }
                             }
-                            property alias headerViewport: headerRow
                         }
                     }
 
