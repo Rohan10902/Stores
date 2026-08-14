@@ -11,9 +11,15 @@ from core.utils.logger import setup_logging, get_logger, log_directory
 from core.controllers import MainBackendController
 
 if getattr(sys, "frozen", False):
+    # PyInstaller onefile extracts bundled resources under _MEIPASS.
+    # PyInstaller onedir keeps them beside the executable.  Supporting both
+    # here lets the release pipeline ship a single EXE without changing the
+    # application's resource contract.
     BASE = Path(sys.executable).resolve().parent
+    BUNDLE_BASE = Path(getattr(sys, "_MEIPASS", BASE)).resolve()
 else:
     BASE = Path(__file__).resolve().parent
+    BUNDLE_BASE = BASE
 
 logger = get_logger("Bootstrap")
 
@@ -92,14 +98,14 @@ def create_application(sys_argv):
     app.aboutToQuit.connect(cleanup_resources)
 
     possible_paths = [
+        BUNDLE_BASE / "qml" / "Main.qml",
         BASE / "qml" / "Main.qml",
+        BUNDLE_BASE / "_internal" / "qml" / "Main.qml",
         BASE / "_internal" / "qml" / "Main.qml",
-        Path(sys.executable).resolve().parent / "qml" / "Main.qml" if getattr(sys, "frozen", False) else None,
-        Path(sys.executable).resolve().parent / "_internal" / "qml" / "Main.qml" if getattr(sys, "frozen", False) else None,
     ]
-    main_qml = next((path for path in possible_paths if path and path.exists()), None)
+    main_qml = next((path for path in possible_paths if path.exists()), None)
     if not main_qml:
-        logger.critical("Main.qml not found. Checked: %s", [str(path) for path in possible_paths if path])
+        logger.critical("Main.qml not found. Checked: %s", [str(path) for path in possible_paths])
         return app, engine, 1
 
     engine.addImportPath(str(main_qml.parent))
