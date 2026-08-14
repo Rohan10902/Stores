@@ -61,12 +61,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Source startup smoke test failed." }
           if (-not (Test-Path source-startup.marker)) { throw "Source startup marker file was not created." }
 
-      - name: Build Windows Executable
+      - name: Build Windows One-File Executable
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name StoreLens --version-file version_info.txt --add-data "qml;qml" bootstrap.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name StoreLens --version-file version_info.txt --add-data "qml;qml" bootstrap.py
 
-      - name: Packaged Executable Startup Smoke Test
+      - name: Packaged One-File Startup Smoke Test
         shell: pwsh
         env:
           STORELENS_CI_STARTUP_TEST: "1"
@@ -74,31 +74,26 @@ jobs:
           QT_QPA_PLATFORM: "offscreen"
         run: |
           Remove-Item packaged-startup.marker -ErrorAction SilentlyContinue
-          $exe = Resolve-Path "dist\StoreLens\StoreLens.exe"
+          $exe = Resolve-Path "dist\StoreLens.exe"
           $out = Join-Path $PWD "packaged-startup.out"
           $err = Join-Path $PWD "packaged-startup.err"
           $process = Start-Process -FilePath $exe -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
           Get-Content $out -ErrorAction SilentlyContinue
           Get-Content $err -ErrorAction SilentlyContinue
-          if ($process.ExitCode -ne 0) { throw "Packaged executable exited with code $($process.ExitCode)." }
-          if (-not (Test-Path packaged-startup.marker)) { throw "Packaged startup marker file was not created." }
-
-      - name: Package Windows Artifact
-        shell: pwsh
-        run: |
-          Compress-Archive -Path dist\StoreLens\* -DestinationPath dist\StoreLens-Windows.zip -Force
+          if ($process.ExitCode -ne 0) { throw "Packaged one-file executable exited with code $($process.ExitCode)." }
+          if (-not (Test-Path packaged-startup.marker)) { throw "Packaged one-file startup marker was not created." }
 
       - name: Generate SHA-256 Checksum
         shell: pwsh
         run: |
-          Get-FileHash dist\StoreLens-Windows.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  StoreLens-Windows.zip" } | Set-Content dist\SHA256SUMS.txt
+          Get-FileHash dist\StoreLens.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  StoreLens.exe" } | Set-Content dist\SHA256SUMS.txt
 
-      - name: Upload Build Artifact
+      - name: Upload Windows One-File Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StoreLens-Windows-RC
+          name: StoreLens-Windows-OneFile
           path: |
-            dist/StoreLens-Windows.zip
+            dist/StoreLens.exe
             dist/SHA256SUMS.txt
             packaged-startup.out
             packaged-startup.err
