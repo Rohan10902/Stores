@@ -33,6 +33,8 @@ ApplicationWindow {
     readonly property var pageIds: [
         "home", "compare", "repair", "review", "create", "explore", "health"
     ]
+    readonly property int previewColumnWidth: 180
+    readonly property int previewRowHeight: 38
 
     function navigateTo(pageId) {
         var index = pageIds.indexOf(pageId)
@@ -44,26 +46,30 @@ ApplicationWindow {
     }
 
     function parsePreview(payload, isMaster) {
+        previewError = ""
         try {
             var data = JSON.parse(String(payload || "{}"))
             var columns = Array.isArray(data.columns) ? data.columns : []
             var rows = Array.isArray(data.rows) ? data.rows : []
-            if (columns.length === 0) {
-                previewError = "No columns were detected in this file."
-                return
-            }
+            var total = Number(data.total || rows.length || 0)
+
             if (isMaster) {
                 masterPreviewColumns = columns
                 masterPreviewRows = rows
-                masterPreviewTotal = Number(data.total || rows.length || 0)
+                masterPreviewTotal = total
                 previewMode = 0
             } else {
                 uploadPreviewColumns = columns
                 uploadPreviewRows = rows
-                uploadPreviewTotal = Number(data.total || rows.length || 0)
+                uploadPreviewTotal = total
                 previewMode = 1
             }
-            previewError = ""
+
+            if (columns.length === 0) {
+                previewError = "No columns were detected in this file."
+            } else if (rows.length === 0) {
+                previewError = "The file loaded successfully, but it contains no data rows to preview."
+            }
             previewVisible = true
         } catch (error) {
             previewError = "Unable to display the dataset preview."
@@ -81,6 +87,10 @@ ApplicationWindow {
 
     function activeTotal() {
         return previewMode === 0 ? masterPreviewTotal : uploadPreviewTotal
+    }
+
+    function activeLabel() {
+        return previewMode === 0 ? "Master Dataset" : "Uploaded Dataset"
     }
 
     function cellValue(row, columnIndex) {
@@ -209,8 +219,8 @@ ApplicationWindow {
         visible: root.previewVisible
         z: 900
         anchors.centerIn: parent
-        width: Math.min(parent.width - 100, 1280)
-        height: Math.min(parent.height - 100, 720)
+        width: Math.min(parent.width - 40, 1450)
+        height: Math.min(parent.height - 40, 820)
         radius: Theme.radiusLarge
         color: Theme.surface
         border.color: Theme.primary
@@ -221,30 +231,34 @@ ApplicationWindow {
             anchors.margins: 6
             color: Theme.background
             radius: Theme.radiusLarge
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Theme.spacingMedium
-                spacing: Theme.spacingMedium
+                spacing: Theme.spacingSmall
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 58
+                    Layout.preferredHeight: 62
+
                     ColumnLayout {
                         Layout.fillWidth: true
+                        spacing: 2
                         Text {
-                            text: root.previewMode === 0 ? "Master Dataset Preview" : "Uploaded Dataset Preview"
+                            text: root.activeLabel() + " Preview"
                             color: Theme.textPrimary
-                            font.pixelSize: 19
+                            font.pixelSize: 20
                             font.bold: true
                         }
                         Text {
-                            text: root.activeTotal().toLocaleString() + " records  •  " + root.activeColumns().length + " columns  •  first " + root.activeRows().length + " rows"
+                            text: root.activeTotal().toLocaleString() + " records  •  " + root.activeColumns().length + " columns  •  showing " + root.activeRows().length + " rows"
                             color: Theme.textSecondary
                             font.pixelSize: 11
                         }
                     }
-                    AppButton { text: "Master"; onClicked: root.previewMode = 0; enabled: root.masterPreviewColumns.length > 0 }
-                    AppButton { text: "Uploaded"; onClicked: root.previewMode = 1; enabled: root.uploadPreviewColumns.length > 0 }
+
+                    AppButton { text: "Master"; onClicked: { root.previewMode = 0; root.previewError = root.masterPreviewColumns.length === 0 ? "No master preview is available." : (root.masterPreviewRows.length === 0 ? "Master loaded with no data rows." : "") }; enabled: root.masterPreviewColumns.length > 0 }
+                    AppButton { text: "Uploaded"; onClicked: { root.previewMode = 1; root.previewError = root.uploadPreviewColumns.length === 0 ? "No uploaded preview is available." : (root.uploadPreviewRows.length === 0 ? "Uploaded file has no data rows." : "") }; enabled: root.uploadPreviewColumns.length > 0 }
                     AppButton { text: "Close"; onClicked: root.closePreview() }
                 }
 
@@ -256,66 +270,122 @@ ApplicationWindow {
                     radius: Theme.radiusMedium
                     clip: true
 
-                    Text {
-                        anchors.centerIn: parent
-                        visible: root.previewError !== ""
-                        text: root.previewError
-                        color: Theme.error
-                    }
-
-                    Flickable {
-                        id: previewFlick
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 1
-                        visible: root.previewError === "" && root.activeColumns().length > 0
-                        clip: true
-                        contentWidth: Math.max(width, root.activeColumns().length * 170)
-                        contentHeight: previewTable.height
-                        boundsBehavior: Flickable.StopAtBounds
-                        ScrollBar.vertical: ScrollBar {}
-                        ScrollBar.horizontal: ScrollBar {}
+                        spacing: 0
 
-                        Column {
-                            id: previewTable
-                            width: Math.max(previewFlick.width, root.activeColumns().length * 170)
-                            spacing: 0
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 42
+                            visible: root.previewError === "" && root.activeColumns().length > 0
+                            color: Theme.surfaceHover
+                            border.color: Theme.borderStrong
+                            clip: true
 
-                            Rectangle {
-                                width: previewTable.width
-                                height: 42
-                                color: Theme.surfaceHover
-                                border.color: Theme.border
+                            Flickable {
+                                id: headerFlick
+                                anchors.fill: parent
+                                clip: true
+                                interactive: false
+                                contentWidth: headerRow.width
+                                contentX: rowsFlick.contentX
+
                                 Row {
-                                    anchors.fill: parent
+                                    id: headerRow
+                                    height: 42
+                                    width: Math.max(headerFlick.width, root.activeColumns().length * root.previewColumnWidth)
+
                                     Repeater {
                                         model: root.activeColumns()
                                         delegate: Rectangle {
                                             required property string modelData
-                                            width: 170; height: 42
-                                            color: "transparent"; border.color: Theme.border
-                                            Text { anchors.fill: parent; anchors.margins: 8; text: modelData; color: Theme.textPrimary; font.bold: true; font.pixelSize: 11; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                                            width: root.previewColumnWidth
+                                            height: 42
+                                            color: "transparent"
+                                            border.color: Theme.border
+
+                                            Text {
+                                                anchors.fill: parent
+                                                anchors.margins: 8
+                                                text: modelData
+                                                color: Theme.textPrimary
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                                verticalAlignment: Text.AlignVCenter
+                                                elide: Text.ElideRight
+                                            }
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            Repeater {
-                                model: root.activeRows()
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: previewTable.width; height: 36
-                                    color: index % 2 === 0 ? Theme.background : Theme.surface
-                                    border.color: Theme.border
-                                    Row {
-                                        anchors.fill: parent
-                                        Repeater {
-                                            model: root.activeColumns().length
-                                            delegate: Rectangle {
-                                                required property int index
-                                                width: 170; height: 36
-                                                color: "transparent"; border.color: Theme.border
-                                                Text { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8; text: root.cellValue(parent.parent.parent.modelData, index); color: Theme.textPrimary; font.pixelSize: 11; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            color: Theme.background
+                            clip: true
+
+                            Text {
+                                anchors.centerIn: parent
+                                visible: root.previewError !== ""
+                                text: root.previewError
+                                color: Theme.error
+                                font.pixelSize: 13
+                            }
+
+                            Flickable {
+                                id: rowsFlick
+                                anchors.fill: parent
+                                visible: root.previewError === "" && root.activeColumns().length > 0
+                                clip: true
+                                contentWidth: Math.max(width, root.activeColumns().length * root.previewColumnWidth)
+                                contentHeight: previewRows.height
+                                boundsBehavior: Flickable.StopAtBounds
+
+                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                                ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                                Column {
+                                    id: previewRows
+                                    width: Math.max(rowsFlick.width, root.activeColumns().length * root.previewColumnWidth)
+                                    spacing: 0
+
+                                    Repeater {
+                                        model: root.activeRows()
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            required property int index
+                                            property var rowData: modelData
+
+                                            width: previewRows.width
+                                            height: root.previewRowHeight
+                                            color: index % 2 === 0 ? Theme.background : Theme.surface
+                                            border.color: Theme.border
+
+                                            Row {
+                                                anchors.fill: parent
+                                                Repeater {
+                                                    model: root.activeColumns().length
+                                                    delegate: Rectangle {
+                                                        required property int index
+                                                        width: root.previewColumnWidth
+                                                        height: root.previewRowHeight
+                                                        color: "transparent"
+                                                        border.color: Theme.border
+
+                                                        Text {
+                                                            anchors.fill: parent
+                                                            anchors.leftMargin: 8
+                                                            anchors.rightMargin: 8
+                                                            text: root.cellValue(rowData, index)
+                                                            color: Theme.textPrimary
+                                                            font.pixelSize: 11
+                                                            verticalAlignment: Text.AlignVCenter
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
