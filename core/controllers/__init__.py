@@ -28,6 +28,10 @@ except ImportError:
 class MainBackendController(QObject):
     notifySignal = Signal(str, str, str)
     saySignal = Signal(str)
+    creatorLoaded = Signal(str)
+    creatorReady = Signal(str)
+    creatorExported = Signal()
+    builderExported = Signal()
 
     def __init__(self, threadpool=None, parent=None):
         super().__init__(parent)
@@ -47,9 +51,11 @@ class MainBackendController(QObject):
         self.creator = CreatorController(self.async_runner, self.notify, self.say, parent=self)
         self.health = HealthController(self.async_runner, self.notify, self.say, parent=self)
 
-        # Forward dataset preview payloads through the top-level backend signal.
-        # This avoids QML Connections losing nested-controller signals when the
-        # page is loaded/unloaded by StackLayout.
+        self.creator.creatorLoaded.connect(self.creatorLoaded.emit)
+        self.creator.creatorReady.connect(self.creatorReady.emit)
+        self.creator.creatorExported.connect(self.creatorExported.emit)
+        self.creator.builderExported.connect(self.builderExported.emit)
+
         self.validate.masterPreviewReady.connect(
             lambda payload: self.saySignal.emit("__STORELENS_PREVIEW_MASTER__" + str(payload))
         )
