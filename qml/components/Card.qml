@@ -3,16 +3,21 @@ import "../theme"
 
 Rectangle {
     id: cardRoot
+
     radius: Theme.radiusLarge
-    // FIXED: Use HoverHandler instead of MouseArea to prevent blocking child button interactions
     color: hoverHandler.hovered && hoverable ? Theme.surfaceHover : Theme.surface
-    border.color: hoverHandler.hovered && hoverable ? Theme.primary : Theme.border
+    border.color: hoverHandler.hovered && hoverable ? Theme.borderStrong : Theme.border
     border.width: 1
 
     property bool hoverable: true
 
-    Behavior on color { ColorAnimation { duration: Theme.durationFast } }
-    Behavior on border.color { ColorAnimation { duration: Theme.durationFast } }
+    Behavior on color {
+        ColorAnimation { duration: Theme.durationFast }
+    }
+
+    Behavior on border.color {
+        ColorAnimation { duration: Theme.durationFast }
+    }
 
     HoverHandler {
         id: hoverHandler
