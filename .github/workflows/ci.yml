@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions:
+  contents: write
+
 jobs:
   rigorous-test-suite:
     runs-on: windows-latest
@@ -32,6 +35,84 @@ jobs:
 
       - name: Ruff Correctness Lint
         run: ruff check . --select E9,F63,F7,F82
+
+      - name: Apply remaining RepairPage QML lint fixes
+        if: ${{ !contains(github.event.head_commit.message, 'chore: apply RepairPage qmllint fixes') }}
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          path = Path('qml/pages/RepairPage.qml')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  '                            delegate: Rectangle {\n'
+                  '                                required property var modelData\n'
+                  '                                required property int index\n',
+                  '                            delegate: Rectangle {\n'
+                  '                                id: columnDelegate\n'
+                  '                                required property var modelData\n'
+                  '                                required property int index\n'
+              ),
+              (
+                  '                                        root.selectedSourceColumn =\n'
+                  '                                            index\n',
+                  '                                        root.selectedSourceColumn =\n'
+                  '                                            columnDelegate.index\n'
+              ),
+              (
+                  '                                        root.selectedTargetColumn =\n'
+                  '                                            modelData.column\n',
+                  '                                        root.selectedTargetColumn =\n'
+                  '                                            columnDelegate.modelData.column\n'
+              ),
+              (
+                  '                                            root.selectedSourceColumn === index\n',
+                  '                                            root.selectedSourceColumn === columnDelegate.index\n'
+              ),
+              (
+                  '                                            modelData.column\n',
+                  '                                            columnDelegate.modelData.column\n'
+              ),
+              (
+                  '                                            modelData.value === ""\n'
+                  '                                                ? "—"\n'
+                  '                                                : modelData.value\n',
+                  '                                            columnDelegate.modelData.value === ""\n'
+                  '                                                ? "—"\n'
+                  '                                                : columnDelegate.modelData.value\n'
+              ),
+              (
+                  '                    text: parent.text\n'
+                  '                    color: Theme.textPrimary\n'
+                  '                    verticalAlignment: Text.AlignVCenter\n'
+                  '                    leftPadding: parent.indicator.width + Theme.spacingSmall\n',
+                  '                    text: rememberMapping.text\n'
+                  '                    color: Theme.textPrimary\n'
+                  '                    verticalAlignment: Text.AlignVCenter\n'
+                  '                    leftPadding: rememberMapping.indicator.width + Theme.spacingSmall\n'
+              ),
+          ]
+
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          '@ | python -
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add qml/pages/RepairPage.qml
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m 'chore: apply RepairPage qmllint fixes'
+            git push origin HEAD:main
+          } else {
+            Write-Host 'RepairPage already contains the targeted fixes.'
+          }
 
       - name: QML Lint
         shell: pwsh
