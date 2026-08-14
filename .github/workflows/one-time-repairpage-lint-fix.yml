@@ -1,0 +1,71 @@
+name: One-time RepairPage lint fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'chore: apply RepairPage qmllint fixes') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch RepairPage.qml
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('qml/pages/RepairPage.qml')
+          text = p.read_text(encoding='utf-8')
+
+          replacements = {
+              '''                            delegate: Rectangle {\n                                required property var modelData\n                                required property int index\n''': '''                            delegate: Rectangle {\n                                id: columnDelegate\n                                required property var modelData\n                                required property int index\n''',
+              '''                                        root.selectedSourceColumn =\n                                            index\n''': '''                                        root.selectedSourceColumn =\n                                            columnDelegate.index\n''',
+              '''                                        root.selectedTargetColumn =\n                                            modelData.column\n''': '''                                        root.selectedTargetColumn =\n                                            columnDelegate.modelData.column\n''',
+              '''                                            root.selectedSourceColumn === index\n''': '''                                            root.selectedSourceColumn === columnDelegate.index\n''',
+              '''                                            modelData.column\n''': '''                                            columnDelegate.modelData.column\n''',
+              '''                                            modelData.value === ""\n                                                ? "—"\n                                                : modelData.value\n''': '''                                            columnDelegate.modelData.value === ""\n                                                ? "—"\n                                                : columnDelegate.modelData.value\n''',
+              '''                contentItem: Text {\n                    text: parent.text\n                    color: Theme.textPrimary\n                    verticalAlignment: Text.AlignVCenter\n                    leftPadding: parent.indicator.width + Theme.spacingSmall\n                }\n''': '''                contentItem: Text {\n                    text: rememberMapping.text\n                    color: Theme.textPrimary\n                    verticalAlignment: Text.AlignVCenter\n                    leftPadding: rememberMapping.indicator.width + Theme.spacingSmall\n                }\n'''
+          }
+
+          for old, new in replacements.items():
+              if old not in text:
+                  print('MISSING PATTERN:', old[:80].replace('\\n', ' '))
+              text = text.replace(old, new)
+
+          p.write_text(text, encoding='utf-8')
+
+      - name: Verify targeted warnings are removed
+        shell: python
+        run: |
+          from pathlib import Path
+          text = Path('qml/pages/RepairPage.qml').read_text(encoding='utf-8')
+          checks = [
+              'root.selectedSourceColumn =\\n                                            index',
+              'root.selectedTargetColumn =\\n                                            modelData.column',
+              'root.selectedSourceColumn === index',
+              'text: parent.text',
+              'leftPadding: parent.indicator.width',
+          ]
+          for check in checks:
+              if check in text:
+                  raise SystemExit(f'Unfixed pattern remains: {check}')
+          print('Targeted RepairPage patterns verified clean.')
+
+      - name: Commit directly to main
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add qml/pages/RepairPage.qml .github/workflows/one-time-repairpage-lint-fix.yml
+          git rm .github/workflows/one-time-repairpage-lint-fix.yml
+          git commit -m 'chore: apply RepairPage qmllint fixes'
+          git push origin HEAD:main
