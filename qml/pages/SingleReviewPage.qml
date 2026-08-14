@@ -246,11 +246,12 @@ Item {
                         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                         delegate: Rectangle {
+                            id: findingDelegate
                             required property var modelData
                             width: ListView.view ? ListView.view.width : 0
                             height: 42
                             radius: Theme.radiusMedium
-                            color: String(modelData.severity || "").toUpperCase() === "ERROR" ? "#421820" : "#433614"
+                            color: String(findingDelegate.modelData.severity || "").toUpperCase() === "ERROR" ? "#421820" : "#433614"
                             border.color: Theme.border
 
                             RowLayout {
@@ -261,16 +262,16 @@ Item {
                                     width: 7
                                     height: 7
                                     radius: 4
-                                    color: String(modelData.severity || "").toUpperCase() === "ERROR" ? Theme.error : Theme.warning
+                                    color: String(findingDelegate.modelData.severity || "").toUpperCase() === "ERROR" ? Theme.error : Theme.warning
                                 }
                                 Text {
-                                    text: String(modelData.severity || "WARNING").toUpperCase()
-                                    color: String(modelData.severity || "").toUpperCase() === "ERROR" ? Theme.error : Theme.warning
+                                    text: String(findingDelegate.modelData.severity || "WARNING").toUpperCase()
+                                    color: String(findingDelegate.modelData.severity || "").toUpperCase() === "ERROR" ? Theme.error : Theme.warning
                                     font.bold: true
                                     Layout.preferredWidth: 80
                                 }
                                 Text {
-                                    text: String(modelData.message || "")
+                                    text: String(findingDelegate.modelData.message || "")
                                     color: Theme.textPrimary
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight
@@ -333,6 +334,7 @@ Item {
                                 Repeater {
                                     model: root.previewColumns
                                     delegate: Rectangle {
+                                        id: headerDelegate
                                         required property string modelData
                                         width: root.columnWidth
                                         height: 40
@@ -342,7 +344,7 @@ Item {
                                             anchors.fill: parent
                                             anchors.leftMargin: Theme.spacingSmall
                                             anchors.rightMargin: Theme.spacingSmall
-                                            text: modelData
+                                            text: headerDelegate.modelData
                                             color: Theme.textSecondary
                                             font.bold: true
                                             font.pixelSize: 11
@@ -380,7 +382,7 @@ Item {
                                     property var rowData: modelData
                                     width: previewTable.width
                                     height: 40
-                                    color: index % 2 === 0 ? Theme.background : Theme.surface
+                                    color: rowDelegate.index % 2 === 0 ? Theme.background : Theme.surface
                                     border.color: Theme.border
 
                                     Row {
@@ -390,6 +392,7 @@ Item {
                                         Repeater {
                                             model: root.previewColumns
                                             delegate: Rectangle {
+                                                id: cellDelegate
                                                 required property string modelData
                                                 required property int index
                                                 width: root.columnWidth
@@ -400,7 +403,7 @@ Item {
                                                     anchors.fill: parent
                                                     anchors.leftMargin: Theme.spacingSmall
                                                     anchors.rightMargin: Theme.spacingSmall
-                                                    text: root.cellValue(rowDelegate.rowData, index)
+                                                    text: root.cellValue(rowDelegate.rowData, cellDelegate.index)
                                                     color: Theme.textPrimary
                                                     font.pixelSize: 11
                                                     elide: Text.ElideRight
@@ -423,8 +426,8 @@ Item {
                         radius: Theme.radiusMedium
                         Text {
                             anchors.centerIn: parent
-                            text: root.sourcePath === "" ? "Select a file to begin the review." : "No preview data available."
-                            color: Theme.textMuted
+                            text: "Select a file and click Review to preview its data."
+                            color: Theme.textSecondary
                             font.pixelSize: 13
                         }
                     }
