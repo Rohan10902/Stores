@@ -28,6 +28,10 @@ except ImportError:
 class MainBackendController(QObject):
     notifySignal = Signal(str, str, str)
     saySignal = Signal(str)
+
+    # Public bridge signals used by QML pages.  Keep these at the top-level
+    # backend so page lifetime/StackLayout changes cannot disconnect a nested
+    # controller while an async import is completing.
     creatorLoaded = Signal(str)
     creatorReady = Signal(str)
     creatorExported = Signal()
@@ -51,10 +55,22 @@ class MainBackendController(QObject):
         self.creator = CreatorController(self.async_runner, self.notify, self.say, parent=self)
         self.health = HealthController(self.async_runner, self.notify, self.say, parent=self)
 
-        self.creator.creatorLoaded.connect(self.creatorLoaded.emit)
-        self.creator.creatorReady.connect(self.creatorReady.emit)
-        self.creator.creatorExported.connect(self.creatorExported.emit)
-        self.creator.builderExported.connect(self.builderExported.emit)
+        # Explicit forwarding lambdas are intentional.  They keep the bridge
+        # alive for the entire application lifetime and normalize payloads at
+        # the QML boundary instead of relying on signal-to-signal connection
+        # behavior across nested QObject ownership.
+        self.creator.creatorLoaded.connect(
+            lambda payload: self.creatorLoaded.emit(str(payload))
+        )
+        self.creator.creatorReady.connect(
+            lambda payload: self.creatorReady.emit(str(payload))
+        )
+        self.creator.creatorExported.connect(
+            lambda: self.creatorExported.emit()
+        )
+        self.creator.builderExported.connect(
+            lambda: self.builderExported.emit()
+        )
 
         self.validate.masterPreviewReady.connect(
             lambda payload: self.saySignal.emit("__STORELENS_PREVIEW_MASTER__" + str(payload))
