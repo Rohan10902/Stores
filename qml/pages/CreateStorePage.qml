@@ -11,30 +11,21 @@ Item {
     id: root
 
     readonly property var headers: [
-        "Store Name",
-        "SID",
-        "Banner",
-        "Nielsen Store Code",
-        "Trip Received",
-        "Last Trip",
-        "Address 1",
-        "Address 2",
-        "Address 3",
-        "ZIP",
-        "Active / Inactive",
-        "Is Census",
-        "Is Exceptions",
-        "Updated By"
+        "Store Name", "SID", "Banner", "Nielsen Store Code",
+        "Trip Received", "Last Trip", "Address 1", "Address 2",
+        "Address 3", "ZIP", "Active / Inactive", "Is Census",
+        "Is Exceptions", "Updated By"
     ]
 
     readonly property var widths: [
-        165, 120, 135, 180, 150, 150, 190,
-        190, 190, 105, 150, 120, 135, 150
+        180, 120, 140, 180, 150, 150, 200,
+        200, 200, 110, 155, 120, 135, 155
     ]
 
-    readonly property int controlColumnWidth: 120
-    readonly property int tableWidth: 2350
+    readonly property int controlColumnWidth: 116
+    readonly property int tableWidth: 2400
     readonly property int minimumRows: 10
+    readonly property int previewRowCount: 8
 
     property var rows: []
     property var selected: []
@@ -54,20 +45,14 @@ Item {
 
     function blankRow() {
         var result = []
-        for (var i = 0; i < headers.length; ++i) {
-            result.push("")
-        }
+        for (var i = 0; i < headers.length; ++i) result.push("")
         return result
     }
 
     function hasData(row) {
-        if (!row) {
-            return false
-        }
+        if (!row) return false
         for (var i = 0; i < row.length; ++i) {
-            if (String(row[i] || "").trim() !== "") {
-                return true
-            }
+            if (String(row[i] || "").trim() !== "") return true
         }
         return false
     }
@@ -92,9 +77,7 @@ Item {
     }
 
     function setCell(rowIndex, columnIndex, value) {
-        if (rowIndex < 0 || rowIndex >= rows.length) {
-            return
-        }
+        if (rowIndex < 0 || rowIndex >= rows.length) return
         var nextRows = rows.slice()
         var nextRow = nextRows[rowIndex].slice()
         nextRow[columnIndex] = value
@@ -104,8 +87,9 @@ Item {
     }
 
     function setSelected(rowIndex, value) {
+        if (rowIndex < 0 || rowIndex >= selected.length) return
         var nextSelected = selected.slice()
-        nextSelected[rowIndex] = value
+        nextSelected[rowIndex] = Boolean(value)
         selected = nextSelected
         invalidate()
     }
@@ -122,9 +106,7 @@ Item {
 
     function selectAll(value) {
         var nextSelected = []
-        for (var i = 0; i < rows.length; ++i) {
-            nextSelected.push(value)
-        }
+        for (var i = 0; i < rows.length; ++i) nextSelected.push(Boolean(value))
         selected = nextSelected
         invalidate()
     }
@@ -149,52 +131,32 @@ Item {
 
     function enteredCount() {
         var count = 0
-        for (var i = 0; i < rows.length; ++i) {
-            if (hasData(rows[i])) {
-                ++count
-            }
-        }
+        for (var i = 0; i < rows.length; ++i) if (hasData(rows[i])) ++count
         return count
     }
 
     function includedCount() {
         var count = 0
         for (var i = 0; i < rows.length; ++i) {
-            if (selected[i] && hasData(rows[i])) {
-                ++count
-            }
+            if (selected[i] && hasData(rows[i])) ++count
         }
         return count
     }
 
     function backendAvailable() {
-        return typeof backend !== "undefined"
-                && backend !== null
-                && backend.creator !== undefined
-                && backend.creator !== null
+        return typeof backend !== "undefined" && backend !== null
     }
 
     function urlToPath(value) {
         try {
-            if (value && value.toLocalFile) {
-                return value.toLocalFile()
-            }
+            if (value && value.toLocalFile) return value.toLocalFile()
         } catch (error) {
         }
         var text = String(value || "")
-        if (text.indexOf("file:///") === 0) {
-            text = text.substring(8)
-        } else if (text.indexOf("file://") === 0) {
-            text = text.substring(7)
-        }
-        if (Qt.platform.os === "windows") {
-            text = text.replace(/^\/+/, "")
-        }
-        try {
-            return decodeURIComponent(text)
-        } catch (error2) {
-            return text
-        }
+        if (text.indexOf("file:///") === 0) text = text.substring(8)
+        else if (text.indexOf("file://") === 0) text = text.substring(7)
+        if (Qt.platform.os === "windows") text = text.replace(/^\/+/, "")
+        try { return decodeURIComponent(text) } catch (error2) { return text }
     }
 
     function normalizeHeader(value) {
@@ -208,7 +170,7 @@ Item {
     function mapIndex(value) {
         var header = normalizeHeader(value)
         var aliases = [
-            ["store name", "store", "name"],
+            ["store name", "store", "name", "store_name"],
             ["sid", "store id", "storeid", "store code", "store_id", "id"],
             ["banner", "brand"],
             ["nielsen store code", "nielsen code", "nielsen store", "nielsen"],
@@ -225,9 +187,7 @@ Item {
         ]
         for (var i = 0; i < aliases.length; ++i) {
             for (var j = 0; j < aliases[i].length; ++j) {
-                if (header === normalizeHeader(aliases[i][j])) {
-                    return i
-                }
+                if (header === normalizeHeader(aliases[i][j])) return i
             }
         }
         return -1
@@ -236,9 +196,7 @@ Item {
     function mappedCount() {
         var count = 0
         for (var i = 0; i < importedHeaders.length; ++i) {
-            if (mapIndex(importedHeaders[i]) >= 0) {
-                ++count
-            }
+            if (mapIndex(importedHeaders[i]) >= 0) ++count
         }
         return count
     }
@@ -273,9 +231,7 @@ Item {
     function validationJson() {
         var output = []
         for (var r = 0; r < rows.length; ++r) {
-            if (!selected[r] || !hasData(rows[r])) {
-                continue
-            }
+            if (!selected[r] || !hasData(rows[r])) continue
             var record = {}
             for (var c = 0; c < headers.length; ++c) {
                 record[headers[c]] = String(rows[r][c] || "").trim()
@@ -286,9 +242,7 @@ Item {
     }
 
     function validateRows() {
-        if (!includedCount() || validationPending || !backendAvailable()) {
-            return
-        }
+        if (!includedCount() || validationPending || !backendAvailable()) return
         validationPending = true
         validated = false
         findings = []
@@ -296,20 +250,13 @@ Item {
     }
 
     function exportRows() {
-        if (!validated || findings.length > 0 || !includedCount() || exporting || !backendAvailable()) {
-            return
-        }
+        if (!validated || findings.length > 0 || !includedCount() || exporting || !backendAvailable()) return
         var output = []
         for (var i = 0; i < rows.length; ++i) {
-            if (selected[i] && hasData(rows[i])) {
-                output.push(rows[i])
-            }
+            if (selected[i] && hasData(rows[i])) output.push(rows[i])
         }
         exporting = true
-        backend.creator.export_builder_file(
-                    JSON.stringify(output),
-                    destinationPath,
-                    JSON.stringify(headers))
+        backend.creator.export_builder_file(JSON.stringify(output), destinationPath, JSON.stringify(headers))
     }
 
     Component.onCompleted: resetRows()
@@ -325,14 +272,13 @@ Item {
         onAccepted: {
             importPending = true
             importPreviewVisible = true
-            importError = "Reading file..."
+            importError = "Reading file and preparing preview..."
             importedHeaders = []
             importedRows = []
             importedTotal = 0
             var path = root.urlToPath(selectedFile)
-            if (root.backendAvailable()) {
-                backend.creator.load_creator_file(path)
-            } else {
+            if (root.backendAvailable()) backend.creator.load_creator_file(path)
+            else {
                 importPending = false
                 importError = "Store Builder backend is unavailable."
             }
@@ -383,10 +329,7 @@ Item {
                     font.bold: true
                     Layout.fillWidth: true
                 }
-                AppButton {
-                    text: "Close"
-                    onClicked: pastePopup.close()
-                }
+                AppButton { text: "Close"; onClicked: pastePopup.close() }
             }
 
             Text {
@@ -415,14 +358,11 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Text {
-                    text: "Tip: Excel clipboard data is usually tab-separated and is preserved safely."
+                    text: "Excel clipboard data is normally tab-separated and will be preserved."
                     color: Theme.textMuted
                     Layout.fillWidth: true
                 }
-                AppButton {
-                    text: "Clear"
-                    onClicked: pasteArea.clear()
-                }
+                AppButton { text: "Clear"; onClicked: pasteArea.clear() }
                 PrimaryButton {
                     text: "Preview Paste"
                     enabled: pasteArea.text.trim().length > 0 && root.backendAvailable()
@@ -439,7 +379,7 @@ Item {
     }
 
     Connections {
-        target: root.backendAvailable() ? backend.creator : null
+        target: root.backendAvailable() ? backend : null
         ignoreUnknownSignals: true
 
         function onCreatorLoaded(payload) {
@@ -450,15 +390,14 @@ Item {
                 importedRows = data.rows || []
                 importedTotal = Number(data.total || importedRows.length || 0)
                 importError = String(data.error || "")
-                if (!importedHeaders.length && !importError) {
-                    importError = "No header row was detected."
-                }
+                if (!importedHeaders.length && !importError) importError = "No header row was detected."
             } catch (error) {
                 importedHeaders = []
                 importedRows = []
                 importedTotal = 0
                 importError = String(error)
             }
+            importPreviewVisible = true
         }
 
         function onCreatorReady(payload) {
@@ -466,12 +405,7 @@ Item {
                 var data = JSON.parse(payload || "{}")
                 findings = data.findings || []
             } catch (error) {
-                findings = [{
-                    row: 0,
-                    field: "SYSTEM",
-                    message: String(error),
-                    severity: "ERROR"
-                }]
+                findings = [{ row: 0, field: "SYSTEM", message: String(error), severity: "ERROR" }]
             }
             validated = true
             validationPending = false
@@ -484,12 +418,15 @@ Item {
     }
 
     ScrollView {
+        id: pageScroll
         anchors.fill: parent
         clip: true
+        contentWidth: availableWidth
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
         ColumnLayout {
-            width: parent.width
+            id: pageColumn
+            width: pageScroll.availableWidth
             spacing: Theme.spacingLarge
 
             PageTitle {
@@ -505,7 +442,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spacingXLarge
                 Layout.rightMargin: Theme.spacingXLarge
-                Layout.preferredHeight: 104
+                Layout.preferredHeight: 92
                 hoverable: false
 
                 RowLayout {
@@ -513,48 +450,22 @@ Item {
                     anchors.margins: Theme.spacingMedium
                     spacing: Theme.spacingSmall
 
-                    PrimaryButton {
-                        text: "Paste Stores"
-                        onClicked: pastePopup.open()
-                    }
-
+                    PrimaryButton { text: "Paste Stores"; onClicked: pastePopup.open() }
                     AppButton {
                         text: importPending ? "Importing..." : "Import File"
                         enabled: !importPending
                         onClicked: importDialog.open()
                     }
+                    AppButton { text: "+ Add Row"; onClicked: root.addRow() }
+                    AppButton { text: "Select All"; onClicked: root.selectAll(true) }
+                    AppButton { text: "Deselect All"; onClicked: root.selectAll(false) }
+                    AppButton { text: "Delete Selected"; onClicked: root.deleteSelected() }
+                    AppButton { text: "Clear"; onClicked: root.resetRows() }
 
-                    AppButton {
-                        text: "+ Add Row"
-                        onClicked: root.addRow()
-                    }
-
-                    AppButton {
-                        text: "Select All"
-                        onClicked: root.selectAll(true)
-                    }
-
-                    AppButton {
-                        text: "Deselect All"
-                        onClicked: root.selectAll(false)
-                    }
-
-                    AppButton {
-                        text: "Delete Selected"
-                        onClicked: root.deleteSelected()
-                    }
-
-                    AppButton {
-                        text: "Clear"
-                        onClicked: root.resetRows()
-                    }
-
-                    Item {
-                        Layout.fillWidth: true
-                    }
+                    Item { Layout.fillWidth: true }
 
                     ColumnLayout {
-                        spacing: 2
+                        spacing: 1
                         Text {
                             text: root.enteredCount() + " entered"
                             color: Theme.textPrimary
@@ -575,14 +486,9 @@ Item {
                         enabled: root.enteredCount() > 0 && !root.validationPending
                         onClicked: root.validateRows()
                     }
-
                     PrimaryButton {
                         text: root.exporting ? "Exporting..." : "Export CSV"
-                        enabled: root.includedCount() > 0
-                                  && root.validated
-                                  && root.findings.length === 0
-                                  && !root.validationPending
-                                  && !root.exporting
+                        enabled: root.includedCount() > 0 && root.validated && root.findings.length === 0 && !root.validationPending && !root.exporting
                         onClicked: exportDialog.open()
                     }
                 }
@@ -593,7 +499,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spacingXLarge
                 Layout.rightMargin: Theme.spacingXLarge
-                Layout.preferredHeight: 360
+                Layout.preferredHeight: 350
                 hoverable: false
 
                 ColumnLayout {
@@ -603,31 +509,27 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true
-
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 2
+                            spacing: 1
                             Text {
-                                text: "Source Preview"
+                                text: root.importPending ? "Preparing Source Preview..." : "Source Preview"
                                 color: Theme.textPrimary
                                 font.pixelSize: 16
                                 font.bold: true
                             }
                             Text {
-                                text: root.importedTotal + " records • " + root.importedHeaders.length + " source columns • " + root.mappedCount() + " mapped"
+                                text: root.importPending
+                                      ? "Reading the selected file. This panel stays visible while the parser works."
+                                      : root.importedTotal + " records • " + root.importedHeaders.length + " source columns • " + root.mappedCount() + " mapped"
                                 color: Theme.textSecondary
                                 font.pixelSize: 11
                             }
                         }
-
-                        AppButton {
-                            text: "Hide"
-                            onClicked: root.importPreviewVisible = false
-                        }
-
+                        AppButton { text: "Hide"; onClicked: root.importPreviewVisible = false }
                         PrimaryButton {
                             text: "Load into Store Builder"
-                            enabled: root.importedHeaders.length > 0 && !root.importPending
+                            enabled: root.importedHeaders.length > 0 && !root.importPending && root.mappedCount() > 0
                             onClicked: root.loadImported()
                         }
                     }
@@ -635,11 +537,10 @@ Item {
                     Rectangle {
                         visible: root.importError !== ""
                         Layout.fillWidth: true
-                        implicitHeight: errorText.implicitHeight + 20
-                        color: Theme.errorSoft
-                        border.color: Theme.error
+                        Layout.preferredHeight: Math.max(40, errorText.implicitHeight + 18)
+                        color: root.importPending ? Theme.infoSoft : Theme.errorSoft
+                        border.color: root.importPending ? Theme.info : Theme.error
                         radius: Theme.radiusMedium
-
                         Text {
                             id: errorText
                             anchors.fill: parent
@@ -661,42 +562,39 @@ Item {
                         clip: true
 
                         Flickable {
-                            id: importFlickable
+                            id: previewFlickable
                             anchors.fill: parent
-                            contentWidth: Math.max(width, importTable.width)
-                            contentHeight: importTable.height
+                            contentWidth: Math.max(width, previewTable.width)
+                            contentHeight: previewTable.height
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
-                            ScrollBar.vertical: ScrollBar { }
-                            ScrollBar.horizontal: ScrollBar { }
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                            ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
 
                             Column {
-                                id: importTable
-                                width: Math.max(importFlickable.width, root.importedHeaders.length * 165)
+                                id: previewTable
+                                width: Math.max(previewFlickable.width, root.importedHeaders.length * 155)
                                 spacing: 0
 
                                 Rectangle {
-                                    width: importTable.width
-                                    height: 38
+                                    width: previewTable.width
+                                    height: 36
                                     color: Theme.surfaceHover
-                                    border.color: Theme.border
-
+                                    border.color: Theme.borderStrong
                                     Row {
                                         anchors.fill: parent
-
                                         Repeater {
                                             model: root.importedHeaders
                                             delegate: Rectangle {
                                                 required property string modelData
                                                 required property int index
-                                                width: 165
-                                                height: 38
+                                                width: 155
+                                                height: 36
                                                 color: "transparent"
                                                 border.color: Theme.border
-
                                                 Text {
                                                     anchors.fill: parent
-                                                    anchors.margins: Theme.spacingSmall
+                                                    anchors.margins: 7
                                                     text: modelData
                                                     color: Theme.textPrimary
                                                     font.pixelSize: 10
@@ -710,35 +608,29 @@ Item {
                                 }
 
                                 Repeater {
-                                    model: Math.min(10, root.importedRows.length)
-
+                                    model: Math.min(root.previewRowCount, root.importedRows.length)
                                     delegate: Rectangle {
-                                        id: importedRowDelegate
                                         required property var modelData
                                         required property int index
-                                        property var rowData: modelData
-                                        width: importTable.width
+                                        property var previewRow: modelData
+                                        width: previewTable.width
                                         height: 30
                                         color: index % 2 === 0 ? Theme.background : Theme.surface
                                         border.color: Theme.border
-
                                         Row {
                                             anchors.fill: parent
-
                                             Repeater {
                                                 model: root.importedHeaders.length
-
                                                 delegate: Rectangle {
                                                     required property int index
-                                                    width: 165
+                                                    width: 155
                                                     height: 30
                                                     color: "transparent"
                                                     border.color: Theme.border
-
                                                     Text {
                                                         anchors.fill: parent
-                                                        anchors.margins: Theme.spacingSmall
-                                                        text: importedRowDelegate.rowData[index] === undefined ? "" : String(importedRowDelegate.rowData[index])
+                                                        anchors.margins: 7
+                                                        text: previewRow[index] === undefined ? "" : String(previewRow[index])
                                                         color: Theme.textPrimary
                                                         font.pixelSize: 10
                                                         elide: Text.ElideRight
@@ -772,8 +664,8 @@ Item {
                     contentHeight: builderTable.height
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { }
-                    ScrollBar.horizontal: ScrollBar { }
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                    ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
 
                     Column {
                         id: builderTable
@@ -782,22 +674,19 @@ Item {
 
                         Rectangle {
                             width: builderTable.width
-                            height: 46
+                            height: 44
                             color: Theme.surfaceHover
                             border.color: Theme.borderStrong
-
                             Row {
                                 anchors.fill: parent
-
                                 Rectangle {
                                     width: root.controlColumnWidth
-                                    height: 46
+                                    height: 44
                                     color: Theme.surfaceActive
                                     border.color: Theme.borderStrong
-
                                     Text {
                                         anchors.fill: parent
-                                        anchors.margins: Theme.spacingSmall
+                                        anchors.margins: 7
                                         text: "USE / ROW"
                                         color: Theme.textPrimary
                                         font.pixelSize: 10
@@ -805,21 +694,18 @@ Item {
                                         verticalAlignment: Text.AlignVCenter
                                     }
                                 }
-
                                 Repeater {
                                     model: root.headers
-
                                     delegate: Rectangle {
                                         required property string modelData
                                         required property int index
                                         width: root.widths[index]
-                                        height: 46
+                                        height: 44
                                         color: "transparent"
                                         border.color: Theme.borderStrong
-
                                         Text {
                                             anchors.fill: parent
-                                            anchors.margins: Theme.spacingSmall
+                                            anchors.margins: 7
                                             text: modelData
                                             color: Theme.textPrimary
                                             font.pixelSize: 10
@@ -834,14 +720,12 @@ Item {
 
                         Repeater {
                             model: root.rows
-
                             delegate: Rectangle {
                                 id: rowDelegate
                                 required property var modelData
                                 required property int index
-                                property int rowIndex: index
                                 property var rowData: modelData
-
+                                property int rowIndex: index
                                 width: builderTable.width
                                 height: 42
                                 color: rowIndex % 2 === 0 ? Theme.background : Theme.surface
@@ -853,20 +737,37 @@ Item {
                                     Rectangle {
                                         width: root.controlColumnWidth
                                         height: 42
-                                        color: selected[rowDelegate.rowIndex] ? Theme.primarySoft : "transparent"
+                                        color: root.selected[rowDelegate.rowIndex] ? Theme.primarySoft : "transparent"
                                         border.color: Theme.border
 
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Theme.spacingSmall
-                                            anchors.rightMargin: Theme.spacingSmall
-                                            spacing: Theme.spacingSmall
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            spacing: 8
 
-                                            CheckBox {
-                                                checked: root.selected[rowDelegate.rowIndex]
-                                                onToggled: root.setSelected(rowDelegate.rowIndex, checked)
-                                                indicator.width: 22
-                                                indicator.height: 22
+                                            Rectangle {
+                                                Layout.preferredWidth: 20
+                                                Layout.preferredHeight: 20
+                                                radius: 4
+                                                color: root.selected[rowDelegate.rowIndex] ? Theme.primary : "transparent"
+                                                border.color: root.selected[rowDelegate.rowIndex] ? Theme.primary : Theme.borderStrong
+                                                border.width: 1
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "✓"
+                                                    visible: root.selected[rowDelegate.rowIndex]
+                                                    color: Theme.textPrimary
+                                                    font.pixelSize: 13
+                                                    font.bold: true
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.setSelected(rowDelegate.rowIndex, !root.selected[rowDelegate.rowIndex])
+                                                }
                                             }
 
                                             Text {
@@ -881,7 +782,6 @@ Item {
 
                                     Repeater {
                                         model: root.headers.length
-
                                         delegate: Rectangle {
                                             required property int index
                                             width: root.widths[index]
@@ -927,20 +827,17 @@ Item {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
                     spacing: Theme.spacingSmall
-
                     Text {
                         text: "Validation Findings • " + root.findings.length
                         color: Theme.error
                         font.pixelSize: 14
                         font.bold: true
                     }
-
                     ListView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
                         model: root.findings
-
                         delegate: Text {
                             required property var modelData
                             width: ListView.view.width
