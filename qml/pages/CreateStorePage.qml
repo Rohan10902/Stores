@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -8,9 +10,30 @@ import "../theme"
 Item {
     id: root
 
-    readonly property var headers: ["Store Name", "SID", "Banner", "Nielsen Store Code", "Trip Received", "Last Trip", "Address 1", "Address 2", "City", "State", "Pincode", "Phone"]
-    readonly property var widths: [155,155,155,180,155,155,210,180,140,150,110,160]
-    readonly property int tableWidth: 2025
+    readonly property var headers: [
+        "Store Name",
+        "SID",
+        "Banner",
+        "Nielsen Store Code",
+        "Trip Received",
+        "Last Trip",
+        "Address 1",
+        "Address 2",
+        "Address 3",
+        "ZIP",
+        "Active / Inactive",
+        "Is Census",
+        "Is Exceptions",
+        "Updated By"
+    ]
+
+    readonly property var widths: [
+        165, 120, 135, 180, 150, 150, 190,
+        190, 190, 105, 150, 120, 135, 150
+    ]
+
+    readonly property int controlColumnWidth: 120
+    readonly property int tableWidth: 2350
     readonly property int minimumRows: 10
 
     property var rows: []
@@ -21,170 +44,272 @@ Item {
     property bool exporting: false
     property string destinationPath: ""
 
-    property bool importPending: false
+    property bool pasteVisible: false
     property bool importPreviewVisible: false
+    property bool importPending: false
     property var importedHeaders: []
     property var importedRows: []
     property int importedTotal: 0
     property string importError: ""
 
     function blankRow() {
-        var r = []
-        for (var i = 0; i < headers.length; ++i) r.push("")
-        return r
+        var result = []
+        for (var i = 0; i < headers.length; ++i) {
+            result.push("")
+        }
+        return result
     }
 
-    function hasData(r) {
-        if (!r) return false
-        for (var i = 0; i < r.length; ++i) if (String(r[i] || "").trim() !== "") return true
+    function hasData(row) {
+        if (!row) {
+            return false
+        }
+        for (var i = 0; i < row.length; ++i) {
+            if (String(row[i] || "").trim() !== "") {
+                return true
+            }
+        }
         return false
     }
 
     function resetRows() {
-        var r = [], s = []
-        for (var i = 0; i < minimumRows; ++i) { r.push(blankRow()); s.push(true) }
-        rows = r
-        selected = s
+        var nextRows = []
+        var nextSelected = []
+        for (var i = 0; i < minimumRows; ++i) {
+            nextRows.push(blankRow())
+            nextSelected.push(true)
+        }
+        rows = nextRows
+        selected = nextSelected
         findings = []
         validated = false
         validationPending = false
     }
 
-    function invalidate() { validated = false; findings = [] }
+    function invalidate() {
+        validated = false
+        findings = []
+    }
 
-    function setCell(r, c, v) {
-        var n = rows.slice()
-        var x = n[r].slice()
-        x[c] = v
-        n[r] = x
-        rows = n
+    function setCell(rowIndex, columnIndex, value) {
+        if (rowIndex < 0 || rowIndex >= rows.length) {
+            return
+        }
+        var nextRows = rows.slice()
+        var nextRow = nextRows[rowIndex].slice()
+        nextRow[columnIndex] = value
+        nextRows[rowIndex] = nextRow
+        rows = nextRows
         invalidate()
     }
 
-    function setSelected(i, v) {
-        var n = selected.slice()
-        n[i] = v
-        selected = n
+    function setSelected(rowIndex, value) {
+        var nextSelected = selected.slice()
+        nextSelected[rowIndex] = value
+        selected = nextSelected
         invalidate()
     }
 
     function addRow() {
-        var r = rows.slice(), s = selected.slice()
-        r.push(blankRow()); s.push(true)
-        rows = r; selected = s; invalidate()
+        var nextRows = rows.slice()
+        var nextSelected = selected.slice()
+        nextRows.push(blankRow())
+        nextSelected.push(true)
+        rows = nextRows
+        selected = nextSelected
+        invalidate()
     }
 
-    function selectAll(v) {
-        var s = []
-        for (var i = 0; i < rows.length; ++i) s.push(v)
-        selected = s; invalidate()
+    function selectAll(value) {
+        var nextSelected = []
+        for (var i = 0; i < rows.length; ++i) {
+            nextSelected.push(value)
+        }
+        selected = nextSelected
+        invalidate()
     }
 
     function deleteSelected() {
-        var r = [], s = []
+        var nextRows = []
+        var nextSelected = []
         for (var i = 0; i < rows.length; ++i) {
-            if (!selected[i]) { r.push(rows[i]); s.push(false) }
+            if (!selected[i]) {
+                nextRows.push(rows[i])
+                nextSelected.push(false)
+            }
         }
-        while (r.length < minimumRows) { r.push(blankRow()); s.push(true) }
-        rows = r; selected = s; invalidate()
+        while (nextRows.length < minimumRows) {
+            nextRows.push(blankRow())
+            nextSelected.push(true)
+        }
+        rows = nextRows
+        selected = nextSelected
+        invalidate()
     }
 
     function enteredCount() {
-        var n = 0
-        for (var i = 0; i < rows.length; ++i) if (hasData(rows[i])) ++n
-        return n
+        var count = 0
+        for (var i = 0; i < rows.length; ++i) {
+            if (hasData(rows[i])) {
+                ++count
+            }
+        }
+        return count
     }
 
     function includedCount() {
-        var n = 0
-        for (var i = 0; i < rows.length; ++i) if (selected[i] && hasData(rows[i])) ++n
-        return n
+        var count = 0
+        for (var i = 0; i < rows.length; ++i) {
+            if (selected[i] && hasData(rows[i])) {
+                ++count
+            }
+        }
+        return count
     }
 
     function backendAvailable() {
-        return typeof backend !== "undefined" && backend !== null && backend.creator !== undefined && backend.creator !== null
+        return typeof backend !== "undefined"
+                && backend !== null
+                && backend.creator !== undefined
+                && backend.creator !== null
+    }
+
+    function urlToPath(value) {
+        try {
+            if (value && value.toLocalFile) {
+                return value.toLocalFile()
+            }
+        } catch (error) {
+        }
+        var text = String(value || "")
+        if (text.indexOf("file:///") === 0) {
+            text = text.substring(8)
+        } else if (text.indexOf("file://") === 0) {
+            text = text.substring(7)
+        }
+        if (Qt.platform.os === "windows") {
+            text = text.replace(/^\/+/, "")
+        }
+        try {
+            return decodeURIComponent(text)
+        } catch (error2) {
+            return text
+        }
+    }
+
+    function normalizeHeader(value) {
+        return String(value || "")
+                .trim()
+                .toLowerCase()
+                .replace(/[_-]+/g, " ")
+                .replace(/\s+/g, " ")
+    }
+
+    function mapIndex(value) {
+        var header = normalizeHeader(value)
+        var aliases = [
+            ["store name", "store", "name"],
+            ["sid", "store id", "storeid", "store code", "store_id", "id"],
+            ["banner", "brand"],
+            ["nielsen store code", "nielsen code", "nielsen store", "nielsen"],
+            ["trip received", "trip_received"],
+            ["last trip", "last_trip"],
+            ["address 1", "address1", "address", "addr", "street", "address line 1"],
+            ["address 2", "address2", "address line 2"],
+            ["address 3", "address3", "address line 3"],
+            ["zip", "zipcode", "zip code", "postal code", "postcode", "pincode", "pin code"],
+            ["active / inactive", "active/inactive", "active inactive", "status", "active"],
+            ["is census", "census", "census flag", "is_census"],
+            ["is exceptions", "is exception", "exceptions", "exception", "is_exceptions"],
+            ["updated by", "updated_by", "modified by", "modified_by", "last updated by"]
+        ]
+        for (var i = 0; i < aliases.length; ++i) {
+            for (var j = 0; j < aliases[i].length; ++j) {
+                if (header === normalizeHeader(aliases[i][j])) {
+                    return i
+                }
+            }
+        }
+        return -1
+    }
+
+    function mappedCount() {
+        var count = 0
+        for (var i = 0; i < importedHeaders.length; ++i) {
+            if (mapIndex(importedHeaders[i]) >= 0) {
+                ++count
+            }
+        }
+        return count
+    }
+
+    function loadImported() {
+        var nextRows = []
+        var nextSelected = []
+        for (var r = 0; r < importedRows.length; ++r) {
+            var source = importedRows[r] || []
+            var target = blankRow()
+            for (var c = 0; c < importedHeaders.length; ++c) {
+                var targetIndex = mapIndex(importedHeaders[c])
+                if (targetIndex >= 0) {
+                    target[targetIndex] = String(source[c] === undefined ? "" : source[c]).trim()
+                }
+            }
+            if (hasData(target)) {
+                nextRows.push(target)
+                nextSelected.push(true)
+            }
+        }
+        while (nextRows.length < minimumRows) {
+            nextRows.push(blankRow())
+            nextSelected.push(true)
+        }
+        rows = nextRows
+        selected = nextSelected
+        invalidate()
+        importPreviewVisible = false
     }
 
     function validationJson() {
-        var out = []
+        var output = []
         for (var r = 0; r < rows.length; ++r) {
-            if (!selected[r] || !hasData(rows[r])) continue
-            var o = {}
-            for (var c = 0; c < headers.length; ++c) o[headers[c]] = String(rows[r][c] || "").trim()
-            out.push(o)
+            if (!selected[r] || !hasData(rows[r])) {
+                continue
+            }
+            var record = {}
+            for (var c = 0; c < headers.length; ++c) {
+                record[headers[c]] = String(rows[r][c] || "").trim()
+            }
+            output.push(record)
         }
-        return JSON.stringify(out)
+        return JSON.stringify(output)
     }
 
     function validateRows() {
-        if (!includedCount() || validationPending || !backendAvailable()) return
+        if (!includedCount() || validationPending || !backendAvailable()) {
+            return
+        }
         validationPending = true
         validated = false
         findings = []
         backend.creator.validate_creator(validationJson())
     }
 
-    function urlToPath(v) {
-        try { if (v && v.toLocalFile) return v.toLocalFile() } catch (e) {}
-        var t = String(v || "")
-        if (t.indexOf("file:///") === 0) t = t.substring(8)
-        else if (t.indexOf("file://") === 0) t = t.substring(7)
-        if (Qt.platform.os === "windows") t = t.replace(/^\/+/, "")
-        try { return decodeURIComponent(t) } catch (e2) { return t }
-    }
-
-    function normalize(v) {
-        return String(v || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ")
-    }
-
-    function mapIndex(v) {
-        var h = normalize(v)
-        var aliases = [
-            ["store name", "store", "name"],
-            ["sid", "store id", "storeid", "store code", "id"],
-            ["banner", "brand"],
-            ["nielsen store code", "nielsen code", "nielsen store", "nielsen"],
-            ["trip received"],
-            ["last trip"],
-            ["address 1", "address1", "address", "addr", "street"],
-            ["address 2", "address2"],
-            ["city", "town"],
-            ["state", "province"],
-            ["pincode", "pin code", "postal code", "zip", "zipcode"],
-            ["phone", "mobile", "contact", "telephone"]
-        ]
-        for (var i = 0; i < aliases.length; ++i) {
-            for (var j = 0; j < aliases[i].length; ++j) {
-                if (h === normalize(aliases[i][j])) return i
-            }
-        }
-        return -1
-    }
-
-    function loadImported() {
-        var out = [], sel = []
-        for (var r = 0; r < importedRows.length; ++r) {
-            var src = importedRows[r] || []
-            var dst = blankRow()
-            for (var c = 0; c < importedHeaders.length; ++c) {
-                var target = mapIndex(importedHeaders[c])
-                if (target >= 0) dst[target] = String(src[c] === undefined ? "" : src[c]).trim()
-            }
-            if (hasData(dst)) { out.push(dst); sel.push(true) }
-        }
-        while (out.length < minimumRows) { out.push(blankRow()); sel.push(true) }
-        rows = out
-        selected = sel
-        invalidate()
-        importPreviewVisible = false
-    }
-
     function exportRows() {
-        if (!validated || findings.length || !includedCount() || exporting || !backendAvailable()) return
-        var out = []
-        for (var i = 0; i < rows.length; ++i) if (selected[i] && hasData(rows[i])) out.push(rows[i])
+        if (!validated || findings.length > 0 || !includedCount() || exporting || !backendAvailable()) {
+            return
+        }
+        var output = []
+        for (var i = 0; i < rows.length; ++i) {
+            if (selected[i] && hasData(rows[i])) {
+                output.push(rows[i])
+            }
+        }
         exporting = true
-        backend.creator.export_builder_file(JSON.stringify(out), destinationPath, JSON.stringify(headers))
+        backend.creator.export_builder_file(
+                    JSON.stringify(output),
+                    destinationPath,
+                    JSON.stringify(headers))
     }
 
     Component.onCompleted: resetRows()
@@ -193,17 +318,24 @@ Item {
         id: importDialog
         title: "Import Store Dataset"
         fileMode: FileDialog.OpenFile
-        nameFilters: ["Store Data (*.csv *.tsv *.txt *.xlsx *.xls *.xlsm *.json *.xml)", "All Files (*)"]
+        nameFilters: [
+            "Store Data (*.csv *.tsv *.txt *.xlsx *.xls *.xlsm *.json *.xml)",
+            "All Files (*)"
+        ]
         onAccepted: {
             importPending = true
             importPreviewVisible = true
-            importError = "Loading dataset..."
+            importError = "Reading file..."
             importedHeaders = []
             importedRows = []
             importedTotal = 0
             var path = root.urlToPath(selectedFile)
-            if (root.backendAvailable()) backend.creator.load_creator_file(path)
-            else { importPending = false; importError = "Store Builder backend is unavailable." }
+            if (root.backendAvailable()) {
+                backend.creator.load_creator_file(path)
+            } else {
+                importPending = false
+                importError = "Store Builder backend is unavailable."
+            }
         }
     }
 
@@ -213,7 +345,97 @@ Item {
         fileMode: FileDialog.SaveFile
         currentFile: "store_builder.csv"
         nameFilters: ["CSV Files (*.csv)", "All Files (*)"]
-        onAccepted: { destinationPath = root.urlToPath(selectedFile); root.exportRows() }
+        onAccepted: {
+            destinationPath = root.urlToPath(selectedFile)
+            root.exportRows()
+        }
+    }
+
+    Popup {
+        id: pastePopup
+        parent: Overlay.overlay
+        modal: true
+        width: Math.min(root.width - 80, 1000)
+        height: Math.min(root.height - 100, 650)
+        x: Math.round((root.width - width) / 2)
+        y: Math.round((root.height - height) / 2)
+        padding: 0
+        closePolicy: Popup.CloseOnEscape
+
+        background: Rectangle {
+            color: Theme.surfaceElevated
+            radius: Theme.radiusXLarge
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Theme.spacingLarge
+            spacing: Theme.spacingMedium
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: "Paste Stores"
+                    color: Theme.textPrimary
+                    font.pixelSize: 22
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+                AppButton {
+                    text: "Close"
+                    onClicked: pastePopup.close()
+                }
+            }
+
+            Text {
+                text: "Paste rows copied from Excel or CSV. The first row is treated as the source header."
+                color: Theme.textSecondary
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            TextArea {
+                id: pasteArea
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                placeholderText: "Store Name\tSID\tBanner\tNielsen Store Code\t...\nExample Store\tS001\tBanner\t12345\t..."
+                selectByMouse: true
+                wrapMode: TextEdit.NoWrap
+                color: Theme.textPrimary
+                placeholderTextColor: Theme.textMuted
+                background: Rectangle {
+                    color: Theme.background
+                    border.color: pasteArea.activeFocus ? Theme.primary : Theme.border
+                    radius: Theme.radiusMedium
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: "Tip: Excel clipboard data is usually tab-separated and is preserved safely."
+                    color: Theme.textMuted
+                    Layout.fillWidth: true
+                }
+                AppButton {
+                    text: "Clear"
+                    onClicked: pasteArea.clear()
+                }
+                PrimaryButton {
+                    text: "Preview Paste"
+                    enabled: pasteArea.text.trim().length > 0 && root.backendAvailable()
+                    onClicked: {
+                        root.importPending = true
+                        root.importPreviewVisible = true
+                        root.importError = "Parsing pasted stores..."
+                        backend.creator.load_creator_text(pasteArea.text)
+                        pastePopup.close()
+                    }
+                }
+            }
+        }
     }
 
     Connections {
@@ -228,7 +450,9 @@ Item {
                 importedRows = data.rows || []
                 importedTotal = Number(data.total || importedRows.length || 0)
                 importError = String(data.error || "")
-                if (!importedHeaders.length && !importError) importError = "No header row was detected in the selected file."
+                if (!importedHeaders.length && !importError) {
+                    importError = "No header row was detected."
+                }
             } catch (error) {
                 importedHeaders = []
                 importedRows = []
@@ -242,7 +466,12 @@ Item {
                 var data = JSON.parse(payload || "{}")
                 findings = data.findings || []
             } catch (error) {
-                findings = [{ row: 0, field: "SYSTEM", message: String(error), severity: "ERROR" }]
+                findings = [{
+                    row: 0,
+                    field: "SYSTEM",
+                    message: String(error),
+                    severity: "ERROR"
+                }]
             }
             validated = true
             validationPending = false
@@ -257,7 +486,6 @@ Item {
     ScrollView {
         anchors.fill: parent
         clip: true
-        contentWidth: availableWidth
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
         ColumnLayout {
@@ -270,29 +498,93 @@ Item {
                 Layout.rightMargin: Theme.spacingXLarge
                 Layout.topMargin: Theme.spacingLarge
                 title: "Store Builder"
-                subtitle: "Build, import, validate and export store records in one canonical spreadsheet workspace."
+                subtitle: "Paste, import, edit, validate and export stores in one canonical workspace."
             }
 
             Card {
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spacingXLarge
                 Layout.rightMargin: Theme.spacingXLarge
-                Layout.preferredHeight: 82
+                Layout.preferredHeight: 104
+                hoverable: false
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: Theme.spacingSmall
-                    spacing: 7
-                    PrimaryButton { text: importPending ? "Importing..." : "Import Store File"; enabled: !importPending; onClicked: importDialog.open() }
-                    AppButton { text: "+ Add Row"; onClicked: root.addRow() }
-                    AppButton { text: "Select All"; onClicked: root.selectAll(true) }
-                    AppButton { text: "Deselect All"; onClicked: root.selectAll(false) }
-                    AppButton { text: "Delete Selected"; onClicked: root.deleteSelected() }
-                    AppButton { text: "Clear"; onClicked: root.resetRows() }
-                    Item { Layout.fillWidth: true }
-                    Text { text: root.enteredCount() + " entered • " + root.includedCount() + " included"; color: Theme.textPrimary; font.bold: true }
-                    AppButton { text: root.validationPending ? "Validating..." : "Validate"; enabled: root.enteredCount() > 0 && !root.validationPending; onClicked: root.validateRows() }
-                    PrimaryButton { text: root.exporting ? "Exporting..." : "Export CSV"; enabled: root.includedCount() > 0 && root.validated && root.findings.length === 0 && !root.validationPending && !root.exporting; onClicked: exportDialog.open() }
+                    anchors.margins: Theme.spacingMedium
+                    spacing: Theme.spacingSmall
+
+                    PrimaryButton {
+                        text: "Paste Stores"
+                        onClicked: pastePopup.open()
+                    }
+
+                    AppButton {
+                        text: importPending ? "Importing..." : "Import File"
+                        enabled: !importPending
+                        onClicked: importDialog.open()
+                    }
+
+                    AppButton {
+                        text: "+ Add Row"
+                        onClicked: root.addRow()
+                    }
+
+                    AppButton {
+                        text: "Select All"
+                        onClicked: root.selectAll(true)
+                    }
+
+                    AppButton {
+                        text: "Deselect All"
+                        onClicked: root.selectAll(false)
+                    }
+
+                    AppButton {
+                        text: "Delete Selected"
+                        onClicked: root.deleteSelected()
+                    }
+
+                    AppButton {
+                        text: "Clear"
+                        onClicked: root.resetRows()
+                    }
+
+                    Item {
+                        Layout.fillWidth: true
+                    }
+
+                    ColumnLayout {
+                        spacing: 2
+                        Text {
+                            text: root.enteredCount() + " entered"
+                            color: Theme.textPrimary
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                            Layout.alignment: Qt.AlignRight
+                        }
+                        Text {
+                            text: root.includedCount() + " included • " + root.headers.length + " columns"
+                            color: Theme.textSecondary
+                            font.pixelSize: 10
+                            Layout.alignment: Qt.AlignRight
+                        }
+                    }
+
+                    AppButton {
+                        text: root.validationPending ? "Validating..." : "Validate"
+                        enabled: root.enteredCount() > 0 && !root.validationPending
+                        onClicked: root.validateRows()
+                    }
+
+                    PrimaryButton {
+                        text: root.exporting ? "Exporting..." : "Export CSV"
+                        enabled: root.includedCount() > 0
+                                  && root.validated
+                                  && root.findings.length === 0
+                                  && !root.validationPending
+                                  && !root.exporting
+                        onClicked: exportDialog.open()
+                    }
                 }
             }
 
@@ -301,7 +593,8 @@ Item {
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spacingXLarge
                 Layout.rightMargin: Theme.spacingXLarge
-                Layout.preferredHeight: 330
+                Layout.preferredHeight: 360
+                hoverable: false
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -310,13 +603,53 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: "Imported File Preview"; color: Theme.textPrimary; font.pixelSize: 15; font.bold: true; Layout.fillWidth: true }
-                        Text { text: root.importedTotal + " records • " + root.importedHeaders.length + " columns"; color: Theme.textSecondary }
-                        AppButton { text: "Hide"; onClicked: root.importPreviewVisible = false }
-                        PrimaryButton { text: "Load into Builder"; enabled: root.importedHeaders.length > 0 && !root.importPending; onClicked: root.loadImported() }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "Source Preview"
+                                color: Theme.textPrimary
+                                font.pixelSize: 16
+                                font.bold: true
+                            }
+                            Text {
+                                text: root.importedTotal + " records • " + root.importedHeaders.length + " source columns • " + root.mappedCount() + " mapped"
+                                color: Theme.textSecondary
+                                font.pixelSize: 11
+                            }
+                        }
+
+                        AppButton {
+                            text: "Hide"
+                            onClicked: root.importPreviewVisible = false
+                        }
+
+                        PrimaryButton {
+                            text: "Load into Store Builder"
+                            enabled: root.importedHeaders.length > 0 && !root.importPending
+                            onClicked: root.loadImported()
+                        }
                     }
 
-                    Text { visible: root.importError !== ""; text: root.importError; color: Theme.error; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                    Rectangle {
+                        visible: root.importError !== ""
+                        Layout.fillWidth: true
+                        implicitHeight: errorText.implicitHeight + 20
+                        color: Theme.errorSoft
+                        border.color: Theme.error
+                        radius: Theme.radiusMedium
+
+                        Text {
+                            id: errorText
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingSmall
+                            text: root.importError
+                            color: Theme.textPrimary
+                            wrapMode: Text.WordWrap
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
 
                     Rectangle {
                         visible: root.importError === "" && root.importedHeaders.length > 0
@@ -324,11 +657,13 @@ Item {
                         Layout.fillHeight: true
                         color: Theme.background
                         border.color: Theme.border
+                        radius: Theme.radiusMedium
                         clip: true
 
                         Flickable {
+                            id: importFlickable
                             anchors.fill: parent
-                            contentWidth: Math.max(width, root.importedHeaders.length * 165)
+                            contentWidth: Math.max(width, importTable.width)
                             contentHeight: importTable.height
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
@@ -337,22 +672,38 @@ Item {
 
                             Column {
                                 id: importTable
-                                width: Math.max(parent.width, root.importedHeaders.length * 165)
+                                width: Math.max(importFlickable.width, root.importedHeaders.length * 165)
                                 spacing: 0
 
                                 Rectangle {
                                     width: importTable.width
-                                    height: 40
+                                    height: 38
                                     color: Theme.surfaceHover
                                     border.color: Theme.border
+
                                     Row {
                                         anchors.fill: parent
+
                                         Repeater {
                                             model: root.importedHeaders
                                             delegate: Rectangle {
                                                 required property string modelData
-                                                width: 165; height: 40; color: "transparent"; border.color: Theme.border
-                                                Text { anchors.fill: parent; anchors.margins: 7; text: modelData; color: Theme.textPrimary; font.bold: true; font.pixelSize: 10; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                                required property int index
+                                                width: 165
+                                                height: 38
+                                                color: "transparent"
+                                                border.color: Theme.border
+
+                                                Text {
+                                                    anchors.fill: parent
+                                                    anchors.margins: Theme.spacingSmall
+                                                    text: modelData
+                                                    color: Theme.textPrimary
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
                                             }
                                         }
                                     }
@@ -360,20 +711,39 @@ Item {
 
                                 Repeater {
                                     model: Math.min(10, root.importedRows.length)
+
                                     delegate: Rectangle {
+                                        id: importedRowDelegate
+                                        required property var modelData
                                         required property int index
+                                        property var rowData: modelData
                                         width: importTable.width
                                         height: 30
                                         color: index % 2 === 0 ? Theme.background : Theme.surface
                                         border.color: Theme.border
+
                                         Row {
                                             anchors.fill: parent
+
                                             Repeater {
                                                 model: root.importedHeaders.length
+
                                                 delegate: Rectangle {
                                                     required property int index
-                                                    width: 165; height: 30; color: "transparent"; border.color: Theme.border
-                                                    Text { anchors.fill: parent; anchors.margins: 7; text: root.importedRows[parent.parent.parent.index][index] === undefined ? "" : String(root.importedRows[parent.parent.parent.index][index]); color: Theme.textPrimary; font.pixelSize: 10; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                                    width: 165
+                                                    height: 30
+                                                    color: "transparent"
+                                                    border.color: Theme.border
+
+                                                    Text {
+                                                        anchors.fill: parent
+                                                        anchors.margins: Theme.spacingSmall
+                                                        text: importedRowDelegate.rowData[index] === undefined ? "" : String(importedRowDelegate.rowData[index])
+                                                        color: Theme.textPrimary
+                                                        font.pixelSize: 10
+                                                        elide: Text.ElideRight
+                                                        verticalAlignment: Text.AlignVCenter
+                                                    }
                                                 }
                                             }
                                         }
@@ -388,34 +758,155 @@ Item {
             Card {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.minimumHeight: 600
+                Layout.minimumHeight: 610
                 Layout.leftMargin: Theme.spacingXLarge
                 Layout.rightMargin: Theme.spacingXLarge
                 Layout.bottomMargin: Theme.spacingXLarge
+                hoverable: false
 
-                ScrollView {
+                Flickable {
+                    id: builderFlickable
                     anchors.fill: parent
-                    anchors.margins: 8
+                    anchors.margins: Theme.spacingSmall
+                    contentWidth: Math.max(width, root.tableWidth)
+                    contentHeight: builderTable.height
                     clip: true
-                    ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar { }
+                    ScrollBar.horizontal: ScrollBar { }
+
                     Column {
-                        width: root.tableWidth
+                        id: builderTable
+                        width: Math.max(builderFlickable.width, root.tableWidth)
+                        spacing: 0
+
                         Rectangle {
-                            width: root.tableWidth; height: 42; color: Theme.surfaceHover; border.color: Theme.border
-                            Row { anchors.fill: parent
-                                Rectangle { width: 120; height: 42; border.color: Theme.border; Text { anchors.fill: parent; anchors.margins: 8; text: "USE / ROW"; color: Theme.textPrimary; font.bold: true; verticalAlignment: Text.AlignVCenter } }
-                                Repeater { model: root.headers; delegate: Rectangle { required property string modelData; width: root.widths[index]; height: 42; border.color: Theme.border; Text { anchors.fill: parent; anchors.margins: 8; text: modelData; color: Theme.textPrimary; font.bold: true; font.pixelSize: 11; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter } } }
+                            width: builderTable.width
+                            height: 46
+                            color: Theme.surfaceHover
+                            border.color: Theme.borderStrong
+
+                            Row {
+                                anchors.fill: parent
+
+                                Rectangle {
+                                    width: root.controlColumnWidth
+                                    height: 46
+                                    color: Theme.surfaceActive
+                                    border.color: Theme.borderStrong
+
+                                    Text {
+                                        anchors.fill: parent
+                                        anchors.margins: Theme.spacingSmall
+                                        text: "USE / ROW"
+                                        color: Theme.textPrimary
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+
+                                Repeater {
+                                    model: root.headers
+
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        required property int index
+                                        width: root.widths[index]
+                                        height: 46
+                                        color: "transparent"
+                                        border.color: Theme.borderStrong
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.margins: Theme.spacingSmall
+                                            text: modelData
+                                            color: Theme.textPrimary
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
                             }
                         }
+
                         Repeater {
-                            model: root.rows.length
+                            model: root.rows
+
                             delegate: Rectangle {
+                                id: rowDelegate
+                                required property var modelData
                                 required property int index
-                                width: root.tableWidth; height: 38; color: index % 2 === 0 ? Theme.background : Theme.surface; border.color: Theme.border
-                                Row { anchors.fill: parent
-                                    Rectangle { width: 120; height: 38; border.color: Theme.border; RowLayout { anchors.fill: parent; anchors.leftMargin: 7; Rectangle { width: 27; height: 27; border.color: Theme.border; Text { anchors.centerIn: parent; text: root.selected[index] ? "✓" : ""; color: Theme.textPrimary; font.pixelSize: 20 }; MouseArea { anchors.fill: parent; onClicked: root.setSelected(index, !root.selected[index]) } }; Text { text: index + 1; color: Theme.textSecondary } } }
-                                    Repeater { model: root.headers.length; delegate: Rectangle { required property int index; width: root.widths[index]; height: 38; border.color: Theme.border; TextField { anchors.fill: parent; anchors.margins: 1; text: root.rows[parent.parent.parent.index][index]; color: Theme.textPrimary; font.pixelSize: 11; selectByMouse: true; background: Rectangle { color: "transparent"; border.color: parent.activeFocus ? Theme.primary : "transparent" }; onEditingFinished: root.setCell(parent.parent.parent.index, index, text) } } }
+                                property int rowIndex: index
+                                property var rowData: modelData
+
+                                width: builderTable.width
+                                height: 42
+                                color: rowIndex % 2 === 0 ? Theme.background : Theme.surface
+                                border.color: Theme.border
+
+                                Row {
+                                    anchors.fill: parent
+
+                                    Rectangle {
+                                        width: root.controlColumnWidth
+                                        height: 42
+                                        color: selected[rowDelegate.rowIndex] ? Theme.primarySoft : "transparent"
+                                        border.color: Theme.border
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: Theme.spacingSmall
+                                            anchors.rightMargin: Theme.spacingSmall
+                                            spacing: Theme.spacingSmall
+
+                                            CheckBox {
+                                                checked: root.selected[rowDelegate.rowIndex]
+                                                onToggled: root.setSelected(rowDelegate.rowIndex, checked)
+                                                indicator.width: 22
+                                                indicator.height: 22
+                                            }
+
+                                            Text {
+                                                text: String(rowDelegate.rowIndex + 1)
+                                                color: Theme.textSecondary
+                                                font.pixelSize: 11
+                                                Layout.fillWidth: true
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: root.headers.length
+
+                                        delegate: Rectangle {
+                                            required property int index
+                                            width: root.widths[index]
+                                            height: 42
+                                            color: "transparent"
+                                            border.color: Theme.border
+
+                                            TextField {
+                                                id: cellEditor
+                                                anchors.fill: parent
+                                                anchors.margins: 1
+                                                text: rowDelegate.rowData[index] === undefined ? "" : String(rowDelegate.rowData[index])
+                                                color: Theme.textPrimary
+                                                placeholderTextColor: Theme.textMuted
+                                                font.pixelSize: 11
+                                                selectByMouse: true
+                                                background: Rectangle {
+                                                    color: cellEditor.activeFocus ? Theme.primarySoft : "transparent"
+                                                    border.color: cellEditor.activeFocus ? Theme.primary : "transparent"
+                                                    radius: Theme.radiusSmall
+                                                }
+                                                onEditingFinished: root.setCell(rowDelegate.rowIndex, index, text)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -429,8 +920,37 @@ Item {
                 Layout.leftMargin: Theme.spacingXLarge
                 Layout.rightMargin: Theme.spacingXLarge
                 Layout.bottomMargin: Theme.spacingXLarge
-                Layout.preferredHeight: Math.min(240, 70 + root.findings.length * 34)
-                ColumnLayout { anchors.fill: parent; anchors.margins: Theme.spacingMedium; Text { text: "Validation Findings"; color: Theme.textPrimary; font.bold: true }; ListView { Layout.fillWidth: true; Layout.fillHeight: true; model: root.findings; delegate: Text { required property var modelData; width: ListView.view.width; text: "Row " + modelData.row + " • " + modelData.field + ": " + modelData.message; color: Theme.error; elide: Text.ElideRight } } }
+                Layout.preferredHeight: Math.min(300, 90 + root.findings.length * 34)
+                hoverable: false
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingMedium
+                    spacing: Theme.spacingSmall
+
+                    Text {
+                        text: "Validation Findings • " + root.findings.length
+                        color: Theme.error
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: root.findings
+
+                        delegate: Text {
+                            required property var modelData
+                            width: ListView.view.width
+                            text: "Row " + modelData.row + " • " + modelData.field + ": " + modelData.message
+                            color: Theme.textPrimary
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
             }
         }
     }
