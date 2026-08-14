@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Property, Signal
 
 from .validate_controller import ValidateController
 from .repair_controller import RepairController
@@ -29,9 +29,6 @@ class MainBackendController(QObject):
     notifySignal = Signal(str, str, str)
     saySignal = Signal(str)
 
-    # Public bridge signals used by QML pages.  Keep these at the top-level
-    # backend so page lifetime/StackLayout changes cannot disconnect a nested
-    # controller while an async import is completing.
     creatorLoaded = Signal(str)
     creatorReady = Signal(str)
     creatorExported = Signal()
@@ -39,7 +36,7 @@ class MainBackendController(QObject):
 
     def __init__(self, threadpool=None, parent=None):
         super().__init__(parent)
-        self.async_runner = AsyncRunner(threadpool)
+        self.async_runner = AsyncRunner(threadpool, parent=self)
 
         self.notify = lambda title, message, level="info": self.notifySignal.emit(
             str(title), str(message), str(level)
@@ -49,35 +46,41 @@ class MainBackendController(QObject):
             str(title), str(message), "error"
         )
 
-        self.validate = ValidateController(self.async_runner, self.notify, self.fail, parent=self)
-        self.repair = RepairController(self.async_runner, self.notify, self.fail, parent=self)
-        self.review = ReviewController(self.async_runner, self.notify, parent=self)
-        self.creator = CreatorController(self.async_runner, self.notify, self.say, parent=self)
-        self.health = HealthController(self.async_runner, self.notify, self.say, parent=self)
+        self._validate = ValidateController(self.async_runner, self.notify, self.fail, parent=self)
+        self._repair = RepairController(self.async_runner, self.notify, self.fail, parent=self)
+        self._review = ReviewController(self.async_runner, self.notify, parent=self)
+        self._creator = CreatorController(self.async_runner, self.notify, self.say, parent=self)
+        self._health = HealthController(self.async_runner, self.notify, self.say, parent=self)
 
-        # Explicit forwarding lambdas are intentional.  They keep the bridge
-        # alive for the entire application lifetime and normalize payloads at
-        # the QML boundary instead of relying on signal-to-signal connection
-        # behavior across nested QObject ownership.
-        self.creator.creatorLoaded.connect(
+        self._creator.creatorLoaded.connect(
             lambda payload: self.creatorLoaded.emit(str(payload))
         )
-        self.creator.creatorReady.connect(
+        self._creator.creatorReady.connect(
             lambda payload: self.creatorReady.emit(str(payload))
         )
-        self.creator.creatorExported.connect(
+        self._creator.creatorExported.connect(
             lambda: self.creatorExported.emit()
         )
-        self.creator.builderExported.connect(
+        self._creator.builderExported.connect(
             lambda: self.builderExported.emit()
         )
 
-        self.validate.masterPreviewReady.connect(
+        self._validate.masterPreviewReady.connect(
             lambda payload: self.saySignal.emit("__STORELENS_PREVIEW_MASTER__" + str(payload))
         )
-        self.validate.uploadPreviewReady.connect(
+        self._validate.uploadPreviewReady.connect(
             lambda payload: self.saySignal.emit("__STORELENS_PREVIEW_UPLOAD__" + str(payload))
         )
+
+    # These controllers are intentionally exposed as real Qt properties.
+    # Plain Python QObject attributes are not a reliable QML object contract;
+    # without these properties, calls such as backend.creator.load_creator_file()
+    # can resolve as undefined even though the backend itself exists.
+    validate = Property(QObject, lambda self: self._validate, constant=True)
+    repair = Property(QObject, lambda self: self._repair, constant=True)
+    review = Property(QObject, lambda self: self._review, constant=True)
+    creator = Property(QObject, lambda self: self._creator, constant=True)
+    health = Property(QObject, lambda self: self._health, constant=True)
 
 
 __all__ = [
