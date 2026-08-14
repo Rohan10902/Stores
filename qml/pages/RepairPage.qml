@@ -169,10 +169,6 @@ Item {
         root.busy = false
     }
 
-    // =========================================================
-    // FILE DIALOGS
-    // =========================================================
-
     FileDialog {
         id: sourceDialog
 
@@ -220,10 +216,6 @@ Item {
         }
     }
 
-    // =========================================================
-    // BACKEND SIGNAL
-    // =========================================================
-
     Connections {
         target:
             root.backendAvailable()
@@ -237,142 +229,62 @@ Item {
         }
     }
 
-    // =========================================================
-    // PAGE
-    // =========================================================
-
     ScrollView {
         id: scrollView
 
         anchors.fill: parent
-
         clip: true
-
         contentWidth: availableWidth
-
-        ScrollBar.vertical.policy:
-            ScrollBar.AsNeeded
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
         ColumnLayout {
             id: page
-
             width: scrollView.availableWidth
-
             spacing: Theme.spacingLarge
-
-            // =================================================
-            // TITLE
-            // =================================================
 
             PageTitle {
                 Layout.fillWidth: true
-
-                Layout.leftMargin:
-                    Theme.spacingXLarge
-
-                Layout.rightMargin:
-                    Theme.spacingXLarge
-
-                Layout.topMargin:
-                    Theme.spacingLarge
-
+                Layout.leftMargin: Theme.spacingXLarge
+                Layout.rightMargin: Theme.spacingXLarge
+                Layout.topMargin: Theme.spacingLarge
                 title: "Record Repair"
-
-                subtitle:
-                    "Inspect structural issues, repair records, undo changes, and export a clean dataset."
+                subtitle: "Inspect structural issues, repair records, undo changes, and export a clean dataset."
             }
-
-            // =================================================
-            // SOURCE / EXPORT
-            // =================================================
 
             Card {
                 Layout.fillWidth: true
-
-                Layout.leftMargin:
-                    Theme.spacingXLarge
-
-                Layout.rightMargin:
-                    Theme.spacingXLarge
-
+                Layout.leftMargin: Theme.spacingXLarge
+                Layout.rightMargin: Theme.spacingXLarge
                 Layout.preferredHeight: 155
 
                 ColumnLayout {
                     anchors.fill: parent
-
-                    anchors.margins:
-                        Theme.spacingMedium
-
-                    spacing:
-                        Theme.spacingMedium
+                    anchors.margins: Theme.spacingMedium
+                    spacing: Theme.spacingMedium
 
                     RowLayout {
                         Layout.fillWidth: true
-
-                        Text {
-                            text: "Source CSV"
-
-                            color:
-                                Theme.textSecondary
-
-                            font.bold: true
-
-                            Layout.preferredWidth: 105
-                        }
-
+                        Text { text: "Source CSV"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 105 }
                         TextField {
                             Layout.fillWidth: true
-
                             readOnly: true
-
-                            text:
-                                root.sourcePath
-
-                            placeholderText:
-                                "Select a CSV file to inspect"
-
-                            color:
-                                Theme.textPrimary
-
+                            text: root.sourcePath
+                            placeholderText: "Select a CSV file to inspect"
+                            color: Theme.textPrimary
                             background: Rectangle {
-                                color:
-                                    Theme.background
-
-                                border.color:
-                                    root.sourcePath !== ""
-                                        ? Theme.primary
-                                        : Theme.border
-
-                                radius:
-                                    Theme.radiusMedium
+                                color: Theme.background
+                                border.color: root.sourcePath !== "" ? Theme.primary : Theme.border
+                                radius: Theme.radiusMedium
                             }
                         }
-
-                        AppButton {
-                            text: "Browse"
-
-                            enabled:
-                                !root.busy
-
-                            onClicked:
-                                sourceDialog.open()
-                        }
-
+                        AppButton { text: "Browse"; enabled: !root.busy; onClicked: sourceDialog.open() }
                         PrimaryButton {
                             text: "Inspect"
-
-                            enabled:
-                                root.sourcePath !== "" &&
-                                !root.busy
-
+                            enabled: root.sourcePath !== "" && !root.busy
                             onClicked: {
                                 if (root.backendAvailable()) {
                                     root.busy = true
-
-                                    backend.repair.inspect_repair(
-                                        root.sourcePath
-                                    )
-
+                                    backend.repair.inspect_repair(root.sourcePath)
                                     root.busy = false
                                 }
                             }
@@ -381,452 +293,155 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true
-
-                        Text {
-                            text: "Export To"
-
-                            color:
-                                Theme.textSecondary
-
-                            font.bold: true
-
-                            Layout.preferredWidth: 105
-                        }
-
+                        Text { text: "Export To"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 105 }
                         TextField {
                             Layout.fillWidth: true
-
                             readOnly: true
-
-                            text:
-                                root.destinationPath
-
-                            placeholderText:
-                                "Choose destination for repaired CSV"
-
-                            color:
-                                Theme.textPrimary
-
+                            text: root.destinationPath
+                            placeholderText: "Choose destination for repaired CSV"
+                            color: Theme.textPrimary
                             background: Rectangle {
-                                color:
-                                    Theme.background
-
-                                border.color:
-                                    root.destinationPath !== ""
-                                        ? Theme.primary
-                                        : Theme.border
-
-                                radius:
-                                    Theme.radiusMedium
+                                color: Theme.background
+                                border.color: root.destinationPath !== "" ? Theme.primary : Theme.border
+                                radius: Theme.radiusMedium
                             }
                         }
-
-                        AppButton {
-                            text: "Browse"
-
-                            enabled:
-                                root.hasData &&
-                                !root.busy
-
-                            onClicked:
-                                destinationDialog.open()
-                        }
-
+                        AppButton { text: "Browse"; enabled: root.hasData && !root.busy; onClicked: destinationDialog.open() }
                         PrimaryButton {
                             text: "Export Repaired CSV"
-
-                            enabled:
-                                root.hasData &&
-                                root.destinationPath !== "" &&
-                                !root.busy
-
-                            onClicked:
-                                root.performRepair()
+                            enabled: root.hasData && root.destinationPath !== "" && !root.busy
+                            onClicked: root.performRepair()
                         }
                     }
                 }
             }
-
-            // =================================================
-            // SUMMARY
-            // =================================================
 
             RowLayout {
                 Layout.fillWidth: true
-
-                Layout.leftMargin:
-                    Theme.spacingXLarge
-
-                Layout.rightMargin:
-                    Theme.spacingXLarge
-
-                spacing:
-                    Theme.spacingMedium
+                Layout.leftMargin: Theme.spacingXLarge
+                Layout.rightMargin: Theme.spacingXLarge
+                spacing: Theme.spacingMedium
 
                 Card {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-
                     ColumnLayout {
                         anchors.centerIn: parent
-
-                        Text {
-                            text:
-                                root.rows.length
-
-                            color:
-                                Theme.primary
-
-                            font.pixelSize: 22
-                            font.bold: true
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
-
-                        Text {
-                            text: "Records"
-
-                            color:
-                                Theme.textSecondary
-
-                            font.pixelSize: 10
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
+                        Text { text: root.rows.length; color: Theme.primary; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: "Records"; color: Theme.textSecondary; font.pixelSize: 10; Layout.alignment: Qt.AlignHCenter }
                     }
                 }
-
                 Card {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-
                     ColumnLayout {
                         anchors.centerIn: parent
-
-                        Text {
-                            text:
-                                root.headers.length
-
-                            color:
-                                Theme.info
-
-                            font.pixelSize: 22
-                            font.bold: true
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
-
-                        Text {
-                            text: "Columns"
-
-                            color:
-                                Theme.textSecondary
-
-                            font.pixelSize: 10
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
+                        Text { text: root.headers.length; color: Theme.info; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: "Columns"; color: Theme.textSecondary; font.pixelSize: 10; Layout.alignment: Qt.AlignHCenter }
                     }
                 }
-
                 Card {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-
                     ColumnLayout {
                         anchors.centerIn: parent
-
-                        Text {
-                            text:
-                                root.issues.length
-
-                            color:
-                                root.issues.length > 0
-                                    ? Theme.error
-                                    : Theme.success
-
-                            font.pixelSize: 22
-                            font.bold: true
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
-
-                        Text {
-                            text: "Open Issues"
-
-                            color:
-                                Theme.textSecondary
-
-                            font.pixelSize: 10
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
+                        Text { text: root.issues.length; color: root.issues.length > 0 ? Theme.error : Theme.success; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: "Open Issues"; color: Theme.textSecondary; font.pixelSize: 10; Layout.alignment: Qt.AlignHCenter }
                     }
                 }
-
                 Card {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 80
-
                     ColumnLayout {
                         anchors.centerIn: parent
-
-                        Text {
-                            text:
-                                root.historyCount
-
-                            color:
-                                Theme.warning
-
-                            font.pixelSize: 22
-                            font.bold: true
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
-
-                        Text {
-                            text: "Undo Steps"
-
-                            color:
-                                Theme.textSecondary
-
-                            font.pixelSize: 10
-
-                            Layout.alignment:
-                                Qt.AlignHCenter
-                        }
+                        Text { text: root.historyCount; color: Theme.warning; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                        Text { text: "Undo Steps"; color: Theme.textSecondary; font.pixelSize: 10; Layout.alignment: Qt.AlignHCenter }
                     }
                 }
             }
 
-            // =================================================
-            // WORKSPACE
-            // =================================================
-
             SplitView {
                 id: workspace
-
                 Layout.fillWidth: true
-
-                Layout.leftMargin:
-                    Theme.spacingXLarge
-
-                Layout.rightMargin:
-                    Theme.spacingXLarge
-
-                Layout.bottomMargin:
-                    Theme.spacingXLarge
-
+                Layout.leftMargin: Theme.spacingXLarge
+                Layout.rightMargin: Theme.spacingXLarge
+                Layout.bottomMargin: Theme.spacingXLarge
                 Layout.preferredHeight: 650
-
-                orientation:
-                    Qt.Horizontal
-
-                // =============================================
-                // ISSUE PANEL
-                // =============================================
+                orientation: Qt.Horizontal
 
                 Card {
                     SplitView.preferredWidth: 390
                     SplitView.minimumWidth: 320
-
                     ColumnLayout {
                         anchors.fill: parent
-
-                        anchors.margins:
-                            Theme.spacingMedium
-
-                        spacing:
-                            Theme.spacingSmall
+                        anchors.margins: Theme.spacingMedium
+                        spacing: Theme.spacingSmall
 
                         RowLayout {
                             Layout.fillWidth: true
-
-                            Text {
-                                text: "Repair Queue"
-
-                                color:
-                                    Theme.textPrimary
-
-                                font.pixelSize: 15
-                                font.bold: true
-                            }
-
-                            Item {
-                                Layout.fillWidth: true
-                            }
-
-                            Text {
-                                text:
-                                    root.issues.length
-                                    + " issue(s)"
-
-                                color:
-                                    Theme.textSecondary
-
-                                font.pixelSize: 11
-                            }
+                            Text { text: "Repair Queue"; color: Theme.textPrimary; font.pixelSize: 15; font.bold: true }
+                            Item { Layout.fillWidth: true }
+                            Text { text: root.issues.length + " issue(s)"; color: Theme.textSecondary; font.pixelSize: 11 }
                         }
 
                         Rectangle {
                             Layout.fillWidth: true
-
                             height: 34
-
-                            color:
-                                Theme.surfaceHover
-
-                            border.color:
-                                Theme.border
-
+                            color: Theme.surfaceHover
+                            border.color: Theme.border
                             RowLayout {
                                 anchors.fill: parent
-
-                                anchors.leftMargin:
-                                    Theme.spacingSmall
-
-                                anchors.rightMargin:
-                                    Theme.spacingSmall
-
-                                Text {
-                                    text: "Row"
-
-                                    color:
-                                        Theme.textSecondary
-
-                                    font.bold: true
-
-                                    Layout.preferredWidth: 50
-                                }
-
-                                Text {
-                                    text: "Issue"
-
-                                    color:
-                                        Theme.textSecondary
-
-                                    font.bold: true
-
-                                    Layout.fillWidth: true
-                                }
+                                anchors.leftMargin: Theme.spacingSmall
+                                anchors.rightMargin: Theme.spacingSmall
+                                Text { text: "Row"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 50 }
+                                Text { text: "Issue"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
                             }
                         }
 
                         ListView {
                             id: issueList
-
                             Layout.fillWidth: true
-
                             Layout.fillHeight: true
-
                             clip: true
-
                             spacing: 2
-
-                            model:
-                                root.issues
-
-                            ScrollBar.vertical:
-                                ScrollBar {}
+                            model: root.issues
+                            ScrollBar.vertical: ScrollBar {}
 
                             delegate: Rectangle {
+                                id: issueDelegate
                                 required property int index
-
                                 required property var modelData
-
-                                width:
-                                    issueList.width
-
+                                width: issueList.width
                                 height: 64
-
-                                radius:
-                                    Theme.radiusMedium
-
-                                color:
-                                    root.selectedIssue === index
-                                        ? Theme.surfaceHover
-                                        : Theme.background
-
-                                border.color:
-                                    root.selectedIssue === index
-                                        ? Theme.primary
-                                        : Theme.border
+                                radius: Theme.radiusMedium
+                                color: root.selectedIssue === issueDelegate.index ? Theme.surfaceHover : Theme.background
+                                border.color: root.selectedIssue === issueDelegate.index ? Theme.primary : Theme.border
 
                                 MouseArea {
                                     anchors.fill: parent
-
-                                    onClicked:
-                                        root.selectIssue(index)
+                                    onClicked: root.selectIssue(issueDelegate.index)
                                 }
 
                                 ColumnLayout {
                                     anchors.fill: parent
-
-                                    anchors.margins:
-                                        Theme.spacingSmall
-
+                                    anchors.margins: Theme.spacingSmall
                                     spacing: 2
-
                                     RowLayout {
                                         Layout.fillWidth: true
-
+                                        Text { text: String(issueDelegate.modelData.row || ""); color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 50 }
                                         Text {
-                                            text:
-                                                String(
-                                                    modelData.row || ""
-                                                )
-
-                                            color:
-                                                Theme.textSecondary
-
+                                            text: String(issueDelegate.modelData.type || "")
+                                            color: issueDelegate.modelData.type === "Created Record" ? Theme.success : Theme.error
                                             font.bold: true
-
-                                            Layout.preferredWidth:
-                                                50
-                                        }
-
-                                        Text {
-                                            text:
-                                                String(
-                                                    modelData.type || ""
-                                                )
-
-                                            color:
-                                                modelData.type ===
-                                                    "Created Record"
-                                                    ? Theme.success
-                                                    : Theme.error
-
-                                            font.bold: true
-
-                                            elide:
-                                                Text.ElideRight
-
+                                            elide: Text.ElideRight
                                             Layout.fillWidth: true
                                         }
                                     }
-
                                     Text {
-                                        text:
-                                            String(
-                                                modelData.message || ""
-                                            )
-
-                                        color:
-                                            Theme.textSecondary
-
+                                        text: String(issueDelegate.modelData.message || "")
+                                        color: Theme.textSecondary
                                         font.pixelSize: 10
-
-                                        elide:
-                                            Text.ElideRight
-
+                                        elide: Text.ElideRight
                                         Layout.fillWidth: true
                                     }
                                 }
@@ -835,429 +450,178 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-
-                            spacing:
-                                Theme.spacingSmall
-
+                            spacing: Theme.spacingSmall
                             AppButton {
                                 text: "Undo"
-
-                                enabled:
-                                    root.historyCount > 0 &&
-                                    root.hasData
-
+                                enabled: root.historyCount > 0 && root.hasData
                                 onClicked: {
                                     if (root.backendAvailable())
                                         backend.repair.undo_repair_action()
                                 }
                             }
-
-                            Item {
-                                Layout.fillWidth: true
-                            }
+                            Item { Layout.fillWidth: true }
                         }
                     }
                 }
 
-                // =============================================
-                // INSPECTOR
-                // =============================================
-
                 Card {
                     SplitView.fillWidth: true
                     SplitView.minimumWidth: 650
-
                     ColumnLayout {
                         anchors.fill: parent
-
-                        anchors.margins:
-                            Theme.spacingMedium
-
-                        spacing:
-                            Theme.spacingSmall
-
-                        // -------------------------------------
-                        // HEADER
-                        // -------------------------------------
+                        anchors.margins: Theme.spacingMedium
+                        spacing: Theme.spacingSmall
 
                         RowLayout {
                             Layout.fillWidth: true
-
                             Text {
-                                text:
-                                    root.selectedIssue >= 0
-                                        ? "Repair Inspector"
-                                        : "Dataset Preview"
-
-                                color:
-                                    Theme.textPrimary
-
+                                text: root.selectedIssue >= 0 ? "Repair Inspector" : "Dataset Preview"
+                                color: Theme.textPrimary
                                 font.pixelSize: 15
                                 font.bold: true
                             }
-
-                            Item {
-                                Layout.fillWidth: true
-                            }
-
-                            Text {
-                                visible:
-                                    root.selectedIssue >= 0
-
-                                text:
-                                    root.selectedType
-
-                                color:
-                                    Theme.error
-
-                                font.bold: true
-                            }
+                            Item { Layout.fillWidth: true }
+                            Text { visible: root.selectedIssue >= 0; text: root.selectedType; color: Theme.error; font.bold: true }
                         }
-
-                        // -------------------------------------
-                        // ISSUE MESSAGE
-                        // -------------------------------------
 
                         Rectangle {
-                            visible:
-                                root.selectedIssue >= 0
-
+                            visible: root.selectedIssue >= 0
                             Layout.fillWidth: true
-
-                            height:
-                                visible ? 58 : 0
-
-                            radius:
-                                Theme.radiusMedium
-
-                            color:
-                                Theme.surfaceHover
-
-                            border.color:
-                                Theme.border
-
+                            height: visible ? 58 : 0
+                            radius: Theme.radiusMedium
+                            color: Theme.surfaceHover
+                            border.color: Theme.border
                             ColumnLayout {
                                 anchors.fill: parent
-
-                                anchors.margins:
-                                    Theme.spacingSmall
-
+                                anchors.margins: Theme.spacingSmall
                                 spacing: 2
-
-                                Text {
-                                    text:
-                                        root.selectedType
-
-                                    color:
-                                        Theme.error
-
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    text:
-                                        root.selectedMessage
-
-                                    color:
-                                        Theme.textPrimary
-
-                                    font.pixelSize: 11
-
-                                    wrapMode:
-                                        Text.WordWrap
-
-                                    Layout.fillWidth: true
-                                }
+                                Text { text: root.selectedType; color: Theme.error; font.bold: true }
+                                Text { text: root.selectedMessage; color: Theme.textPrimary; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                             }
                         }
 
-                        // -------------------------------------
-                        // ACTIONS
-                        // -------------------------------------
-
                         RowLayout {
-                            visible:
-                                root.selectedIssue >= 0
-
+                            visible: root.selectedIssue >= 0
                             Layout.fillWidth: true
-
-                            spacing:
-                                Theme.spacingSmall
+                            spacing: Theme.spacingSmall
 
                             PrimaryButton {
                                 text: "Join Rows"
-
-                                enabled:
-                                    root.selectedIssue >= 0
-
+                                enabled: root.selectedIssue >= 0
                                 onClicked: {
-                                    var issue =
-                                        root.selectedIssueObject()
-
-                                    if (issue &&
-                                            root.backendAvailable()) {
-                                        backend.repair.join_repair_rows(
-                                            Number(
-                                                issue.index || 0
-                                            )
-                                        )
-                                    }
+                                    var issue = root.selectedIssueObject()
+                                    if (issue && root.backendAvailable())
+                                        backend.repair.join_repair_rows(Number(issue.index || 0))
                                 }
                             }
-
                             AppButton {
                                 text: "Keep As-Is"
-
-                                enabled:
-                                    root.selectedIssue >= 0
-
+                                enabled: root.selectedIssue >= 0
                                 onClicked: {
-                                    var issue =
-                                        root.selectedIssueObject()
-
-                                    if (issue &&
-                                            root.backendAvailable()) {
-                                        backend.repair.keep_repair_issue(
-                                            Number(
-                                                issue.index || 0
-                                            )
-                                        )
-                                    }
+                                    var issue = root.selectedIssueObject()
+                                    if (issue && root.backendAvailable())
+                                        backend.repair.keep_repair_issue(Number(issue.index || 0))
                                 }
                             }
-
                             AppButton {
                                 text: "Keep / Pad Row"
-
-                                enabled:
-                                    root.selectedIssue >= 0
-
+                                enabled: root.selectedIssue >= 0
                                 onClicked: {
-                                    var issue =
-                                        root.selectedIssueObject()
-
-                                    if (issue &&
-                                            root.backendAvailable()) {
-                                        backend.repair.keep_repair_unresolved(
-                                            Number(
-                                                issue.index || 0
-                                            ),
-                                            root.selectedSourceColumn >= 0
-                                                ? root.selectedSourceColumn
-                                                : 0
-                                        )
-                                    }
+                                    var issue = root.selectedIssueObject()
+                                    if (issue && root.backendAvailable())
+                                        backend.repair.keep_repair_unresolved(Number(issue.index || 0), root.selectedSourceColumn >= 0 ? root.selectedSourceColumn : 0)
                                 }
                             }
-
                             AppButton {
                                 text: "Map Column"
-
-                                enabled:
-                                    root.selectedIssue >= 0 &&
-                                    root.selectedSourceColumn >= 0 &&
-                                    root.headers.length > 0
-
-                                onClicked:
-                                    columnMappingDialog.open()
+                                enabled: root.selectedIssue >= 0 && root.selectedSourceColumn >= 0 && root.headers.length > 0
+                                onClicked: columnMappingDialog.open()
                             }
-
                             AppButton {
                                 text: "Create Record"
-
-                                enabled:
-                                    root.selectedIssue >= 0
-
-                                onClicked:
-                                    mappingDialog.open()
+                                enabled: root.selectedIssue >= 0
+                                onClicked: mappingDialog.open()
                             }
-
                             AppButton {
                                 text: "Delete Record"
-
-                                visible:
-                                    root.selectedType === "Created Record"
-
-                                enabled:
-                                    visible &&
-                                    root.selectedIssue >= 0
-
+                                visible: root.selectedType === "Created Record"
+                                enabled: visible && root.selectedIssue >= 0
                                 onClicked: {
-                                    var issue =
-                                        root.selectedIssueObject()
-
-                                    if (issue &&
-                                            root.backendAvailable()) {
-                                        backend.repair.delete_repair_record(
-                                            String(issue.index || "")
-                                        )
-                                    }
+                                    var issue = root.selectedIssueObject()
+                                    if (issue && root.backendAvailable())
+                                        backend.repair.delete_repair_record(String(issue.index || ""))
                                 }
                             }
-
-                            Item {
-                                Layout.fillWidth: true
-                            }
+                            Item { Layout.fillWidth: true }
                         }
-
-                        // -------------------------------------
-                        // ROW PREVIEW
-                        // -------------------------------------
 
                         Rectangle {
                             Layout.fillWidth: true
-
                             height: 38
-
-                            color:
-                                Theme.surfaceHover
-
-                            border.color:
-                                Theme.border
-
+                            color: Theme.surfaceHover
+                            border.color: Theme.border
                             RowLayout {
                                 anchors.fill: parent
-
-                                anchors.leftMargin:
-                                    Theme.spacingSmall
-
-                                anchors.rightMargin:
-                                    Theme.spacingSmall
-
-                                Text {
-                                    text: "Column"
-
-                                    color:
-                                        Theme.textSecondary
-
-                                    font.bold: true
-
-                                    Layout.preferredWidth: 180
-                                }
-
-                                Text {
-                                    text: "Value"
-
-                                    color:
-                                        Theme.textSecondary
-
-                                    font.bold: true
-
-                                    Layout.fillWidth: true
-                                }
+                                anchors.leftMargin: Theme.spacingSmall
+                                anchors.rightMargin: Theme.spacingSmall
+                                Text { text: "Column"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 180 }
+                                Text { text: "Value"; color: Theme.textSecondary; font.bold: true; Layout.fillWidth: true }
                             }
                         }
 
                         ListView {
                             id: rowPreview
-
                             Layout.fillWidth: true
-
                             Layout.fillHeight: true
-
                             clip: true
-
                             model: {
                                 var row = root.selectedRowData()
-
                                 var result = []
-
-                                for (var i = 0;
-                                     i < root.headers.length;
-                                     ++i) {
+                                for (var i = 0; i < root.headers.length; ++i) {
                                     result.push({
-                                        column:
-                                            String(
-                                                root.headers[i]
-                                            ),
-
-                                        value:
-                                            i < row.length
-                                                ? String(
-                                                    row[i] === null ||
-                                                    row[i] === undefined
-                                                        ? ""
-                                                        : row[i]
-                                                  )
-                                                : ""
+                                        column: String(root.headers[i]),
+                                        value: i < row.length ? String(row[i] === null || row[i] === undefined ? "" : row[i]) : ""
                                     })
                                 }
-
                                 return result
                             }
-
-                            ScrollBar.vertical:
-                                ScrollBar {}
+                            ScrollBar.vertical: ScrollBar {}
 
                             delegate: Rectangle {
+                                id: columnDelegate
                                 required property var modelData
                                 required property int index
-
-                                width:
-                                    rowPreview.width
-
+                                width: rowPreview.width
                                 height: 38
-
-                                color:
-                                    index % 2 === 0
-                                        ? Theme.background
-                                        : Theme.surface
-
-                                border.color:
-                                    Theme.border
+                                color: columnDelegate.index % 2 === 0 ? Theme.background : Theme.surface
+                                border.color: Theme.border
 
                                 MouseArea {
                                     anchors.fill: parent
-
                                     onClicked: {
-                                        root.selectedSourceColumn =
-                                            index
-
-                                        root.selectedTargetColumn =
-                                            modelData.column
+                                        root.selectedSourceColumn = columnDelegate.index
+                                        root.selectedTargetColumn = columnDelegate.modelData.column
                                     }
                                 }
 
                                 RowLayout {
                                     anchors.fill: parent
-
-                                    anchors.leftMargin:
-                                        Theme.spacingSmall
-
-                                    anchors.rightMargin:
-                                        Theme.spacingSmall
+                                    anchors.leftMargin: Theme.spacingSmall
+                                    anchors.rightMargin: Theme.spacingSmall
 
                                     Text {
-                                        text:
-                                            modelData.column
-
-                                        color:
-                                            root.selectedSourceColumn === index
-                                                ? Theme.primary
-                                                : Theme.textPrimary
-
-                                        font.bold:
-                                            root.selectedSourceColumn === index
-
+                                        text: columnDelegate.modelData.column
+                                        color: root.selectedSourceColumn === columnDelegate.index ? Theme.primary : Theme.textPrimary
+                                        font.bold: root.selectedSourceColumn === columnDelegate.index
                                         Layout.preferredWidth: 180
-
-                                        elide:
-                                            Text.ElideRight
+                                        elide: Text.ElideRight
                                     }
 
                                     Text {
-                                        text:
-                                            modelData.value === ""
-                                                ? "—"
-                                                : modelData.value
-
-                                        color:
-                                            Theme.textSecondary
-
+                                        text: columnDelegate.modelData.value === "" ? "—" : columnDelegate.modelData.value
+                                        color: Theme.textSecondary
                                         Layout.fillWidth: true
-
-                                        elide:
-                                            Text.ElideRight
+                                        elide: Text.ElideRight
                                     }
                                 }
                             }
@@ -1268,115 +632,57 @@ Item {
         }
     }
 
-    // =========================================================
-    // COLUMN MAPPING DIALOG
-    // =========================================================
-
     Dialog {
         id: columnMappingDialog
-
         title: "Map Repair Column"
-
         modal: true
-
         width: 500
         height: 310
-
         anchors.centerIn: parent
-
-        background: Rectangle {
-            color: Theme.surface
-            border.color: Theme.border
-            radius: Theme.radiusMedium
-        }
+        background: Rectangle { color: Theme.surface; border.color: Theme.border; radius: Theme.radiusMedium }
 
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: Theme.spacingLarge
             spacing: Theme.spacingMedium
 
+            Text { text: "Move the selected source value into the target column."; color: Theme.textPrimary; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Text {
-                text: "Move the selected source value into the target column."
-                color: Theme.textPrimary
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-
-            Text {
-                text:
-                    root.selectedSourceColumn >= 0 &&
-                    root.selectedSourceColumn < root.headers.length
-                        ? "Source: " + root.headers[root.selectedSourceColumn]
-                        : "Select a source column first."
+                text: root.selectedSourceColumn >= 0 && root.selectedSourceColumn < root.headers.length ? "Source: " + root.headers[root.selectedSourceColumn] : "Select a source column first."
                 color: Theme.textSecondary
                 font.pixelSize: 11
                 Layout.fillWidth: true
             }
-
             ComboBox {
                 id: targetColumnCombo
-
                 Layout.fillWidth: true
-
                 model: root.headers
-
-                currentIndex:
-                    root.selectedTargetColumn !== ""
-                        ? Math.max(0, root.headers.indexOf(root.selectedTargetColumn))
-                        : 0
-
-                background: Rectangle {
-                    color: Theme.background
-                    border.color: Theme.border
-                    radius: Theme.radiusMedium
-                }
+                currentIndex: root.selectedTargetColumn !== "" ? Math.max(0, root.headers.indexOf(root.selectedTargetColumn)) : 0
+                background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
             }
-
             CheckBox {
                 id: rememberMapping
-
                 text: "Remember this mapping"
-
                 checked: false
-
                 contentItem: Text {
-                    text: parent.text
+                    text: rememberMapping.text
                     color: Theme.textPrimary
                     verticalAlignment: Text.AlignVCenter
-                    leftPadding: parent.indicator.width + Theme.spacingSmall
+                    leftPadding: rememberMapping.indicator.width + Theme.spacingSmall
                 }
             }
-
             RowLayout {
                 Layout.fillWidth: true
-
                 Item { Layout.fillWidth: true }
-
-                AppButton {
-                    text: "Cancel"
-                    onClicked: columnMappingDialog.close()
-                }
-
+                AppButton { text: "Cancel"; onClicked: columnMappingDialog.close() }
                 PrimaryButton {
                     text: "Apply Mapping"
-
-                    enabled:
-                        root.selectedIssue >= 0 &&
-                        root.selectedSourceColumn >= 0 &&
-                        targetColumnCombo.currentIndex >= 0
-
+                    enabled: root.selectedIssue >= 0 && root.selectedSourceColumn >= 0 && targetColumnCombo.currentIndex >= 0
                     onClicked: {
                         var issue = root.selectedIssueObject()
-
                         if (issue && root.backendAvailable()) {
-                            backend.repair.apply_repair_mapping(
-                                Number(issue.index || 0),
-                                root.selectedSourceColumn,
-                                String(targetColumnCombo.currentText || ""),
-                                rememberMapping.checked
-                            )
+                            backend.repair.apply_repair_mapping(Number(issue.index || 0), root.selectedSourceColumn, String(targetColumnCombo.currentText || ""), rememberMapping.checked)
                         }
-
                         rememberMapping.checked = false
                         columnMappingDialog.close()
                     }
@@ -1385,124 +691,41 @@ Item {
         }
     }
 
-    // =========================================================
-    // CREATE RECORD DIALOG
-    // =========================================================
-
     Dialog {
         id: mappingDialog
-
         title: "Create Repair Record"
-
         modal: true
-
         width: 520
         height: 360
-
         anchors.centerIn: parent
-
-        background: Rectangle {
-            color:
-                Theme.surface
-
-            border.color:
-                Theme.border
-
-            radius:
-                Theme.radiusMedium
-        }
+        background: Rectangle { color: Theme.surface; border.color: Theme.border; radius: Theme.radiusMedium }
 
         ColumnLayout {
             anchors.fill: parent
+            anchors.margins: Theme.spacingLarge
+            spacing: Theme.spacingMedium
 
-            anchors.margins:
-                Theme.spacingLarge
-
-            spacing:
-                Theme.spacingMedium
-
-            Text {
-                text:
-                    "Create a new record from the selected issue."
-
-                color:
-                    Theme.textPrimary
-
-                wrapMode:
-                    Text.WordWrap
-
-                Layout.fillWidth: true
-            }
-
-            Text {
-                text:
-                    "The mapping is sent as JSON to the repair backend."
-
-                color:
-                    Theme.textSecondary
-
-                font.pixelSize: 11
-
-                Layout.fillWidth: true
-            }
-
+            Text { text: "Create a new record from the selected issue."; color: Theme.textPrimary; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text { text: "The mapping is sent as JSON to the repair backend."; color: Theme.textSecondary; font.pixelSize: 11; Layout.fillWidth: true }
             TextArea {
                 id: mappingInput
-
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-
-                placeholderText:
-                    '{"Column Name":"Value"}'
-
-                textFormat:
-                    TextEdit.PlainText
-
-                color:
-                    Theme.textPrimary
-
-                background: Rectangle {
-                    color:
-                        Theme.background
-
-                    border.color:
-                        Theme.border
-
-                    radius:
-                        Theme.radiusMedium
-                }
+                placeholderText: '{"Column Name":"Value"}'
+                textFormat: TextEdit.PlainText
+                color: Theme.textPrimary
+                background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
             }
-
             RowLayout {
                 Layout.fillWidth: true
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                AppButton {
-                    text: "Cancel"
-
-                    onClicked:
-                        mappingDialog.close()
-                }
-
+                Item { Layout.fillWidth: true }
+                AppButton { text: "Cancel"; onClicked: mappingDialog.close() }
                 PrimaryButton {
                     text: "Create"
-
                     onClicked: {
-                        var issue =
-                            root.selectedIssueObject()
-
-                        if (issue &&
-                                root.backendAvailable()) {
-
-                            backend.repair.create_repair_record(
-                                Number(issue.index || 0),
-                                mappingInput.text
-                            )
-                        }
-
+                        var issue = root.selectedIssueObject()
+                        if (issue && root.backendAvailable())
+                            backend.repair.create_repair_record(Number(issue.index || 0), mappingInput.text)
                         mappingInput.text = ""
                         mappingDialog.close()
                     }
