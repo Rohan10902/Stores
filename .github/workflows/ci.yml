@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [main, master]
 
-permissions:
-  contents: write
-
 jobs:
   rigorous-test-suite:
     runs-on: windows-latest
@@ -35,100 +32,6 @@ jobs:
 
       - name: Ruff Correctness Lint
         run: ruff check . --select E9,F63,F7,F82
-
-      - name: Apply remaining RepairPage QML lint fixes
-        shell: pwsh
-        run: |
-          $path = 'qml/pages/RepairPage.qml'
-          $text = Get-Content -Raw -Encoding UTF8 $path
-
-          $old = @'
-                            delegate: Rectangle {
-                                required property var modelData
-                                required property int index
-'@
-          $new = @'
-                            delegate: Rectangle {
-                                id: columnDelegate
-                                required property var modelData
-                                required property int index
-'@
-          $text = $text.Replace($old, $new)
-
-          $old = @'
-                                        root.selectedSourceColumn =
-                                            index
-'@
-          $new = @'
-                                        root.selectedSourceColumn =
-                                            columnDelegate.index
-'@
-          $text = $text.Replace($old, $new)
-
-          $old = @'
-                                        root.selectedTargetColumn =
-                                            modelData.column
-'@
-          $new = @'
-                                        root.selectedTargetColumn =
-                                            columnDelegate.modelData.column
-'@
-          $text = $text.Replace($old, $new)
-
-          $old = @'
-                                            root.selectedSourceColumn === index
-'@
-          $new = @'
-                                            root.selectedSourceColumn === columnDelegate.index
-'@
-          $text = $text.Replace($old, $new)
-
-          $old = @'
-                                            modelData.column
-'@
-          $new = @'
-                                            columnDelegate.modelData.column
-'@
-          $text = $text.Replace($old, $new)
-
-          $old = @'
-                                            modelData.value === ""
-                                                ? "—"
-                                                : modelData.value
-'@
-          $new = @'
-                                            columnDelegate.modelData.value === ""
-                                                ? "—"
-                                                : columnDelegate.modelData.value
-'@
-          $text = $text.Replace($old, $new)
-
-          $old = @'
-                    text: parent.text
-                    color: Theme.textPrimary
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: parent.indicator.width + Theme.spacingSmall
-'@
-          $new = @'
-                    text: rememberMapping.text
-                    color: Theme.textPrimary
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: rememberMapping.indicator.width + Theme.spacingSmall
-'@
-          $text = $text.Replace($old, $new)
-
-          Set-Content -Encoding UTF8 -NoNewline $path $text
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add qml/pages/RepairPage.qml
-          git diff --cached --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m 'chore: apply RepairPage qmllint fixes'
-            git push origin HEAD:main
-          } else {
-            Write-Host 'RepairPage already contains the targeted fixes.'
-          }
 
       - name: QML Lint
         shell: pwsh
