@@ -259,8 +259,8 @@ Item {
                                 anchors.margins: Theme.spacingSmall
                                 spacing: Theme.spacingSmall
                                 Rectangle {
-                                    width: 7
-                                    height: 7
+                                    Layout.preferredWidth: 7
+                                    Layout.preferredHeight: 7
                                     radius: 4
                                     color: String(findingDelegate.modelData.severity || "").toUpperCase() === "ERROR" ? Theme.error : Theme.warning
                                 }
