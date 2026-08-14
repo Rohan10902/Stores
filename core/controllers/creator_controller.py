@@ -5,7 +5,7 @@ import tempfile
 
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
 
-from ..common import STORE_FIELDS, clean_value, read_table
+from ..common import STORE_FIELDS, clean_value, parse_delimited_text, read_table
 from ..file_creator import creator_validate, export_creator
 
 
@@ -54,6 +54,15 @@ class CreatorController(QObject):
         self.current_headers = []
         self.current_rows = []
 
+    def _emit_loaded(self, headers, rows):
+        self.current_headers = list(headers)
+        self.current_rows = list(rows)
+        self.creatorLoaded.emit(json.dumps({
+            "headers": self.current_headers,
+            "rows": self.current_rows,
+            "total": len(self.current_rows),
+        }))
+
     @Slot(str)
     def load_creator_file(self, path):
         local_path = _to_local_file(path)
@@ -65,12 +74,7 @@ class CreatorController(QObject):
             return headers, rows
 
         def success(result):
-            self.current_headers, self.current_rows = result
-            self.creatorLoaded.emit(json.dumps({
-                "headers": self.current_headers,
-                "rows": self.current_rows,
-                "total": len(self.current_rows),
-            }))
+            self._emit_loaded(*result)
             if self.notify:
                 self.notify("File Imported", f"Loaded {len(self.current_rows)} records and {len(self.current_headers)} columns.", "success")
 
@@ -79,6 +83,35 @@ class CreatorController(QObject):
             self.current_rows = []
             if self.notify:
                 self.notify("Import Failed", str(exc), "error")
+            self.creatorLoaded.emit(json.dumps({
+                "headers": [],
+                "rows": [],
+                "total": 0,
+                "error": str(exc),
+            }))
+
+        self.async_runner.run(task, success, error)
+
+    @Slot(str)
+    def load_creator_text(self, text):
+        def task():
+            parsed = parse_delimited_text(text)
+            if len(parsed) < 2:
+                raise ValueError("Paste at least one header row and one store row.")
+            headers = [clean_value(value) for value in parsed[0]]
+            rows = [list(row) for row in parsed[1:] if any(clean_value(value) for value in row)]
+            if not any(headers):
+                raise ValueError("The pasted data does not contain usable headers.")
+            return headers, rows
+
+        def success(result):
+            self._emit_loaded(*result)
+            if self.notify:
+                self.notify("Stores Pasted", f"Parsed {len(self.current_rows)} records and {len(self.current_headers)} columns.", "success")
+
+        def error(exc):
+            if self.notify:
+                self.notify("Paste Failed", str(exc), "error")
             self.creatorLoaded.emit(json.dumps({
                 "headers": [],
                 "rows": [],
@@ -110,7 +143,11 @@ class CreatorController(QObject):
         def error(exc):
             if self.notify:
                 self.notify("Validation Error", str(exc), "error")
-            self.creatorReady.emit(json.dumps({"count": 1, "rows": 0, "findings": [{"row": 0, "field": "SYSTEM", "message": str(exc), "severity": "ERROR"}]}))
+            self.creatorReady.emit(json.dumps({
+                "count": 1,
+                "rows": 0,
+                "findings": [{"row": 0, "field": "SYSTEM", "message": str(exc), "severity": "ERROR"}],
+            }))
 
         self.async_runner.run(task, success, error)
 
