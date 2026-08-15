@@ -10,9 +10,22 @@ from pathlib import Path
 
 import pandas as pd
 
-from .common import STORE_FIELDS, binary_ok, canonical_field, clean_value, date_ok, norm_value, parse_delimited_text
+from .common import (
+    STORE_FIELDS,
+    REQUIRED_STORE_FIELDS,
+    BINARY_STORE_FIELDS,
+    binary_ok,
+    canonical_field,
+    clean_value,
+    date_ok,
+    normalize_binary_value,
+    normalize_nielsen_code,
+    norm_value,
+    parse_delimited_text,
+    suggested_numeric_width,
+)
 
-REQUIRED_FIELDS = ("Store Name", "SID", "Nielsen Store Code")
+REQUIRED_FIELDS = REQUIRED_STORE_FIELDS
 
 
 def empty_rows(n: int = 10) -> list[dict[str, str]]:
@@ -24,10 +37,7 @@ def parse_clipboard(text: str) -> list[list[str]]:
 
 
 def normalize_nielsen(value, width: int) -> str:
-    value = clean_value(value)
-    if not value:
-        return ""
-    return value.zfill(int(width)) if value.isdigit() else value
+    return normalize_nielsen_code(value, width)
 
 
 def _detect_structure(df: pd.DataFrame) -> dict:
@@ -52,25 +62,30 @@ def _detect_structure(df: pd.DataFrame) -> dict:
 
 
 def _suggested_width(codes) -> int:
-    widths = [len(clean_value(code)) for code in codes if clean_value(code).isdigit()]
-    if not widths:
-        return 0
-    counts = Counter(widths)
-    top = max(counts.values())
-    return max(width for width, count in counts.items() if count == top)
+    return suggested_numeric_width(codes)
 
 
 def _row_has_data(row: dict) -> bool:
     return any(clean_value(row.get(field, "")) for field in STORE_FIELDS)
 
 
-def _validate_choice(findings, row_no, field, value, allowed):
-    if value and norm_value(value) not in allowed:
+def _normalize_row(row: dict, nielsen_width: int = 0) -> dict[str, str]:
+    values = {field: clean_value(row.get(field, "")) for field in STORE_FIELDS}
+    for field in BINARY_STORE_FIELDS:
+        values[field] = normalize_binary_value(values[field])
+    values["Nielsen Store Code"] = normalize_nielsen_code(
+        values["Nielsen Store Code"], nielsen_width
+    )
+    return values
+
+
+def _validate_choice(findings, row_no, field, value):
+    if value and not binary_ok(value):
         findings.append({
             "row": row_no,
             "field": field,
             "value": value,
-            "message": f"Allowed values: {', '.join(sorted(allowed))}",
+            "message": "Use 1 or 0",
             "severity": "ERROR",
         })
 
@@ -80,6 +95,9 @@ def creator_validate(rows: list[dict]) -> list[dict]:
     findings = []
     seen_nielsen: dict[str, int] = {}
     seen_composite: dict[tuple[str, str], int] = {}
+    nielsen_width = _suggested_width(
+        [row.get("Nielsen Store Code", "") for row in rows if isinstance(row, dict)]
+    )
 
     for index, row in enumerate(rows):
         row_no = index + 1
@@ -89,10 +107,16 @@ def creator_validate(rows: list[dict]) -> list[dict]:
         if not _row_has_data(row):
             continue
 
-        values = {field: clean_value(row.get(field, "")) for field in STORE_FIELDS}
+        values = _normalize_row(row, nielsen_width)
         for field in REQUIRED_FIELDS:
             if not values[field]:
-                findings.append({"row": row_no, "field": field, "value": "", "message": "Required value", "severity": "ERROR"})
+                findings.append({
+                    "row": row_no,
+                    "field": field,
+                    "value": "",
+                    "message": "Required value is empty",
+                    "severity": "ERROR",
+                })
 
         sid_key = norm_value(values["SID"])
         nielsen_key = norm_value(values["Nielsen Store Code"])
@@ -114,10 +138,8 @@ def creator_validate(rows: list[dict]) -> list[dict]:
         if zip_value and (not zip_value.isdigit() or not 3 <= len(zip_value) <= 12):
             findings.append({"row": row_no, "field": "ZIP", "value": zip_value, "message": "ZIP must contain 3–12 digits", "severity": "ERROR"})
 
-        _validate_choice(findings, row_no, "Active / Inactive", values["Active / Inactive"], {"active", "inactive"})
-        for field in ("Is Census", "Is Exceptions"):
-            if values[field] and not binary_ok(values[field]):
-                findings.append({"row": row_no, "field": field, "value": values[field], "message": "Use Yes/No, True/False, or 1/0", "severity": "ERROR"})
+        for field in BINARY_STORE_FIELDS:
+            _validate_choice(findings, row_no, field, values[field])
 
         for field in ("Trip Received", "Last Trip"):
             if values[field] and not date_ok(values[field]):
@@ -136,13 +158,18 @@ def review_dataframe(df: pd.DataFrame) -> dict:
     rows = []
     for ix, record in canonical.iterrows():
         item = {"row": int(ix) + 2, "severity": "OK", "issues": []}
+        values = _normalize_row(record.to_dict(), suggested)
         for field in REQUIRED_FIELDS:
-            if field in canonical.columns and not clean_value(record.get(field, "")):
+            if not values[field]:
                 item["issues"].append(f"{field}: required value is blank")
         if "Nielsen Store Code" in canonical.columns and suggested:
             code = clean_value(record.get("Nielsen Store Code", ""))
             if code.isdigit() and len(code) != suggested:
                 item["issues"].append(f"Nielsen Store Code: {code} has width {len(code)}; dominant width is {suggested}")
+        for field in BINARY_STORE_FIELDS:
+            raw = clean_value(record.get(field, ""))
+            if raw and not binary_ok(raw):
+                item["issues"].append(f"{field}: use 1 or 0")
         for field in ("Trip Received", "Last Trip"):
             if field in canonical.columns:
                 value = clean_value(record.get(field, ""))
@@ -164,6 +191,7 @@ def export_creator(rows: list[dict], dst: str) -> str:
     if path.suffix.lower() != ".csv":
         path = path.with_suffix(".csv")
     path.parent.mkdir(parents=True, exist_ok=True)
+    nielsen_width = _suggested_width([row.get("Nielsen Store Code", "") for row in rows if isinstance(row, dict)])
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.stem}.", suffix=".tmp", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", newline="", encoding="utf-8-sig") as file:
@@ -171,7 +199,7 @@ def export_creator(rows: list[dict], dst: str) -> str:
             writer.writeheader()
             for row in rows:
                 if _row_has_data(row):
-                    writer.writerow({field: clean_value(row.get(field, "")) for field in STORE_FIELDS})
+                    writer.writerow(_normalize_row(row, nielsen_width))
             file.flush()
             os.fsync(file.fileno())
         os.replace(temp_name, path)
