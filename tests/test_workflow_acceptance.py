@@ -178,6 +178,28 @@ def test_repair_controller_emits_actual_inspected_rows():
     assert payload["issues"]
 
 
+def test_repair_controller_map_column_translates_qml_index_to_header_name():
+    runner = ImmediateRunner()
+    states = []
+    controller = RepairController(runner, None, None)
+    controller.repairReady.connect(states.append)
+
+    with tempfile.TemporaryDirectory() as directory:
+        source = Path(directory) / "repair.csv"
+        source.write_text(
+            "SID,Store Name,City\nS1,Alpha,Pune\nS2,Beta\n",
+            encoding="utf-8",
+        )
+        controller.inspect_repair(str(source))
+        initial = json.loads(states[-1])
+        issue_index = initial["issues"][0]["index"]
+        controller.map_repair_column(issue_index, 2, 1)
+
+    payload = json.loads(states[-1])
+    assert payload["issues"] == []
+    assert payload["rows"][1] == ["S2", "", "Beta"]
+
+
 def test_review_controller_emits_preview_columns_rows_and_malformed_findings():
     runner = ImmediateRunner()
     ready = []
@@ -323,6 +345,8 @@ def test_health_profile_and_statistics_return_structured_data_not_display_string
     stats = statistic(dataframe, "City", "count")
     assert stats["column"] == "City"
     assert stats["value"] == 3
+    unique_stats = statistic(dataframe, "City", "unique")
+    assert unique_stats["value"] == 2
     grouped = statistic(dataframe, "SID", "count", "City")
     assert grouped["columns"] == ["City", "count"]
     assert {row["City"] for row in grouped["rows"]} == {"Pune", "Mumbai"}
