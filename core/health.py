@@ -52,6 +52,10 @@ def statistic(df: pd.DataFrame, col: str = "", op: str = "", group: str = "") ->
     if col not in df.columns:
         raise ValueError(f"Column not found: {col}")
     operation = str(op).strip().lower()
+    # The Health UI historically exposed "unique" while pandas-style
+    # operations use "nunique". Accept both so the UI contract is stable.
+    if operation == "unique":
+        operation = "nunique"
     if group:
         if group not in df.columns:
             raise ValueError(f"Group column not found: {group}")
@@ -130,7 +134,7 @@ def export_html_report(health_data, dst_path: str) -> None:
         with os.fdopen(fd, "w", encoding="utf-8") as file:
             file.write(html)
             file.flush()
-            os.fsync(file.fileno())
+            os.fsync(fd)
         os.replace(temp_name, destination)
     except Exception:
         try:
