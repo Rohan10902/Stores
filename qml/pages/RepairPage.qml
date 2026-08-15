@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -53,11 +55,11 @@ Item {
     }
 
     function clearSelection() {
-        selectedIssue = -1
-        selectedMessage = ""
-        selectedType = ""
-        selectedSourceColumn = -1
-        selectedTargetColumn = ""
+        root.selectedIssue = -1
+        root.selectedMessage = ""
+        root.selectedType = ""
+        root.selectedSourceColumn = -1
+        root.selectedTargetColumn = ""
     }
 
     function loadPayload(payload) {
@@ -96,13 +98,13 @@ Item {
         }
     }
 
-    function selectIssue(index) {
-        if (index < 0 || index >= root.issues.length)
+    function selectIssue(issueIndexValue) {
+        if (issueIndexValue < 0 || issueIndexValue >= root.issues.length)
             return
 
-        root.selectedIssue = index
+        root.selectedIssue = issueIndexValue
 
-        var issue = root.issues[index] || {}
+        var issue = root.issues[issueIndexValue] || {}
 
         root.selectedMessage =
             String(issue.message || "")
@@ -386,7 +388,7 @@ Item {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            height: 34
+                            Layout.preferredHeight: 34
                             color: Theme.surfaceHover
                             border.color: Theme.border
                             RowLayout {
@@ -411,7 +413,7 @@ Item {
                                 id: issueDelegate
                                 required property int index
                                 required property var modelData
-                                width: issueList.width
+                                width: ListView.view.width
                                 height: 64
                                 radius: Theme.radiusMedium
                                 color: root.selectedIssue === issueDelegate.index ? Theme.surfaceHover : Theme.background
@@ -487,7 +489,7 @@ Item {
                         Rectangle {
                             visible: root.selectedIssue >= 0
                             Layout.fillWidth: true
-                            height: visible ? 58 : 0
+                            Layout.preferredHeight: visible ? 58 : 0
                             radius: Theme.radiusMedium
                             color: Theme.surfaceHover
                             border.color: Theme.border
@@ -557,7 +559,7 @@ Item {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            height: 38
+                            Layout.preferredHeight: 38
                             color: Theme.surfaceHover
                             border.color: Theme.border
                             RowLayout {
@@ -591,7 +593,7 @@ Item {
                                 id: columnDelegate
                                 required property var modelData
                                 required property int index
-                                width: rowPreview.width
+                                width: ListView.view.width
                                 height: 38
                                 color: columnDelegate.index % 2 === 0 ? Theme.background : Theme.surface
                                 border.color: Theme.border
@@ -648,43 +650,34 @@ Item {
 
             Text { text: "Move the selected source value into the target column."; color: Theme.textPrimary; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Text {
-                text: root.selectedSourceColumn >= 0 && root.selectedSourceColumn < root.headers.length ? "Source: " + root.headers[root.selectedSourceColumn] : "Select a source column first."
+                text: root.selectedTargetColumn === "" ? "No source column selected." : "Source: " + root.selectedTargetColumn
                 color: Theme.textSecondary
-                font.pixelSize: 11
                 Layout.fillWidth: true
             }
+
             ComboBox {
-                id: targetColumnCombo
+                id: mappingTarget
                 Layout.fillWidth: true
                 model: root.headers
-                currentIndex: root.selectedTargetColumn !== "" ? Math.max(0, root.headers.indexOf(root.selectedTargetColumn)) : 0
-                background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
             }
-            CheckBox {
-                id: rememberMapping
-                text: "Remember this mapping"
-                checked: false
-                contentItem: Text {
-                    text: rememberMapping.text
-                    color: Theme.textPrimary
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: rememberMapping.indicator.width + Theme.spacingSmall
-                }
-            }
+
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 AppButton { text: "Cancel"; onClicked: columnMappingDialog.close() }
                 PrimaryButton {
-                    text: "Apply Mapping"
-                    enabled: root.selectedIssue >= 0 && root.selectedSourceColumn >= 0 && targetColumnCombo.currentIndex >= 0
+                    text: "Map"
+                    enabled: root.selectedSourceColumn >= 0 && mappingTarget.currentIndex >= 0
                     onClicked: {
                         var issue = root.selectedIssueObject()
                         if (issue && root.backendAvailable()) {
-                            backend.repair.apply_repair_mapping(Number(issue.index || 0), root.selectedSourceColumn, String(targetColumnCombo.currentText || ""), rememberMapping.checked)
+                            backend.repair.map_repair_column(
+                                Number(issue.index || 0),
+                                root.selectedSourceColumn,
+                                mappingTarget.currentIndex
+                            )
+                            columnMappingDialog.close()
                         }
-                        rememberMapping.checked = false
-                        columnMappingDialog.close()
                     }
                 }
             }
@@ -695,42 +688,100 @@ Item {
         id: mappingDialog
         title: "Create Repair Record"
         modal: true
-        width: 520
-        height: 360
+        width: 620
+        height: 520
         anchors.centerIn: parent
         background: Rectangle { color: Theme.surface; border.color: Theme.border; radius: Theme.radiusMedium }
+
+        property var mappingValues: ({})
+
+        function resetMapping() {
+            var next = {}
+            for (var i = 0; i < root.headers.length; ++i)
+                next[String(root.headers[i])] = ""
+            mappingDialog.mappingValues = next
+        }
+
+        onOpened: resetMapping()
 
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: Theme.spacingLarge
             spacing: Theme.spacingMedium
 
-            Text { text: "Create a new record from the selected issue."; color: Theme.textPrimary; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            Text { text: "The mapping is sent as JSON to the repair backend."; color: Theme.textSecondary; font.pixelSize: 11; Layout.fillWidth: true }
-            TextArea {
-                id: mappingInput
+            Text {
+                text: "Enter values for the new record."
+                color: Theme.textPrimary
+                font.bold: true
+                Layout.fillWidth: true
+            }
+
+            ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                placeholderText: '{"Column Name":"Value"}'
-                textFormat: TextEdit.PlainText
-                color: Theme.textPrimary
-                background: Rectangle { color: Theme.background; border.color: Theme.border; radius: Theme.radiusMedium }
+                clip: true
+
+                ColumnLayout {
+                    width: parent.width
+                    spacing: Theme.spacingSmall
+
+                    Repeater {
+                        model: root.headers
+
+                        delegate: RowLayout {
+                            id: mappingRow
+                            required property int index
+                            required property var modelData
+                            Layout.fillWidth: true
+
+                            Text {
+                                text: String(mappingRow.modelData)
+                                color: Theme.textSecondary
+                                Layout.preferredWidth: 180
+                                elide: Text.ElideRight
+                            }
+
+                            TextField {
+                                id: mappingField
+                                Layout.fillWidth: true
+                                text: String(mappingDialog.mappingValues[mappingRow.modelData] || "")
+                                onTextChanged: {
+                                    var next = Object.assign({}, mappingDialog.mappingValues)
+                                    next[mappingRow.modelData] = text
+                                    mappingDialog.mappingValues = next
+                                }
+                            }
+                        }
+                    }
+                }
             }
+
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 AppButton { text: "Cancel"; onClicked: mappingDialog.close() }
                 PrimaryButton {
-                    text: "Create"
+                    text: "Create Record"
+                    enabled: root.selectedIssue >= 0 && root.headers.length > 0
                     onClicked: {
                         var issue = root.selectedIssueObject()
-                        if (issue && root.backendAvailable())
-                            backend.repair.create_repair_record(Number(issue.index || 0), mappingInput.text)
-                        mappingInput.text = ""
-                        mappingDialog.close()
+                        if (issue && root.backendAvailable()) {
+                            backend.repair.create_repair_record(
+                                Number(issue.index || 0),
+                                JSON.stringify(mappingDialog.mappingValues)
+                            )
+                            mappingDialog.close()
+                        }
                     }
                 }
             }
         }
+    }
+
+    CheckBox {
+        id: rememberMapping
+        visible: false
+        text: "Remember mapping"
+        checked: false
     }
 }
