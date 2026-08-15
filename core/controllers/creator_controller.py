@@ -3,7 +3,7 @@ import json
 import os
 import tempfile
 
-from PySide6.QtCore import QObject, QUrl, Signal, Slot
+from PySide6.QtCore import QObject, Property, QUrl, Signal, Slot
 
 from ..common import (
     STORE_FIELDS,
@@ -16,6 +16,7 @@ from ..common import (
     suggested_numeric_width,
 )
 from ..file_creator import creator_validate, export_creator
+from ..models.store_table_model import StoreTableModel
 
 
 def _to_local_file(value):
@@ -91,6 +92,9 @@ class CreatorController(QObject):
         self.say = say
         self.current_headers = []
         self.current_rows = []
+        self._store_model = StoreTableModel(self)
+
+    storeModel = Property(QObject, lambda self: self._store_model, constant=True)
 
     def _emit_loaded(self, headers, rows):
         headers, rows = _normalize_import_rows(headers, rows)
@@ -159,6 +163,14 @@ class CreatorController(QObject):
             }))
 
         self.async_runner.run(task, success, error)
+
+    @Slot(str)
+    def set_builder_rows(self, rows_json):
+        self._store_model.setRowsJson(rows_json)
+
+    @Slot()
+    def reset_builder_rows(self):
+        self._store_model.reset()
 
     @Slot(str)
     def validate_creator(self, rows_json):
