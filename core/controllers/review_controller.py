@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 
+import pandas as pd
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
 
 from core.common import read_table
@@ -22,11 +23,7 @@ def _atomic_csv(dataframe, destination):
         destination += ".csv"
     parent = os.path.dirname(destination) or "."
     os.makedirs(parent, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(
-        prefix=".storelens-review-",
-        suffix=".tmp",
-        dir=parent,
-    )
+    fd, temp_name = tempfile.mkstemp(prefix=".storelens-review-", suffix=".tmp", dir=parent)
     try:
         with os.fdopen(fd, "w", newline="", encoding="utf-8-sig") as file:
             writer = csv.writer(file)
@@ -45,6 +42,40 @@ def _atomic_csv(dataframe, destination):
     return destination
 
 
+def _read_tolerant_csv(path):
+    with open(path, "r", encoding="utf-8-sig", errors="replace", newline="") as file:
+        sample = file.read(8192)
+        file.seek(0)
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",\t;|")
+        except csv.Error:
+            dialect = csv.excel
+        reader = csv.reader(file, dialect)
+        try:
+            headers = next(reader)
+        except StopIteration:
+            return pd.DataFrame(), []
+        headers = [str(value).strip() for value in headers]
+        expected = len(headers)
+        normalized = []
+        findings = []
+        for line_number, row in enumerate(reader, start=2):
+            original_count = len(row)
+            if original_count != expected:
+                severity = "ERROR"
+                direction = "extra fields" if original_count > expected else "missing fields"
+                findings.append({
+                    "message": f"Row {line_number}: expected {expected} fields, found {original_count} ({direction}). The row was normalized for review.",
+                    "severity": severity,
+                })
+            if original_count < expected:
+                row = row + [""] * (expected - original_count)
+            elif original_count > expected:
+                row = row[:expected]
+            normalized.append(row)
+    return pd.DataFrame(normalized, columns=headers), findings
+
+
 class ReviewController(QObject):
     singleReviewReady = Signal(str)
 
@@ -55,30 +86,31 @@ class ReviewController(QObject):
         self.current_dataframe = None
         self.current_file = ""
 
+    @staticmethod
+    def _read_review_file(path):
+        extension = os.path.splitext(path)[1].lower()
+        if extension in (".csv", ".tsv", ".txt"):
+            return _read_tolerant_csv(path)
+        return read_table(path), []
+
     @Slot(str)
     def review_single_file(self, path):
         local_path = _to_local_file(path)
 
         def task():
-            dataframe = read_table(local_path)
+            dataframe, structural_findings = self._read_review_file(local_path)
             preview_cols = [str(column) for column in dataframe.columns]
             preview_rows = dataframe.head(50).fillna("").astype(str).values.tolist()
             total = int(len(dataframe))
-            attention = 0
-            findings = []
+            findings = list(structural_findings)
+            attention = len(findings)
             expected_columns = len(preview_cols)
             for index, row in enumerate(preview_rows, start=2):
                 if len(row) != expected_columns:
-                    findings.append({
-                        "message": f"Row {index}: Column count mismatch.",
-                        "severity": "ERROR",
-                    })
+                    findings.append({"message": f"Row {index}: Column count mismatch.", "severity": "ERROR"})
                     attention += 1
                 elif not any(str(value).strip() for value in row):
-                    findings.append({
-                        "message": f"Row {index}: Completely empty.",
-                        "severity": "WARNING",
-                    })
+                    findings.append({"message": f"Row {index}: Completely empty.", "severity": "WARNING"})
                     attention += 1
             return dataframe, {
                 "totalRecords": total,
@@ -93,11 +125,7 @@ class ReviewController(QObject):
             self.current_file = os.path.abspath(local_path)
             self.singleReviewReady.emit(json.dumps(payload, default=str))
             if self.notify:
-                self.notify(
-                    "Review Complete",
-                    f"Reviewed {payload['totalRecords']:,} records.",
-                    "success",
-                )
+                self.notify("Review Complete", f"Reviewed {payload['totalRecords']:,} records.", "success")
 
         def error(exc):
             self.current_dataframe = None
@@ -124,16 +152,12 @@ class ReviewController(QObject):
                 raise ValueError("Review export destination cannot overwrite the source file.")
             dataframe = self.current_dataframe
             if dataframe is None or self.current_file != source:
-                dataframe = read_table(source)
+                dataframe, _ = self._read_review_file(source)
             return _atomic_csv(dataframe, destination)
 
         def success(output_path):
             if self.notify:
-                self.notify(
-                    "Success",
-                    f"Review exported successfully to {output_path}.",
-                    "success",
-                )
+                self.notify("Success", f"Review exported successfully to {output_path}.", "success")
 
         def error(exc):
             if self.notify:
