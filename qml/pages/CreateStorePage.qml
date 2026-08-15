@@ -35,7 +35,6 @@ Item {
     function backendAvailable() {
         return typeof backend !== "undefined" && backend !== null && backend.creator !== undefined && backend.creator !== null
     }
-
     function urlToPath(value) {
         var text = String(value || "")
         if (text.indexOf("file:///") === 0) text = text.substring(8)
@@ -43,23 +42,17 @@ Item {
         if (Qt.platform.os === "windows") text = text.replace(/^\/+/, "")
         try { return decodeURIComponent(text) } catch (error) { return text }
     }
-
     function normalizeHeader(value) {
         return String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ")
     }
-
     function mapIndex(value) {
         var header = root.normalizeHeader(value)
         var aliases = [
-            ["store name", "store", "name"],
-            ["sid", "store id", "storeid", "store code", "store_id", "id"],
-            ["banner", "brand"],
-            ["nielsen store code", "nielsen code", "nielsen store", "nielsen"],
-            ["trip received", "trip_received"],
-            ["last trip", "last_trip"],
+            ["store name", "store", "name"], ["sid", "store id", "storeid", "store code", "store_id", "id"],
+            ["banner", "brand"], ["nielsen store code", "nielsen code", "nielsen store", "nielsen"],
+            ["trip received", "trip_received"], ["last trip", "last_trip"],
             ["address 1", "address1", "address", "addr", "street", "address line 1"],
-            ["address 2", "address2", "address line 2"],
-            ["address 3", "address3", "address line 3"],
+            ["address 2", "address2", "address line 2"], ["address 3", "address3", "address line 3"],
             ["zip", "zipcode", "zip code", "postal code", "postcode", "pincode", "pin code"],
             ["active / inactive", "active/inactive", "active inactive", "status", "active", "isactive", "is active"],
             ["is census", "census", "census flag", "is_census", "iscensus", "is census"],
@@ -71,14 +64,12 @@ Item {
                 if (header === root.normalizeHeader(aliases[i][j])) return i
         return -1
     }
-
     function mappedCount() {
         var count = 0
         for (var i = 0; i < root.importedHeaders.length; ++i)
             if (root.mapIndex(root.importedHeaders[i]) >= 0) ++count
         return count
     }
-
     function resetBuilder() {
         if (!root.backendAvailable()) return
         backend.creator.reset_builder_rows()
@@ -86,7 +77,6 @@ Item {
         root.validated = false
         root.modelRevision++
     }
-
     function validateRows() {
         if (!root.backendAvailable() || root.validationPending) return
         if (backend.creator.storeModel.selectedRowCount() === 0) return
@@ -95,16 +85,11 @@ Item {
         root.findings = []
         backend.creator.validate_creator(backend.creator.storeModel.selectedRecordsJson())
     }
-
     function exportRows() {
         if (!root.backendAvailable() || root.exporting || !root.validated || root.findings.length > 0) return
         if (backend.creator.storeModel.selectedRowCount() === 0) return
         root.exporting = true
-        backend.creator.export_builder_file(
-            backend.creator.storeModel.selectedRowsJson(),
-            root.destinationPath,
-            JSON.stringify(root.headers)
-        )
+        backend.creator.export_builder_file(backend.creator.storeModel.selectedRowsJson(), root.destinationPath, JSON.stringify(root.headers))
     }
 
     FileDialog {
@@ -156,15 +141,7 @@ Item {
                 AppButton { text: "Close"; onClicked: pastePopup.close() }
             }
             Text { text: "Paste rows copied from Excel or CSV. The first row is treated as the source header."; color: Theme.textSecondary; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-            TextArea {
-                id: pasteArea
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                placeholderText: "Store Name\tSID\tBanner\tNielsen Store Code\t..."
-                selectByMouse: true
-                wrapMode: TextEdit.NoWrap
-                color: Theme.textPrimary
-            }
+            TextArea { id: pasteArea; Layout.fillWidth: true; Layout.fillHeight: true; placeholderText: "Store Name\tSID\tBanner\tNielsen Store Code\t..."; selectByMouse: true; wrapMode: TextEdit.NoWrap; color: Theme.textPrimary }
             RowLayout {
                 Layout.fillWidth: true
                 Text { text: "Large pastes stay in the Python model; only visible cells are rendered."; color: Theme.textMuted; Layout.fillWidth: true }
@@ -214,10 +191,7 @@ Item {
             }
             root.validated = true
         }
-        function onBuilderExported() {
-            root.exporting = false
-            root.destinationPath = ""
-        }
+        function onBuilderExported() { root.exporting = false; root.destinationPath = "" }
     }
 
     Connections {
@@ -232,11 +206,9 @@ Item {
         clip: true
         contentWidth: availableWidth
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
-
         ColumnLayout {
             width: pageScroll.availableWidth
             spacing: Theme.spacingLarge
-
             PageTitle {
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spacingXLarge
@@ -245,7 +217,6 @@ Item {
                 title: "Store Builder"
                 subtitle: "Paste, import, edit, validate and export stores in one canonical workspace."
             }
-
             Card {
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spacingXLarge
@@ -262,14 +233,13 @@ Item {
                     Item { Layout.fillWidth: true }
                     ColumnLayout {
                         spacing: 1
-                        Text { text: backendAvailable() ? backend.creator.storeModel.nonEmptyRowCount() + " entered" : "0 entered"; color: Theme.textPrimary; font.bold: true; Layout.alignment: Qt.AlignRight }
-                        Text { text: backendAvailable() ? backend.creator.storeModel.selectedRowCount() + " selected • 14 columns" : "0 selected • 14 columns"; color: Theme.textSecondary; font.pixelSize: 10; Layout.alignment: Qt.AlignRight }
+                        Text { text: root.backendAvailable() ? backend.creator.storeModel.nonEmptyRowCount() + " entered" : "0 entered"; color: Theme.textPrimary; font.bold: true; Layout.alignment: Qt.AlignRight }
+                        Text { text: root.backendAvailable() ? backend.creator.storeModel.selectedRowCount() + " selected • 14 columns" : "0 selected • 14 columns"; color: Theme.textSecondary; font.pixelSize: 10; Layout.alignment: Qt.AlignRight }
                     }
-                    AppButton { text: root.validationPending ? "Validating..." : "Validate"; enabled: !root.validationPending && backendAvailable() && backend.creator.storeModel.selectedRowCount() > 0; onClicked: root.validateRows() }
-                    PrimaryButton { text: root.exporting ? "Exporting..." : "Export CSV"; enabled: root.validated && root.findings.length === 0 && !root.validationPending && !root.exporting && backendAvailable() && backend.creator.storeModel.selectedRowCount() > 0; onClicked: exportDialog.open() }
+                    AppButton { text: root.validationPending ? "Validating..." : "Validate"; enabled: !root.validationPending && root.backendAvailable() && backend.creator.storeModel.selectedRowCount() > 0; onClicked: root.validateRows() }
+                    PrimaryButton { text: root.exporting ? "Exporting..." : "Export CSV"; enabled: root.validated && root.findings.length === 0 && !root.validationPending && !root.exporting && root.backendAvailable() && backend.creator.storeModel.selectedRowCount() > 0; onClicked: exportDialog.open() }
                 }
             }
-
             Card {
                 visible: root.importPreviewVisible
                 Layout.fillWidth: true
@@ -316,7 +286,7 @@ Item {
                                 id: previewRow
                                 required property var modelData
                                 required property int index
-                                width: Math.max(parent ? parent.width : 0, root.importedHeaders.length * 155)
+                                width: root.importedHeaders.length * 155
                                 height: 30
                                 color: index % 2 === 0 ? Theme.background : Theme.surface
                                 Row {
@@ -339,7 +309,6 @@ Item {
                     }
                 }
             }
-
             Card {
                 id: builderCard
                 Layout.fillWidth: true
@@ -397,7 +366,6 @@ Item {
                                 implicitHeight: 42
                                 color: column === 0 && selected ? Theme.primarySoft : (row % 2 === 0 ? Theme.background : Theme.surface)
                                 border.color: Theme.border
-
                                 Text {
                                     visible: !tableCell.editing
                                     anchors.fill: parent
@@ -408,13 +376,11 @@ Item {
                                     elide: Text.ElideRight
                                     verticalAlignment: Text.AlignVCenter
                                 }
-
                                 MouseArea {
                                     anchors.fill: parent
                                     enabled: tableCell.column === 0
                                     onClicked: backend.creator.storeModel.setRowSelected(tableCell.row, !tableCell.selected)
                                 }
-
                                 TableView.editDelegate: TextField {
                                     anchors.fill: parent
                                     anchors.margins: 1
@@ -424,14 +390,13 @@ Item {
                                     selectByMouse: true
                                     background: Rectangle { color: Theme.primarySoft; border.color: Theme.primary; radius: Theme.radiusSmall }
                                     Component.onCompleted: selectAll()
-                                    TableView.onCommit: tableCell.value = text
+                                    TableView.onCommit: backend.creator.storeModel.setCell(tableCell.row, tableCell.column - 1, text)
                                 }
                             }
                         }
                     }
                 }
             }
-
             Card {
                 visible: root.findings.length > 0
                 Layout.fillWidth: true
