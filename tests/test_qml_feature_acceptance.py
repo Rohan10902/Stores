@@ -158,3 +158,16 @@ def test_explore_controls_keep_storelens_dark_theme_and_sql_is_not_auto_inserted
     assert 'background: Rectangle {' in text
     assert 'color: Theme.background' in text
     assert 'color: "white"' not in text
+
+
+def test_explore_sql_suggestions_are_automatic_and_dataset_aware():
+    text = (QML_DIR / "pages" / "ExplorePage.qml").read_text(encoding="utf-8")
+    assert "property var sqlSuggestions: []" in text
+    assert "function rebuildSqlSuggestions()" in text
+    assert "root.rebuildSqlSuggestions()" in text
+    assert '"SELECT COUNT(*) AS row_count FROM data"' in text
+    assert "quoteIdentifier(firstColumn)" in text
+    assert "SELECT DISTINCT " in text
+    assert "GROUP BY " in text
+    assert "Automatic suggestion" in text
+    assert "useSqlSuggestion(currentIndex - 1)" in text
