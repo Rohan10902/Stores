@@ -1,6 +1,6 @@
 import json
 
-from core.common import STORE_FIELDS, normalize_store_row
+from core.common import STORE_FIELDS, normalize_store_row, read_table
 from core.controllers.creator_controller import CreatorController
 from core.file_creator import creator_validate, export_creator
 
@@ -64,9 +64,12 @@ def test_creator_export_writes_canonical_zero_one_values_and_padded_nielsen_code
     ]
     assert creator_validate(rows) == []
     export_creator(rows, str(destination))
-    text = destination.read_text(encoding="utf-8-sig")
-    assert "001" in text
-    assert ",0,0,1," in text or ",0,0,1\n" in text
+    exported = read_table(str(destination))
+    assert exported.iloc[0]["Nielsen Store Code"] == "001"
+    assert exported.iloc[1]["Nielsen Store Code"] == "002"
+    assert exported.iloc[0]["Active / Inactive"] == "0"
+    assert exported.iloc[0]["Is Census"] == "0"
+    assert exported.iloc[0]["Is Exceptions"] == "1"
 
 
 def test_controller_paste_normalizes_flags_and_pads_numeric_nielsen_codes():
