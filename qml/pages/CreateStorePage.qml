@@ -447,7 +447,10 @@ Item {
                                     }
                                 }
                                 Repeater {
-                                    model: Math.min(root.previewRowCount, root.importedRows.length)
+                                    // IMPORTANT: use the actual row array as the model.
+                                    // A numeric Repeater model only supplies an index and
+                                    // therefore cannot provide imported row data to modelData.
+                                    model: root.importedRows.slice(0, root.previewRowCount)
                                     delegate: Rectangle {
                                         id: sourceRowDelegate
                                         required property var modelData
