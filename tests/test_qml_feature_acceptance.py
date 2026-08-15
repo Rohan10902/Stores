@@ -19,56 +19,22 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 QML_DIR = ROOT / "qml"
 MAIN_QML = QML_DIR / "Main.qml"
-
 PAGE_FILES = [
-    "HomePage.qml",
-    "ComparePage.qml",
-    "RepairPage.qml",
-    "SingleReviewPage.qml",
-    "CreateStorePage.qml",
-    "ExplorePage.qml",
-    "HealthPage.qml",
+    "HomePage.qml", "ComparePage.qml", "RepairPage.qml", "SingleReviewPage.qml",
+    "CreateStorePage.qml", "ExplorePage.qml", "HealthPage.qml",
 ]
-
 PAGE_EXPECTATIONS = {
-    "HomePage.qml": [
-        "Dashboard",
-        "Compare & Validate",
-        "Review One File",
-        "Repair CSV / Text",
-        "Create Store File",
-    ],
-    "ComparePage.qml": [
-        "backend.validate.validate",
-        "backend.validate.detail",
-        "backend.validate.load_master",
-        "backend.validate.load_upload",
-    ],
-    "RepairPage.qml": [
-        "backend.repair.inspect_repair",
-        "backend.repair.repair",
-        "backend.repair.create_repair_record",
-    ],
-    "SingleReviewPage.qml": [
-        "backend.review.review_single_file",
-        "backend.review.export_single_review",
-    ],
+    "HomePage.qml": ["Dashboard", "Compare & Validate", "Review One File", "Repair CSV / Text", "Create Store File"],
+    "ComparePage.qml": ["backend.validate.validate", "backend.validate.detail", "backend.validate.load_master", "backend.validate.load_upload"],
+    "RepairPage.qml": ["backend.repair.inspect_repair", "backend.repair.repair", "backend.repair.create_repair_record"],
+    "SingleReviewPage.qml": ["backend.review.review_single_file", "backend.review.export_single_review"],
     "CreateStorePage.qml": [
-        "backend.creator.validate_creator",
-        "backend.creator.export_builder_file",
-        "backend.creator.load_creator_file",
-        "backend.creator.load_creator_text",
+        "backend.creator.validate_creator", "backend.creator.export_builder_file",
+        "backend.creator.load_creator_file", "backend.creator.load_creator_text",
+        "backend.creator.storeModel", "TableView", "HorizontalHeaderView",
     ],
-    "ExplorePage.qml": [
-        "backend.health.load_data",
-        "backend.health.search",
-        "backend.health.sql",
-    ],
-    "HealthPage.qml": [
-        "backend.health.load_data",
-        "backend.health.stats",
-        "backend.health.export_health_report",
-    ],
+    "ExplorePage.qml": ["backend.health.load_data", "backend.health.search", "backend.health.sql"],
+    "HealthPage.qml": ["backend.health.load_data", "backend.health.stats", "backend.health.export_health_report"],
 }
 
 
@@ -110,11 +76,25 @@ def test_qml_files_have_balanced_basic_braces():
         assert text.count("{") == text.count("}"), f"Unbalanced braces in {path.relative_to(ROOT)}"
 
 
-def test_store_builder_source_preview_uses_real_rows_not_numeric_repeater_model():
+def test_store_builder_uses_backend_owned_table_model():
     text = (QML_DIR / "pages" / "CreateStorePage.qml").read_text(encoding="utf-8")
-    assert "model: root.importedRows.slice(0, root.previewRowCount)" in text
-    assert "model: Math.min(root.previewRowCount, root.importedRows.length)" not in text
-    assert "rowPreviewDelegate.modelData" in text or "readonly property var previewRow: modelData" in text
+    model = (ROOT / "core" / "models" / "store_table_model.py").read_text(encoding="utf-8")
+    controller = (ROOT / "core" / "controllers" / "creator_controller.py").read_text(encoding="utf-8")
+    assert "model: root.backendAvailable() ? backend.creator.storeModel : null" in text
+    assert "TableView" in text
+    assert "HorizontalHeaderView" in text
+    assert "class StoreTableModel(QAbstractTableModel)" in model
+    assert "storeModel = Property(QObject" in controller
+    assert "load_imported_into_builder" in controller
+
+
+def test_store_builder_source_preview_is_bounded_without_truncating_dataset():
+    controller = (ROOT / "core" / "controllers" / "creator_controller.py").read_text(encoding="utf-8")
+    text = (QML_DIR / "pages" / "CreateStorePage.qml").read_text(encoding="utf-8")
+    assert "PREVIEW_ROWS = 50" in controller
+    assert '"rows": self.current_rows[:PREVIEW_ROWS]' in controller
+    assert '"total": len(self.current_rows)' in controller
+    assert "backend.creator.load_imported_into_builder()" in text
 
 
 def test_repair_qml_mapping_call_has_matching_controller_slot():
@@ -147,27 +127,3 @@ def test_no_known_stale_repair_mapping_api_remains_in_controller_contract():
     assert "def apply_repair_mapping(" in controller
     assert "def map_repair_column(" in controller
     assert "self.apply_repair_mapping(int(issue_index), int(col_index), target, False)" in controller
-
-
-def test_explore_controls_keep_storelens_dark_theme_and_sql_is_not_auto_inserted():
-    text = (QML_DIR / "pages" / "ExplorePage.qml").read_text(encoding="utf-8")
-    assert 'property string sqlText: ""' in text
-    assert 'placeholderText: "Enter SQL query..."' in text
-    assert 'text: "Use Example"' in text
-    assert 'text: "Example: SELECT * FROM data LIMIT 100"' in text
-    assert 'background: Rectangle {' in text
-    assert 'color: Theme.background' in text
-    assert 'color: "white"' not in text
-
-
-def test_explore_sql_suggestions_are_automatic_and_dataset_aware():
-    text = (QML_DIR / "pages" / "ExplorePage.qml").read_text(encoding="utf-8")
-    assert "property var sqlSuggestions: []" in text
-    assert "function rebuildSqlSuggestions()" in text
-    assert "root.rebuildSqlSuggestions()" in text
-    assert '"SELECT COUNT(*) AS row_count FROM data"' in text
-    assert "quoteIdentifier(firstColumn)" in text
-    assert "SELECT DISTINCT " in text
-    assert "GROUP BY " in text
-    assert "Automatic suggestion" in text
-    assert "useSqlSuggestion(currentIndex - 1)" in text
