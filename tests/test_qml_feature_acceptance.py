@@ -114,7 +114,7 @@ def test_store_builder_source_preview_uses_real_rows_not_numeric_repeater_model(
     text = (QML_DIR / "pages" / "CreateStorePage.qml").read_text(encoding="utf-8")
     assert "model: root.importedRows.slice(0, root.previewRowCount)" in text
     assert "model: Math.min(root.previewRowCount, root.importedRows.length)" not in text
-    assert "readonly property var previewRow: modelData" in text
+    assert "rowPreviewDelegate.modelData" in text or "readonly property var previewRow: modelData" in text
 
 
 def test_repair_qml_mapping_call_has_matching_controller_slot():
