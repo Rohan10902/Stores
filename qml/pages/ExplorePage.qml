@@ -54,6 +54,10 @@ Item {
             backend.health.sql(root.sqlText)
     }
 
+    function useExampleSql() {
+        root.sqlText = "SELECT * FROM data LIMIT 100"
+    }
+
     function rowValue(row, column) {
         if (row === null || row === undefined)
             return ""
@@ -144,6 +148,12 @@ Item {
                         text: root.sourcePath
                         placeholderText: "Select CSV or spreadsheet"
                         color: Theme.textPrimary
+                        placeholderTextColor: Theme.textMuted
+                        background: Rectangle {
+                            color: Theme.background
+                            border.color: Theme.border
+                            radius: Theme.radiusSmall
+                        }
                     }
                     AppButton {
                         text: "Browse"
@@ -216,12 +226,37 @@ Item {
                             Layout.preferredWidth: 220
                             model: ["All Columns"].concat(root.columns)
                             onActivated: root.searchColumn = currentIndex <= 0 ? "" : currentText
+                            contentItem: Text {
+                                leftPadding: 12
+                                rightPadding: 30
+                                text: columnCombo.displayText
+                                color: Theme.textPrimary
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                            background: Rectangle {
+                                color: Theme.background
+                                border.color: Theme.border
+                                radius: Theme.radiusSmall
+                            }
+                            indicator: Text {
+                                x: columnCombo.width - width - 10
+                                y: (columnCombo.height - height) / 2
+                                text: "▾"
+                                color: Theme.textSecondary
+                            }
                         }
                         TextField {
                             Layout.fillWidth: true
                             placeholderText: "Search for a value..."
+                            placeholderTextColor: Theme.textMuted
                             text: root.searchText
                             color: Theme.textPrimary
+                            background: Rectangle {
+                                color: Theme.background
+                                border.color: Theme.border
+                                radius: Theme.radiusSmall
+                            }
                             onTextChanged: root.searchText = text
                             onAccepted: root.executeSearch()
                         }
@@ -234,6 +269,8 @@ Item {
                             text: "Clear"
                             onClicked: {
                                 root.searchText = ""
+                                root.searchColumn = ""
+                                columnCombo.currentIndex = 0
                                 root.loadData()
                             }
                         }
@@ -265,17 +302,41 @@ Item {
                         }
                     }
                     TextArea {
+                        id: sqlEditor
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         text: root.sqlText
-                        placeholderText: "SELECT * FROM data LIMIT 100"
+                        placeholderText: "Enter SQL query..."
+                        placeholderTextColor: Theme.textMuted
                         color: Theme.textPrimary
+                        selectionColor: Theme.primary
+                        selectedTextColor: Theme.textPrimary
                         wrapMode: TextEdit.NoWrap
+                        background: Rectangle {
+                            color: Theme.background
+                            border.color: sqlEditor.activeFocus ? Theme.primary : Theme.border
+                            radius: Theme.radiusSmall
+                        }
                         onTextChanged: root.sqlText = text
+                        Keys.onPressed: function(event) {
+                            if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_Enter) {
+                                root.executeSql()
+                                event.accepted = true
+                            }
+                        }
                     }
                     RowLayout {
                         Layout.fillWidth: true
+                        Text {
+                            text: root.sqlText === "" ? "Example: SELECT * FROM data LIMIT 100" : ""
+                            color: Theme.textMuted
+                            font.pixelSize: 10
+                        }
                         Item { Layout.fillWidth: true }
+                        AppButton {
+                            text: "Use Example"
+                            onClicked: root.useExampleSql()
+                        }
                         AppButton {
                             text: "Reset"
                             onClicked: root.sqlText = ""
