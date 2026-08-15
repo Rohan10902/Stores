@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import csv
 import os
-from pathlib import Path
 from collections import Counter
+from pathlib import Path
 
 import pandas as pd
 
@@ -22,8 +22,8 @@ REQUIRED_STORE_FIELDS = (
     "Store Name", "SID", "Nielsen Store Code", "Active / Inactive", "Is Census", "Is Exceptions",
 )
 BINARY_STORE_FIELDS = ("Active / Inactive", "Is Census", "Is Exceptions")
-BINARY_TRUE_VALUES = {"1", "true", "yes", "y"}
-BINARY_FALSE_VALUES = {"0", "false", "no", "n"}
+BINARY_TRUE_VALUES = {"1", "true", "yes", "y", "active"}
+BINARY_FALSE_VALUES = {"0", "false", "no", "n", "inactive"}
 ALIASES = {
     "Store Name": ["store name", "store", "name", "store_name"],
     "SID": ["sid", "store id", "storeid", "store code", "store_id", "id"],
@@ -164,9 +164,7 @@ def normalize_store_row(row: dict, nielsen_width: int = 0) -> dict:
     normalized = {field: clean_value(row.get(field, "")) for field in STORE_FIELDS}
     for field in BINARY_STORE_FIELDS:
         normalized[field] = normalize_binary_value(normalized[field])
-    normalized["Nielsen Store Code"] = normalize_nielsen_code(
-        normalized["Nielsen Store Code"], nielsen_width
-    )
+    normalized["Nielsen Store Code"] = normalize_nielsen_code(normalized["Nielsen Store Code"], nielsen_width)
     return normalized
 
 
@@ -177,9 +175,7 @@ def normalize_store_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     frame = canonicalize_columns(df.copy()).fillna("").astype(str)
     if "Nielsen Store Code" in frame.columns:
         width = suggested_numeric_width(frame["Nielsen Store Code"].tolist())
-        frame["Nielsen Store Code"] = frame["Nielsen Store Code"].map(
-            lambda value: normalize_nielsen_code(value, width)
-        )
+        frame["Nielsen Store Code"] = frame["Nielsen Store Code"].map(lambda value: normalize_nielsen_code(value, width))
     for field in BINARY_STORE_FIELDS:
         if field in frame.columns:
             frame[field] = frame[field].map(normalize_binary_value)
