@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -38,15 +40,15 @@ ApplicationWindow {
 
     function navigateTo(pageId) {
         var index = pageIds.indexOf(pageId)
-        if (index >= 0) currentPage = index
+        if (index >= 0) root.currentPage = index
     }
 
     function navigateToIndex(index) {
-        if (index >= 0 && index < pageIds.length) currentPage = index
+        if (index >= 0 && index < pageIds.length) root.currentPage = index
     }
 
     function parsePreview(payload, isMaster) {
-        previewError = ""
+        root.previewError = ""
         try {
             var data = JSON.parse(String(payload || "{}"))
             var columns = Array.isArray(data.columns) ? data.columns : []
@@ -54,54 +56,55 @@ ApplicationWindow {
             var total = Number(data.total || rows.length || 0)
 
             if (isMaster) {
-                masterPreviewColumns = columns
-                masterPreviewRows = rows
-                masterPreviewTotal = total
-                previewMode = 0
+                root.masterPreviewColumns = columns
+                root.masterPreviewRows = rows
+                root.masterPreviewTotal = total
+                root.previewMode = 0
             } else {
-                uploadPreviewColumns = columns
-                uploadPreviewRows = rows
-                uploadPreviewTotal = total
-                previewMode = 1
+                root.uploadPreviewColumns = columns
+                root.uploadPreviewRows = rows
+                root.uploadPreviewTotal = total
+                root.previewMode = 1
             }
 
             if (columns.length === 0) {
-                previewError = "No columns were detected in this file."
+                root.previewError = "No columns were detected in this file."
             } else if (rows.length === 0) {
-                previewError = "The file loaded successfully, but it contains no data rows to preview."
+                root.previewError = "The file loaded successfully, but it contains no data rows to preview."
             }
-            previewVisible = true
+            root.previewVisible = true
         } catch (error) {
-            previewError = "Unable to display the dataset preview."
-            previewVisible = true
+            root.previewError = "Unable to display the dataset preview."
+            root.previewVisible = true
         }
     }
 
     function activeColumns() {
-        return previewMode === 0 ? masterPreviewColumns : uploadPreviewColumns
+        return root.previewMode === 0 ? root.masterPreviewColumns : root.uploadPreviewColumns
     }
 
     function activeRows() {
-        return previewMode === 0 ? masterPreviewRows : uploadPreviewRows
+        return root.previewMode === 0 ? root.masterPreviewRows : root.uploadPreviewRows
     }
 
     function activeTotal() {
-        return previewMode === 0 ? masterPreviewTotal : uploadPreviewTotal
+        return root.previewMode === 0 ? root.masterPreviewTotal : root.uploadPreviewTotal
     }
 
     function activeLabel() {
-        return previewMode === 0 ? "Master Dataset" : "Uploaded Dataset"
+        return root.previewMode === 0 ? "Master Dataset" : "Uploaded Dataset"
     }
 
     function cellValue(row, columnIndex) {
-        if (!Array.isArray(row) || columnIndex < 0 || columnIndex >= row.length) return ""
+        if (!Array.isArray(row) || columnIndex < 0 || columnIndex >= row.length)
+            return ""
         var value = row[columnIndex]
         return value === null || value === undefined ? "" : String(value)
     }
 
     function closePreview() {
-        previewVisible = false
-        previewError = ""
+        root.previewVisible = false
+        root.previewError = ""
     }
 
     Connections {
@@ -155,7 +158,7 @@ ApplicationWindow {
                     }
                 }
 
-                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
                 Text { text: "WORKSPACE"; color: Theme.textMuted; font.pixelSize: 10; font.bold: true; Layout.leftMargin: Theme.spacingSmall }
                 SidebarButton { text: "Dashboard"; isActive: root.currentPage === 0; onClicked: root.navigateToIndex(0) }
                 SidebarButton { text: "Compare & Validate"; isActive: root.currentPage === 1; onClicked: root.navigateToIndex(1) }
@@ -165,7 +168,7 @@ ApplicationWindow {
                 SidebarButton { text: "Explore / Data"; isActive: root.currentPage === 5; onClicked: root.navigateToIndex(5) }
                 SidebarButton { text: "Health"; isActive: root.currentPage === 6; onClicked: root.navigateToIndex(6) }
                 Item { Layout.fillHeight: true }
-                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 3
@@ -192,11 +195,11 @@ ApplicationWindow {
                         anchors.rightMargin: Theme.spacingLarge
                         Text { text: root.pageNames[root.currentPage]; color: Theme.textPrimary; font.pixelSize: 17; font.bold: true }
                         Item { Layout.fillWidth: true }
-                        Rectangle { width: 8; height: 8; radius: 4; color: Theme.success }
+                        Rectangle { Layout.preferredWidth: 8; Layout.preferredHeight: 8; radius: 4; color: Theme.success }
                         Text { text: "Ready"; color: Theme.textSecondary; font.pixelSize: 11 }
                     }
                 }
-                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
                 StackLayout {
                     id: pageStack
                     Layout.fillWidth: true
@@ -298,6 +301,7 @@ ApplicationWindow {
                                     Repeater {
                                         model: root.activeColumns()
                                         delegate: Rectangle {
+                                            id: headerDelegate
                                             required property string modelData
                                             width: root.previewColumnWidth
                                             height: 42
@@ -307,7 +311,7 @@ ApplicationWindow {
                                             Text {
                                                 anchors.fill: parent
                                                 anchors.margins: 8
-                                                text: modelData
+                                                text: headerDelegate.modelData
                                                 color: Theme.textPrimary
                                                 font.pixelSize: 11
                                                 font.bold: true
@@ -354,13 +358,12 @@ ApplicationWindow {
                                     Repeater {
                                         model: root.activeRows()
                                         delegate: Rectangle {
+                                            id: rowDelegate
                                             required property var modelData
                                             required property int index
-                                            property var rowData: modelData
-
                                             width: previewRows.width
                                             height: root.previewRowHeight
-                                            color: index % 2 === 0 ? Theme.background : Theme.surface
+                                            color: rowDelegate.index % 2 === 0 ? Theme.background : Theme.surface
                                             border.color: Theme.border
 
                                             Row {
@@ -368,6 +371,7 @@ ApplicationWindow {
                                                 Repeater {
                                                     model: root.activeColumns().length
                                                     delegate: Rectangle {
+                                                        id: cellDelegate
                                                         required property int index
                                                         width: root.previewColumnWidth
                                                         height: root.previewRowHeight
@@ -378,7 +382,7 @@ ApplicationWindow {
                                                             anchors.fill: parent
                                                             anchors.leftMargin: 8
                                                             anchors.rightMargin: 8
-                                                            text: root.cellValue(rowData, index)
+                                                            text: root.cellValue(rowDelegate.modelData, cellDelegate.index)
                                                             color: Theme.textPrimary
                                                             font.pixelSize: 11
                                                             verticalAlignment: Text.AlignVCenter
