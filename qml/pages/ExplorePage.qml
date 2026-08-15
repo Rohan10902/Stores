@@ -19,6 +19,7 @@ Item {
     property string searchText: ""
     property string searchColumn: ""
     property string sqlText: ""
+    property var sqlSuggestions: []
 
     function backendAvailable() {
         return typeof backend !== "undefined" && backend !== null && backend.health !== undefined && backend.health !== null
@@ -39,6 +40,28 @@ Item {
         }
     }
 
+    function quoteIdentifier(value) {
+        return '"' + String(value || "").replace(/"/g, '""') + '"'
+    }
+
+    function rebuildSqlSuggestions() {
+        var suggestions = [
+            "SELECT * FROM data LIMIT 100",
+            "SELECT COUNT(*) AS row_count FROM data"
+        ]
+        var firstColumn = root.columns.length > 0 ? String(root.columns[0]) : ""
+        if (firstColumn !== "") {
+            var q = root.quoteIdentifier(firstColumn)
+            suggestions.push("SELECT " + q + " FROM data LIMIT 100")
+            suggestions.push("SELECT DISTINCT " + q + " FROM data ORDER BY " + q + " LIMIT 100")
+            suggestions.push("SELECT " + q + ", COUNT(*) AS count FROM data GROUP BY " + q + " ORDER BY count DESC LIMIT 20")
+        }
+        if (root.columns.length > 1) {
+            suggestions.push("SELECT " + root.quoteIdentifier(root.columns[0]) + ", " + root.quoteIdentifier(root.columns[1]) + " FROM data LIMIT 100")
+        }
+        root.sqlSuggestions = suggestions
+    }
+
     function loadData() {
         if (root.backendAvailable() && root.sourcePath !== "")
             backend.health.load_data(root.sourcePath)
@@ -55,7 +78,12 @@ Item {
     }
 
     function useExampleSql() {
-        root.sqlText = "SELECT * FROM data LIMIT 100"
+        root.sqlText = root.sqlSuggestions.length > 0 ? String(root.sqlSuggestions[0]) : "SELECT * FROM data LIMIT 100"
+    }
+
+    function useSqlSuggestion(index) {
+        if (index >= 0 && index < root.sqlSuggestions.length)
+            root.sqlText = String(root.sqlSuggestions[index])
     }
 
     function rowValue(row, column) {
@@ -98,12 +126,14 @@ Item {
                 root.totalRows = Number(data.total || 0)
                 root.displayedRows = Number(data.displayed === undefined ? root.rows.length : data.displayed)
                 root.truncated = Boolean(data.truncated)
+                root.rebuildSqlSuggestions()
             } catch (error) {
                 root.columns = []
                 root.rows = []
                 root.totalRows = 0
                 root.displayedRows = 0
                 root.truncated = false
+                root.sqlSuggestions = ["SELECT * FROM data LIMIT 100", "SELECT COUNT(*) AS row_count FROM data"]
             }
         }
     }
@@ -147,8 +177,8 @@ Item {
                         readOnly: true
                         text: root.sourcePath
                         placeholderText: "Select CSV or spreadsheet"
-                        color: Theme.textPrimary
                         placeholderTextColor: Theme.textMuted
+                        color: Theme.textPrimary
                         background: Rectangle {
                             color: Theme.background
                             border.color: Theme.border
@@ -282,7 +312,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.leftMargin: Theme.spacingXLarge
                 Layout.rightMargin: Theme.spacingXLarge
-                Layout.preferredHeight: 150
+                Layout.preferredHeight: 205
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
@@ -299,6 +329,45 @@ Item {
                             text: "Run against the loaded dataset"
                             color: Theme.textSecondary
                             font.pixelSize: 10
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "Automatic suggestion"
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
+                        ComboBox {
+                            id: sqlSuggestionCombo
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Theme.fieldHeight
+                            model: ["Choose a query suggestion..."] .concat(root.sqlSuggestions)
+                            onActivated: {
+                                if (currentIndex > 0)
+                                    root.useSqlSuggestion(currentIndex - 1)
+                                currentIndex = 0
+                            }
+                            contentItem: Text {
+                                leftPadding: 12
+                                rightPadding: 30
+                                text: sqlSuggestionCombo.displayText
+                                color: sqlSuggestionCombo.currentIndex > 0 ? Theme.textPrimary : Theme.textMuted
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                            background: Rectangle {
+                                color: Theme.background
+                                border.color: Theme.border
+                                radius: Theme.radiusSmall
+                            }
+                            indicator: Text {
+                                x: sqlSuggestionCombo.width - width - 10
+                                y: (sqlSuggestionCombo.height - height) / 2
+                                text: "▾"
+                                color: Theme.textSecondary
+                            }
                         }
                     }
                     TextArea {
@@ -328,7 +397,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
-                            text: root.sqlText === "" ? "Example: SELECT * FROM data LIMIT 100" : ""
+                            text: "Example: SELECT * FROM data LIMIT 100"
                             color: Theme.textMuted
                             font.pixelSize: 10
                         }
