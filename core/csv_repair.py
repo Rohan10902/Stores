@@ -96,8 +96,11 @@ class CSVRepairTool:
         target_index = self.headers.index(target)
         value = row[col_index]
         del row[col_index]
-        if col_index < target_index:
-            target_index -= 1
+        # target_index is a schema position, not the position in the shortened
+        # row. Do not decrement it when the source column was before the target:
+        # inserting at the schema position is what actually places the value in
+        # the selected target column. The old decrement silently moved values
+        # one column too far left.
         if target_index >= len(row):
             row.extend([""] * (target_index - len(row) + 1))
         row.insert(target_index, value)
