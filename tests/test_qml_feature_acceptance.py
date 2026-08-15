@@ -147,3 +147,14 @@ def test_no_known_stale_repair_mapping_api_remains_in_controller_contract():
     assert "def apply_repair_mapping(" in controller
     assert "def map_repair_column(" in controller
     assert "self.apply_repair_mapping(int(issue_index), int(col_index), target, False)" in controller
+
+
+def test_explore_controls_keep_storelens_dark_theme_and_sql_is_not_auto_inserted():
+    text = (QML_DIR / "pages" / "ExplorePage.qml").read_text(encoding="utf-8")
+    assert 'property string sqlText: ""' in text
+    assert 'placeholderText: "Enter SQL query..."' in text
+    assert 'text: "Use Example"' in text
+    assert 'text: "Example: SELECT * FROM data LIMIT 100"' in text
+    assert 'background: Rectangle {' in text
+    assert 'color: Theme.background' in text
+    assert 'color: "white"' not in text
