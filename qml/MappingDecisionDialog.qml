@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -38,12 +40,13 @@ Dialog {
         Repeater {
             model: root.candidates
             delegate: RadioButton {
+                id: candidateDelegate
                 required property var modelData
                 Layout.fillWidth: true
-                visible: Number(modelData.score || 0) > 0
-                text: String(modelData.field) + " — " + String(modelData.score) + "% confidence"
-                checked: root.selectedField === String(modelData.field)
-                onClicked: root.selectedField = String(modelData.field)
+                visible: Number(candidateDelegate.modelData.score || 0) > 0
+                text: String(candidateDelegate.modelData.field) + " — " + String(candidateDelegate.modelData.score) + "% confidence"
+                checked: root.selectedField === String(candidateDelegate.modelData.field)
+                onClicked: root.selectedField = String(candidateDelegate.modelData.field)
             }
         }
 
@@ -75,10 +78,10 @@ Dialog {
     }
 
     function openForSuggestion(suggestion) {
-        detectedValue = String(suggestion.value || "")
-        valueType = String(suggestion.valueType || "")
-        candidates = suggestion.candidates || []
-        selectedField = String(suggestion.suggestedField || "")
-        open()
+        root.detectedValue = String(suggestion.value || "")
+        root.valueType = String(suggestion.valueType || "")
+        root.candidates = suggestion.candidates || []
+        root.selectedField = String(suggestion.suggestedField || "")
+        root.open()
     }
 }
