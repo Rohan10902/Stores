@@ -47,6 +47,10 @@ ApplicationWindow {
         if (index >= 0 && index < root.pageIds.length)
             root.currentPage = index
     }
+    function pageLoaded(index) {
+        var loaders = [homeLoader, compareLoader, repairLoader, reviewLoader, createLoader, exploreLoader, healthLoader]
+        return index >= 0 && index < loaders.length && loaders[index].item !== null
+    }
     function parsePreview(payload, isMaster) {
         try {
             var data = JSON.parse(String(payload || "{}"))
@@ -192,12 +196,12 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                     }
-                    Loader { active: root.currentPage === 1; source: "pages/ComparePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
-                    Loader { active: root.currentPage === 2; source: "pages/RepairPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
-                    Loader { active: root.currentPage === 3; source: "pages/SingleReviewPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
-                    Loader { active: root.currentPage === 4; source: "pages/CreateStorePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
-                    Loader { active: root.currentPage === 5; source: "pages/ExplorePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
-                    Loader { active: root.currentPage === 6; source: "pages/HealthPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { id: compareLoader; active: root.currentPage === 1; source: "pages/ComparePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { id: repairLoader; active: root.currentPage === 2; source: "pages/RepairPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { id: reviewLoader; active: root.currentPage === 3; source: "pages/SingleReviewPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { id: createLoader; active: root.currentPage === 4; source: "pages/CreateStorePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { id: exploreLoader; active: root.currentPage === 5; source: "pages/ExplorePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader { id: healthLoader; active: root.currentPage === 6; source: "pages/HealthPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
                 }
             }
         }
