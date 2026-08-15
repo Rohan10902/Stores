@@ -18,6 +18,8 @@ from ..common import (
 from ..file_creator import creator_validate, export_creator
 from ..models.store_table_model import StoreTableModel
 
+PREVIEW_ROWS = 50
+
 
 def _to_local_file(value):
     value = str(value or "")
@@ -51,7 +53,7 @@ def _atomic_csv(rows, headers, destination):
 
 
 def _normalize_import_rows(headers, rows):
-    """Normalize Store Builder values before QML receives them."""
+    """Normalize Store Builder values before they enter the application model."""
     headers = [clean_value(value) for value in headers]
     field_by_index = [canonical_field(header) for header in headers]
     nielsen_values = []
@@ -79,6 +81,22 @@ def _normalize_import_rows(headers, rows):
     return headers, normalized_rows
 
 
+def _canonical_builder_rows(headers, rows):
+    """Map arbitrary source columns into the canonical Store Builder schema."""
+    fields = [canonical_field(header) for header in headers]
+    result = []
+    for source_row in rows:
+        target = [""] * len(STORE_FIELDS)
+        for source_index, field in enumerate(fields):
+            if not field or source_index >= len(source_row):
+                continue
+            target_index = STORE_FIELDS.index(field)
+            if not target[target_index]:
+                target[target_index] = clean_value(source_row[source_index])
+        result.append(target)
+    return result
+
+
 class CreatorController(QObject):
     creatorLoaded = Signal(str)
     creatorReady = Signal(str)
@@ -102,8 +120,9 @@ class CreatorController(QObject):
         self.current_rows = list(rows)
         self.creatorLoaded.emit(json.dumps({
             "headers": self.current_headers,
-            "rows": self.current_rows,
+            "rows": self.current_rows[:PREVIEW_ROWS],
             "total": len(self.current_rows),
+            "previewRows": min(PREVIEW_ROWS, len(self.current_rows)),
         }))
 
     @Slot(str)
@@ -124,14 +143,10 @@ class CreatorController(QObject):
         def error(exc):
             self.current_headers = []
             self.current_rows = []
+            self._store_model.reset()
             if self.notify:
                 self.notify("Import Failed", str(exc), "error")
-            self.creatorLoaded.emit(json.dumps({
-                "headers": [],
-                "rows": [],
-                "total": 0,
-                "error": str(exc),
-            }))
+            self.creatorLoaded.emit(json.dumps({"headers": [], "rows": [], "total": 0, "error": str(exc)}))
 
         self.async_runner.run(task, success, error)
 
@@ -155,14 +170,14 @@ class CreatorController(QObject):
         def error(exc):
             if self.notify:
                 self.notify("Paste Failed", str(exc), "error")
-            self.creatorLoaded.emit(json.dumps({
-                "headers": [],
-                "rows": [],
-                "total": 0,
-                "error": str(exc),
-            }))
+            self.creatorLoaded.emit(json.dumps({"headers": [], "rows": [], "total": 0, "error": str(exc)}))
 
         self.async_runner.run(task, success, error)
+
+    @Slot()
+    def load_imported_into_builder(self):
+        rows = _canonical_builder_rows(self.current_headers, self.current_rows)
+        self._store_model.setRowsJson(json.dumps(rows, ensure_ascii=False))
 
     @Slot(str)
     def set_builder_rows(self, rows_json):
@@ -194,11 +209,7 @@ class CreatorController(QObject):
         def error(exc):
             if self.notify:
                 self.notify("Validation Error", str(exc), "error")
-            self.creatorReady.emit(json.dumps({
-                "count": 1,
-                "rows": 0,
-                "findings": [{"row": 0, "field": "SYSTEM", "message": str(exc), "severity": "ERROR"}],
-            }))
+            self.creatorReady.emit(json.dumps({"count": 1, "rows": 0, "findings": [{"row": 0, "field": "SYSTEM", "message": str(exc), "severity": "ERROR"}]}))
 
         self.async_runner.run(task, success, error)
 
