@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "../theme"
 
@@ -11,7 +10,6 @@ Card {
     signal clicked()
 
     Layout.fillWidth: true
-    // FIXED: Hard-clamp card height metrics per requirements to prevent empty-space stretching
     Layout.preferredHeight: 140
     Layout.minimumHeight: 140
     Layout.maximumHeight: 140
