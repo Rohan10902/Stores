@@ -68,4 +68,4 @@ def test_model_handles_ten_thousand_rows_without_creating_qml_objects():
     assert model.rowCount() == 10000
     assert model.columnCount() == 15
     assert model.data(model.index(9999, 2), Qt.DisplayRole) == "S9999"
-    assert model.data(model.index(9999, 3), Qt.DisplayRole) == "N9999"
+    assert model.data(model.index(9999, 4), Qt.DisplayRole) == "N9999"
