@@ -27,7 +27,7 @@ class ImmediateRunner:
             on_error(exc)
 
 
-def _store_row(sid, nielsen, name, city="Pune"):
+def _store_row(sid, nielsen, name):
     row = {field: "" for field in STORE_FIELDS}
     row.update(
         {
@@ -39,10 +39,12 @@ def _store_row(sid, nielsen, name, city="Pune"):
             "Last Trip": "2026-02-10",
             "Address 1": "1 Test Street",
             "Address 2": "",
-            "City": city,
-            "State": "MH",
-            "Pincode": "411001",
-            "Phone": "9876543210",
+            "Address 3": "",
+            "ZIP": "411001",
+            "Active / Inactive": "Active",
+            "Is Census": "Yes",
+            "Is Exceptions": "No",
+            "Updated By": "StoreLens",
         }
     )
     return row
