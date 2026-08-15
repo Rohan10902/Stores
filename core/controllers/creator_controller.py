@@ -5,7 +5,16 @@ import tempfile
 
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
 
-from ..common import STORE_FIELDS, clean_value, parse_delimited_text, read_table
+from ..common import (
+    STORE_FIELDS,
+    clean_value,
+    canonical_field,
+    normalize_binary_value,
+    normalize_nielsen_code,
+    parse_delimited_text,
+    read_table,
+    suggested_numeric_width,
+)
 from ..file_creator import creator_validate, export_creator
 
 
@@ -40,6 +49,35 @@ def _atomic_csv(rows, headers, destination):
         raise
 
 
+def _normalize_import_rows(headers, rows):
+    """Normalize Store Builder values before QML receives them."""
+    headers = [clean_value(value) for value in headers]
+    field_by_index = [canonical_field(header) for header in headers]
+    nielsen_values = []
+    for row in rows:
+        for index, field in enumerate(field_by_index):
+            if field == "Nielsen Store Code" and index < len(row):
+                nielsen_values.append(clean_value(row[index]))
+    nielsen_width = suggested_numeric_width(nielsen_values)
+
+    normalized_rows = []
+    for row in rows:
+        values = list(row)
+        if len(values) < len(headers):
+            values.extend([""] * (len(headers) - len(values)))
+        for index, field in enumerate(field_by_index):
+            if index >= len(values):
+                continue
+            value = clean_value(values[index])
+            if field in {"Active / Inactive", "Is Census", "Is Exceptions"}:
+                value = normalize_binary_value(value)
+            elif field == "Nielsen Store Code":
+                value = normalize_nielsen_code(value, nielsen_width)
+            values[index] = value
+        normalized_rows.append(values[:len(headers)])
+    return headers, normalized_rows
+
+
 class CreatorController(QObject):
     creatorLoaded = Signal(str)
     creatorReady = Signal(str)
@@ -55,6 +93,7 @@ class CreatorController(QObject):
         self.current_rows = []
 
     def _emit_loaded(self, headers, rows):
+        headers, rows = _normalize_import_rows(headers, rows)
         self.current_headers = list(headers)
         self.current_rows = list(rows)
         self.creatorLoaded.emit(json.dumps({
