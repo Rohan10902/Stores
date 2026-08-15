@@ -8,7 +8,6 @@ import "./theme"
 
 ApplicationWindow {
     id: root
-
     visible: true
     width: 1500
     height: 920
@@ -28,23 +27,20 @@ ApplicationWindow {
     property bool previewVisible: false
     property string previewError: ""
 
-    readonly property var pageNames: [
-        "Dashboard", "Compare & Validate", "Record Repair", "Single File Review",
-        "Store Builder", "Explore / Data", "Health"
-    ]
-    readonly property var pageIds: [
-        "home", "compare", "repair", "review", "create", "explore", "health"
-    ]
+    readonly property var pageNames: ["Dashboard", "Compare & Validate", "Record Repair", "Single File Review", "Store Builder", "Explore / Data", "Health"]
+    readonly property var pageIds: ["home", "compare", "repair", "review", "create", "explore", "health"]
     readonly property int previewColumnWidth: 180
     readonly property int previewRowHeight: 38
 
     function navigateTo(pageId) {
-        var index = pageIds.indexOf(pageId)
-        if (index >= 0) root.currentPage = index
+        var pageIndex = root.pageIds.indexOf(pageId)
+        if (pageIndex >= 0)
+            root.currentPage = pageIndex
     }
 
-    function navigateToIndex(index) {
-        if (index >= 0 && index < pageIds.length) root.currentPage = index
+    function navigateToIndex(pageIndex) {
+        if (pageIndex >= 0 && pageIndex < root.pageIds.length)
+            root.currentPage = pageIndex
     }
 
     function parsePreview(payload, isMaster) {
@@ -54,7 +50,6 @@ ApplicationWindow {
             var columns = Array.isArray(data.columns) ? data.columns : []
             var rows = Array.isArray(data.rows) ? data.rows : []
             var total = Number(data.total || rows.length || 0)
-
             if (isMaster) {
                 root.masterPreviewColumns = columns
                 root.masterPreviewRows = rows
@@ -66,12 +61,10 @@ ApplicationWindow {
                 root.uploadPreviewTotal = total
                 root.previewMode = 1
             }
-
-            if (columns.length === 0) {
+            if (columns.length === 0)
                 root.previewError = "No columns were detected in this file."
-            } else if (rows.length === 0) {
+            else if (rows.length === 0)
                 root.previewError = "The file loaded successfully, but it contains no data rows to preview."
-            }
             root.previewVisible = true
         } catch (error) {
             root.previewError = "Unable to display the dataset preview."
@@ -79,21 +72,10 @@ ApplicationWindow {
         }
     }
 
-    function activeColumns() {
-        return root.previewMode === 0 ? root.masterPreviewColumns : root.uploadPreviewColumns
-    }
-
-    function activeRows() {
-        return root.previewMode === 0 ? root.masterPreviewRows : root.uploadPreviewRows
-    }
-
-    function activeTotal() {
-        return root.previewMode === 0 ? root.masterPreviewTotal : root.uploadPreviewTotal
-    }
-
-    function activeLabel() {
-        return root.previewMode === 0 ? "Master Dataset" : "Uploaded Dataset"
-    }
+    function activeColumns() { return root.previewMode === 0 ? root.masterPreviewColumns : root.uploadPreviewColumns }
+    function activeRows() { return root.previewMode === 0 ? root.masterPreviewRows : root.uploadPreviewRows }
+    function activeTotal() { return root.previewMode === 0 ? root.masterPreviewTotal : root.uploadPreviewTotal }
+    function activeLabel() { return root.previewMode === 0 ? "Master Dataset" : "Uploaded Dataset" }
 
     function cellValue(row, columnIndex) {
         if (!Array.isArray(row) || columnIndex < 0 || columnIndex >= row.length)
@@ -113,13 +95,17 @@ ApplicationWindow {
         function onNotifySignal(title, message, level) {
             var prefix = String(title || "").trim()
             var body = String(message || "").trim()
-            if (prefix !== "" && body !== "") toast.show(prefix + ": " + body, level)
-            else if (body !== "") toast.show(body, level)
-            else if (prefix !== "") toast.show(prefix, level)
+            if (prefix !== "" && body !== "")
+                toast.show(prefix + ": " + body, level)
+            else if (body !== "")
+                toast.show(body, level)
+            else if (prefix !== "")
+                toast.show(prefix, level)
         }
         function onSaySignal(message) {
             var text = String(message || "").trim()
-            if (text !== "") toast.show(text, "info")
+            if (text !== "")
+                toast.show(text, "info")
         }
     }
 
@@ -140,12 +126,10 @@ ApplicationWindow {
             color: Theme.surface
             border.color: Theme.border
             border.width: 1
-
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Theme.spacingMedium
                 spacing: Theme.spacingMedium
-
                 Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 72
@@ -157,7 +141,6 @@ ApplicationWindow {
                         Text { text: "Data Intelligence"; color: Theme.textSecondary; font.pixelSize: 11 }
                     }
                 }
-
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Theme.border }
                 Text { text: "WORKSPACE"; color: Theme.textMuted; font.pixelSize: 10; font.bold: true; Layout.leftMargin: Theme.spacingSmall }
                 SidebarButton { text: "Dashboard"; isActive: root.currentPage === 0; onClicked: root.navigateToIndex(0) }
@@ -228,43 +211,42 @@ ApplicationWindow {
         color: Theme.surface
         border.color: Theme.primary
         border.width: 2
-
         Rectangle {
             anchors.fill: parent
             anchors.margins: 6
             color: Theme.background
             radius: Theme.radiusLarge
-
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Theme.spacingMedium
                 spacing: Theme.spacingSmall
-
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 62
-
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 2
-                        Text {
-                            text: root.activeLabel() + " Preview"
-                            color: Theme.textPrimary
-                            font.pixelSize: 20
-                            font.bold: true
-                        }
-                        Text {
-                            text: root.activeTotal().toLocaleString() + " records  •  " + root.activeColumns().length + " columns  •  showing " + root.activeRows().length + " rows"
-                            color: Theme.textSecondary
-                            font.pixelSize: 11
+                        Text { text: root.activeLabel() + " Preview"; color: Theme.textPrimary; font.pixelSize: 20; font.bold: true }
+                        Text { text: root.activeTotal().toLocaleString() + " records  •  " + root.activeColumns().length + " columns  •  showing " + root.activeRows().length + " rows"; color: Theme.textSecondary; font.pixelSize: 11 }
+                    }
+                    AppButton {
+                        text: "Master"
+                        enabled: root.masterPreviewColumns.length > 0
+                        onClicked: {
+                            root.previewMode = 0
+                            root.previewError = root.masterPreviewColumns.length === 0 ? "No master preview is available." : (root.masterPreviewRows.length === 0 ? "Master loaded with no data rows." : "")
                         }
                     }
-
-                    AppButton { text: "Master"; onClicked: { root.previewMode = 0; root.previewError = root.masterPreviewColumns.length === 0 ? "No master preview is available." : (root.masterPreviewRows.length === 0 ? "Master loaded with no data rows." : "") }; enabled: root.masterPreviewColumns.length > 0 }
-                    AppButton { text: "Uploaded"; onClicked: { root.previewMode = 1; root.previewError = root.uploadPreviewColumns.length === 0 ? "No uploaded preview is available." : (root.uploadPreviewRows.length === 0 ? "Uploaded file has no data rows." : "") }; enabled: root.uploadPreviewColumns.length > 0 }
+                    AppButton {
+                        text: "Uploaded"
+                        enabled: root.uploadPreviewColumns.length > 0
+                        onClicked: {
+                            root.previewMode = 1
+                            root.previewError = root.uploadPreviewColumns.length === 0 ? "No uploaded preview is available." : (root.uploadPreviewRows.length === 0 ? "Uploaded file has no data rows." : "")
+                        }
+                    }
                     AppButton { text: "Close"; onClicked: root.closePreview() }
                 }
-
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -272,11 +254,9 @@ ApplicationWindow {
                     border.color: Theme.border
                     radius: Theme.radiusMedium
                     clip: true
-
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: 0
-
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 42
@@ -284,7 +264,6 @@ ApplicationWindow {
                             color: Theme.surfaceHover
                             border.color: Theme.borderStrong
                             clip: true
-
                             Flickable {
                                 id: headerFlick
                                 anchors.fill: parent
@@ -292,12 +271,10 @@ ApplicationWindow {
                                 interactive: false
                                 contentWidth: headerRow.width
                                 contentX: rowsFlick.contentX
-
                                 Row {
                                     id: headerRow
                                     height: 42
                                     width: Math.max(headerFlick.width, root.activeColumns().length * root.previewColumnWidth)
-
                                     Repeater {
                                         model: root.activeColumns()
                                         delegate: Rectangle {
@@ -307,7 +284,6 @@ ApplicationWindow {
                                             height: 42
                                             color: "transparent"
                                             border.color: Theme.border
-
                                             Text {
                                                 anchors.fill: parent
                                                 anchors.margins: 8
@@ -323,21 +299,12 @@ ApplicationWindow {
                                 }
                             }
                         }
-
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: Theme.background
                             clip: true
-
-                            Text {
-                                anchors.centerIn: parent
-                                visible: root.previewError !== ""
-                                text: root.previewError
-                                color: Theme.error
-                                font.pixelSize: 13
-                            }
-
+                            Text { anchors.centerIn: parent; visible: root.previewError !== ""; text: root.previewError; color: Theme.error; font.pixelSize: 13 }
                             Flickable {
                                 id: rowsFlick
                                 anchors.fill: parent
@@ -346,15 +313,12 @@ ApplicationWindow {
                                 contentWidth: Math.max(width, root.activeColumns().length * root.previewColumnWidth)
                                 contentHeight: previewRows.height
                                 boundsBehavior: Flickable.StopAtBounds
-
                                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                                 ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
-
                                 Column {
                                     id: previewRows
                                     width: Math.max(rowsFlick.width, root.activeColumns().length * root.previewColumnWidth)
                                     spacing: 0
-
                                     Repeater {
                                         model: root.activeRows()
                                         delegate: Rectangle {
@@ -365,7 +329,6 @@ ApplicationWindow {
                                             height: root.previewRowHeight
                                             color: rowDelegate.index % 2 === 0 ? Theme.background : Theme.surface
                                             border.color: Theme.border
-
                                             Row {
                                                 anchors.fill: parent
                                                 Repeater {
@@ -377,7 +340,6 @@ ApplicationWindow {
                                                         height: root.previewRowHeight
                                                         color: "transparent"
                                                         border.color: Theme.border
-
                                                         Text {
                                                             anchors.fill: parent
                                                             anchors.leftMargin: 8
