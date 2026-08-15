@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import os
 from pathlib import Path
+from collections import Counter
 
 import pandas as pd
 
@@ -17,6 +18,12 @@ STORE_FIELDS = [
     "Is Exceptions", "Updated By",
 ]
 MATCH_FIELDS = ["SID", "Nielsen Store Code"]
+REQUIRED_STORE_FIELDS = (
+    "Store Name", "SID", "Nielsen Store Code", "Active / Inactive", "Is Census", "Is Exceptions",
+)
+BINARY_STORE_FIELDS = ("Active / Inactive", "Is Census", "Is Exceptions")
+BINARY_TRUE_VALUES = {"1", "true", "yes", "y"}
+BINARY_FALSE_VALUES = {"0", "false", "no", "n"}
 ALIASES = {
     "Store Name": ["store name", "store", "name", "store_name"],
     "SID": ["sid", "store id", "storeid", "store code", "store_id", "id"],
@@ -28,17 +35,19 @@ ALIASES = {
     "Address 2": ["address 2", "address2", "address line 2"],
     "Address 3": ["address 3", "address3", "address line 3"],
     "ZIP": ["zip", "zipcode", "zip code", "postal code", "postcode", "pincode", "pin code"],
-    "Active / Inactive": ["active / inactive", "active/inactive", "active inactive", "status", "active"],
-    "Is Census": ["is census", "census", "census flag", "is_census"],
-    "Is Exceptions": ["is exceptions", "is exception", "exceptions", "exception", "is_exceptions"],
+    "Active / Inactive": ["active / inactive", "active/inactive", "active inactive", "status", "active", "isactive", "is active"],
+    "Is Census": ["is census", "census", "census flag", "is_census", "iscensus", "is census"],
+    "Is Exceptions": ["is exceptions", "is exception", "exceptions", "exception", "is_exceptions", "isexception", "is exception"],
     "Updated By": ["updated by", "updated_by", "modified by", "modified_by", "last updated by"],
 }
 LEGACY_ALIASES = {
     "store_code": "SID", "store_name": "Store Name", "address": "Address 1", "pincode": "ZIP",
 }
 
+
 def _normal_header(value: object) -> str:
     return " ".join(str(value or "").strip().lower().replace("_", " ").replace("-", " ").split())
+
 
 def canonical_field(value: object) -> str:
     normalized = _normal_header(value)
@@ -48,6 +57,7 @@ def canonical_field(value: object) -> str:
         if normalized == _normal_header(field) or any(normalized == _normal_header(alias) for alias in ALIASES.get(field, [])):
             return field
     return LEGACY_ALIASES.get(normalized, "")
+
 
 def canonicalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
@@ -61,11 +71,13 @@ def canonicalize_columns(df: pd.DataFrame) -> pd.DataFrame:
             used.add(target)
     return df.rename(columns=mapping)
 
+
 def _read_csv_strict(path: str) -> pd.DataFrame:
     try:
         return pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False, on_bad_lines="error")
     except UnicodeDecodeError:
         return pd.read_csv(path, encoding="cp1252", dtype=str, keep_default_na=False, on_bad_lines="error")
+
 
 def read_table(file_path: str) -> pd.DataFrame:
     if not file_path:
@@ -93,6 +105,7 @@ def read_table(file_path: str) -> pd.DataFrame:
         logger.error("Malformed input %s: %s", file_path, exc)
         raise ValueError(f"The file could not be read safely: {exc}") from exc
 
+
 def clean_value(val) -> str:
     if val is None: return ""
     try:
@@ -101,11 +114,14 @@ def clean_value(val) -> str:
         pass
     return str(val).strip()
 
+
 def norm_value(val) -> str:
     return clean_value(val).casefold()
 
+
 def norm_name(val) -> str:
     return norm_value(val)
+
 
 def date_ok(val) -> bool:
     text = clean_value(val)
@@ -113,8 +129,62 @@ def date_ok(val) -> bool:
     try: return not pd.isna(pd.to_datetime(text, errors="raise"))
     except (ValueError, TypeError): return False
 
+
 def binary_ok(val) -> bool:
-    return norm_value(val) in {"1", "0", "true", "false", "yes", "no", "y", "n"}
+    return norm_value(val) in BINARY_TRUE_VALUES | BINARY_FALSE_VALUES
+
+
+def normalize_binary_value(value) -> str:
+    normalized = norm_value(value)
+    if normalized in BINARY_TRUE_VALUES:
+        return "1"
+    if normalized in BINARY_FALSE_VALUES:
+        return "0"
+    return clean_value(value)
+
+
+def suggested_numeric_width(values) -> int:
+    widths = [len(clean_value(value)) for value in values if clean_value(value).isdigit()]
+    if not widths:
+        return 0
+    counts = Counter(widths)
+    top = max(counts.values())
+    return max(width for width, count in counts.items() if count == top)
+
+
+def normalize_nielsen_code(value, width: int = 0) -> str:
+    text = clean_value(value)
+    if not text or not text.isdigit() or not width:
+        return text
+    return text.zfill(int(width))
+
+
+def normalize_store_row(row: dict, nielsen_width: int = 0) -> dict:
+    """Return a canonical Store Builder row with backend-owned normalization."""
+    normalized = {field: clean_value(row.get(field, "")) for field in STORE_FIELDS}
+    for field in BINARY_STORE_FIELDS:
+        normalized[field] = normalize_binary_value(normalized[field])
+    normalized["Nielsen Store Code"] = normalize_nielsen_code(
+        normalized["Nielsen Store Code"], nielsen_width
+    )
+    return normalized
+
+
+def normalize_store_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Canonicalize and normalize store records without changing source columns unnecessarily."""
+    if df is None:
+        return df
+    frame = canonicalize_columns(df.copy()).fillna("").astype(str)
+    if "Nielsen Store Code" in frame.columns:
+        width = suggested_numeric_width(frame["Nielsen Store Code"].tolist())
+        frame["Nielsen Store Code"] = frame["Nielsen Store Code"].map(
+            lambda value: normalize_nielsen_code(value, width)
+        )
+    for field in BINARY_STORE_FIELDS:
+        if field in frame.columns:
+            frame[field] = frame[field].map(normalize_binary_value)
+    return frame
+
 
 def parse_delimited_text(text: str) -> list[list[str]]:
     text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
@@ -122,12 +192,14 @@ def parse_delimited_text(text: str) -> list[list[str]]:
     delimiter = "\t" if "\t" in text[:4096] else ","
     return [row for row in csv.reader(text.splitlines(), delimiter=delimiter)]
 
+
 def json_value(val):
     try:
         if pd.isna(val): return ""
         if isinstance(val, (int, float, str, bool)): return val
         return str(val)
     except (ValueError, TypeError): return str(val)
+
 
 def map_columns(df: pd.DataFrame, mapping: dict) -> pd.DataFrame:
     if df is None or df.empty: return df
