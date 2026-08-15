@@ -45,8 +45,27 @@ def test_model_selection_and_selected_records_are_backend_owned():
 
 def test_model_handles_ten_thousand_rows_without_creating_qml_objects():
     model = StoreTableModel()
-    dataset = rows() * 3334
-    model.setRowsJson(json.dumps(dataset[:10000]))
+    dataset = [
+        [
+            f"Store {i}",
+            f"S{i}",
+            "Banner",
+            f"N{i}",
+            "2026-01-01",
+            "2026-01-02",
+            "A1",
+            "A2",
+            "A3",
+            "411001",
+            "1",
+            "0",
+            "1",
+            "Tester",
+        ]
+        for i in range(10000)
+    ]
+    model.setRowsJson(json.dumps(dataset))
     assert model.rowCount() == 10000
     assert model.columnCount() == 15
-    assert model.data(model.index(9999, 2), Qt.DisplayRole) == "S2"
+    assert model.data(model.index(9999, 2), Qt.DisplayRole) == "S9999"
+    assert model.data(model.index(9999, 3), Qt.DisplayRole) == "N9999"
