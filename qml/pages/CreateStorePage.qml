@@ -43,8 +43,7 @@ Item {
         return result
     }
     function hasData(row) {
-        if (!row)
-            return false
+        if (!row) return false
         for (var i = 0; i < row.length; ++i)
             if (String(row[i] || "").trim() !== "") return true
         return false
@@ -67,8 +66,7 @@ Item {
         root.findings = []
     }
     function setCell(rowIndex, columnIndex, value) {
-        if (rowIndex < 0 || rowIndex >= root.rows.length)
-            return
+        if (rowIndex < 0 || rowIndex >= root.rows.length) return
         var next = root.rows.slice()
         var row = next[rowIndex].slice()
         row[columnIndex] = value
@@ -77,8 +75,7 @@ Item {
         root.invalidate()
     }
     function setSelected(rowIndex, value) {
-        if (rowIndex < 0 || rowIndex >= root.selected.length)
-            return
+        if (rowIndex < 0 || rowIndex >= root.selected.length) return
         var next = root.selected.slice()
         next[rowIndex] = Boolean(value)
         root.selected = next
@@ -95,8 +92,7 @@ Item {
     }
     function selectAll(value) {
         var next = []
-        for (var i = 0; i < root.rows.length; ++i)
-            next.push(Boolean(value))
+        for (var i = 0; i < root.rows.length; ++i) next.push(Boolean(value))
         root.selected = next
         root.invalidate()
     }
@@ -237,8 +233,7 @@ Item {
             root.importedHeaders = []
             root.importedRows = []
             root.importedTotal = 0
-            if (root.backendAvailable())
-                backend.creator.load_creator_file(root.urlToPath(selectedFile))
+            if (root.backendAvailable()) backend.creator.load_creator_file(root.urlToPath(selectedFile))
             else {
                 root.importPending = false
                 root.importError = "Store Builder backend is unavailable."
@@ -435,43 +430,32 @@ Item {
                                         Repeater {
                                             model: root.importedHeaders
                                             delegate: Rectangle {
-                                                id: headerDelegate
+                                                id: previewHeaderCell
                                                 required property string modelData
-                                                width: 155
-                                                height: 36
-                                                color: "transparent"
-                                                border.color: Theme.border
-                                                Text { anchors.fill: parent; anchors.margins: 7; text: headerDelegate.modelData; color: Theme.textPrimary; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                                width: 155; height: 36; color: "transparent"; border.color: Theme.border
+                                                Text { anchors.fill: parent; anchors.margins: 7; text: previewHeaderCell.modelData; color: Theme.textPrimary; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
                                             }
                                         }
                                     }
                                 }
                                 Repeater {
-                                    // IMPORTANT: use the actual row array as the model.
-                                    // A numeric Repeater model only supplies an index and
-                                    // therefore cannot provide imported row data to modelData.
                                     model: root.importedRows.slice(0, root.previewRowCount)
                                     delegate: Rectangle {
-                                        id: sourceRowDelegate
+                                        id: rowPreviewDelegate
                                         required property var modelData
                                         required property int index
-                                        readonly property var previewRow: modelData
-                                        width: previewTable.width
-                                        height: 30
-                                        color: sourceRowDelegate.index % 2 === 0 ? Theme.background : Theme.surface
+                                        width: previewTable.width; height: 30
+                                        color: index % 2 === 0 ? Theme.background : Theme.surface
                                         border.color: Theme.border
                                         Row {
                                             anchors.fill: parent
                                             Repeater {
                                                 model: root.importedHeaders.length
                                                 delegate: Rectangle {
-                                                    id: sourceCellDelegate
+                                                    id: previewCell
                                                     required property int index
-                                                    width: 155
-                                                    height: 30
-                                                    color: "transparent"
-                                                    border.color: Theme.border
-                                                    Text { anchors.fill: parent; anchors.margins: 7; text: sourceCellDelegate.index < sourceRowDelegate.previewRow.length && sourceRowDelegate.previewRow[sourceCellDelegate.index] !== undefined ? String(sourceRowDelegate.previewRow[sourceCellDelegate.index]) : ""; color: Theme.textPrimary; font.pixelSize: 10; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                                    width: 155; height: 30; color: "transparent"; border.color: Theme.border
+                                                    Text { anchors.fill: parent; anchors.margins: 7; text: previewCell.index < rowPreviewDelegate.modelData.length && rowPreviewDelegate.modelData[previewCell.index] !== undefined ? String(rowPreviewDelegate.modelData[previewCell.index]) : ""; color: Theme.textPrimary; font.pixelSize: 10; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
                                                 }
                                             }
                                         }
@@ -483,6 +467,7 @@ Item {
                 }
             }
             Card {
+                id: builderCard
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 610
@@ -493,11 +478,11 @@ Item {
                     id: builderFlickable
                     anchors.fill: parent
                     anchors.margins: Theme.spacingSmall
-                    contentWidth: Math.max(width, root.tableWidth)
+                    contentWidth: Math.max(width, builderTable.width)
                     contentHeight: builderTable.height
+                    flickableDirection: Flickable.HorizontalFlick
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                     ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
                     Column {
                         id: builderTable
@@ -510,80 +495,74 @@ Item {
                             Row {
                                 anchors.fill: parent
                                 Rectangle {
-                                    width: root.controlColumnWidth
-                                    height: 44
-                                    color: Theme.surfaceActive
-                                    border.color: Theme.borderStrong
+                                    width: root.controlColumnWidth; height: 44
+                                    color: Theme.surfaceActive; border.color: Theme.borderStrong
                                     Text { anchors.fill: parent; anchors.margins: 7; text: "USE / ROW"; color: Theme.textPrimary; font.pixelSize: 10; font.bold: true; verticalAlignment: Text.AlignVCenter }
                                 }
                                 Repeater {
                                     model: root.headers
                                     delegate: Rectangle {
-                                        id: headerCell
                                         required property string modelData
                                         required property int index
-                                        width: root.widths[headerCell.index]
-                                        height: 44
-                                        color: "transparent"
-                                        border.color: Theme.borderStrong
-                                        Text { anchors.fill: parent; anchors.margins: 7; text: headerCell.modelData; color: Theme.textPrimary; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                        width: root.widths[index]; height: 44; color: "transparent"; border.color: Theme.borderStrong
+                                        Text { anchors.fill: parent; anchors.margins: 7; text: modelData; color: Theme.textPrimary; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
                                     }
                                 }
                             }
                         }
-                        Repeater {
+                        ListView {
+                            id: builderList
+                            width: builderTable.width
+                            height: Math.max(1, builderCard.height - 48)
                             model: root.rows
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            cacheBuffer: 168
+                            reuseItems: false
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                             delegate: Rectangle {
                                 id: rowDelegate
                                 required property var modelData
                                 required property int index
                                 readonly property var rowData: modelData
                                 readonly property int rowIndex: index
-                                width: builderTable.width
+                                width: builderList.width
                                 height: 42
-                                color: rowDelegate.rowIndex % 2 === 0 ? Theme.background : Theme.surface
+                                color: rowIndex % 2 === 0 ? Theme.background : Theme.surface
                                 border.color: Theme.border
                                 Row {
                                     anchors.fill: parent
                                     Rectangle {
-                                        width: root.controlColumnWidth
-                                        height: 42
-                                        color: root.selected[rowDelegate.rowIndex] ? Theme.primarySoft : "transparent"
+                                        width: root.controlColumnWidth; height: 42
+                                        color: root.selected[rowIndex] ? Theme.primarySoft : "transparent"
                                         border.color: Theme.border
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: 8
-                                            anchors.rightMargin: 8
+                                            anchors.leftMargin: 8; anchors.rightMargin: 8
                                             Rectangle {
-                                                Layout.preferredWidth: 20
-                                                Layout.preferredHeight: 20
-                                                radius: 4
-                                                color: root.selected[rowDelegate.rowIndex] ? Theme.primary : "transparent"
-                                                border.color: root.selected[rowDelegate.rowIndex] ? Theme.primary : Theme.borderStrong
-                                                Text { anchors.centerIn: parent; text: "✓"; visible: root.selected[rowDelegate.rowIndex]; color: Theme.textPrimary; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: root.setSelected(rowDelegate.rowIndex, !root.selected[rowDelegate.rowIndex]) }
+                                                Layout.preferredWidth: 20; Layout.preferredHeight: 20; radius: 4
+                                                color: root.selected[rowIndex] ? Theme.primary : "transparent"
+                                                border.color: root.selected[rowIndex] ? Theme.primary : Theme.borderStrong
+                                                Text { anchors.centerIn: parent; text: "✓"; visible: root.selected[rowIndex]; color: Theme.textPrimary; font.bold: true }
+                                                MouseArea { anchors.fill: parent; onClicked: root.setSelected(rowIndex, !root.selected[rowIndex]) }
                                             }
-                                            Text { text: String(rowDelegate.rowIndex + 1); color: Theme.textSecondary; font.pixelSize: 11; Layout.fillWidth: true; verticalAlignment: Text.AlignVCenter }
+                                            Text { text: String(rowIndex + 1); color: Theme.textSecondary; font.pixelSize: 11; Layout.fillWidth: true; verticalAlignment: Text.AlignVCenter }
                                         }
                                     }
                                     Repeater {
                                         model: root.headers.length
                                         delegate: Rectangle {
-                                            id: cellDelegate
                                             required property int index
-                                            width: root.widths[cellDelegate.index]
-                                            height: 42
-                                            color: "transparent"
-                                            border.color: Theme.border
+                                            width: root.widths[index]; height: 42; color: "transparent"; border.color: Theme.border
                                             TextField {
                                                 id: cellEditor
                                                 anchors.fill: parent
                                                 anchors.margins: 1
-                                                text: cellDelegate.index < rowDelegate.rowData.length && rowDelegate.rowData[cellDelegate.index] !== undefined ? String(rowDelegate.rowData[cellDelegate.index]) : ""
+                                                text: index < rowDelegate.rowData.length && rowDelegate.rowData[index] !== undefined ? String(rowDelegate.rowData[index]) : ""
                                                 color: Theme.textPrimary
                                                 selectByMouse: true
                                                 background: Rectangle { color: cellEditor.activeFocus ? Theme.primarySoft : "transparent"; border.color: cellEditor.activeFocus ? Theme.primary : "transparent"; radius: Theme.radiusSmall }
-                                                onEditingFinished: root.setCell(rowDelegate.rowIndex, cellDelegate.index, text)
+                                                onEditingFinished: root.setCell(rowDelegate.rowIndex, index, text)
                                             }
                                         }
                                     }
