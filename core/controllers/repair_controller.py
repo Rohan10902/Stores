@@ -56,6 +56,24 @@ class RepairController(QObject):
             if self.fail:
                 self.fail("Mapping Error", str(exc))
 
+    @Slot(int, int, int)
+    def map_repair_column(self, issue_index, col_index, target_index):
+        """Compatibility slot for the QML Map Column action.
+
+        The repair engine accepts the target column name, while the QML table
+        naturally works with a target column index. Keep that translation in
+        the controller so the UI cannot silently call a nonexistent backend
+        method or pass an integer where a header name is required.
+        """
+        try:
+            if not 0 <= int(target_index) < len(self.tool.headers):
+                raise ValueError("Target repair column is out of range.")
+            target = str(self.tool.headers[int(target_index)])
+            self.apply_repair_mapping(int(issue_index), int(col_index), target, False)
+        except Exception as exc:
+            if self.fail:
+                self.fail("Mapping Error", str(exc))
+
     @Slot(int, int)
     def keep_repair_unresolved(self, issue_index, col_index):
         try:
