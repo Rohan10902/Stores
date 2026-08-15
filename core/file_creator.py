@@ -82,7 +82,7 @@ def _validate_choice(findings, row_no, field, value):
             "row": row_no,
             "field": field,
             "value": value,
-            "message": "Allowed values: 1 or 0",
+            "message": "Allowed values: 1 or 0. Use Yes/No, True/False, or 1/0 on input.",
             "severity": "ERROR",
         })
 
