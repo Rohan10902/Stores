@@ -153,9 +153,13 @@ class HealthController(QObject):
 
         columns = [str(column) for column in dataframe.columns]
         total = len(dataframe)
-        displayed = min(100, total)
+
+        # Do not artificially truncate in-app data views. The application already
+        # owns the loaded dataframe, so Explore and Health should expose the full
+        # result set rather than advertising a 100-row limitation.
+        displayed = total
         rows = (
-            dataframe.head(displayed)
+            dataframe
             .fillna("")
             .astype(str)
             .to_dict(orient="records")
@@ -166,7 +170,7 @@ class HealthController(QObject):
             "rows": rows,
             "total": total,
             "displayed": displayed,
-            "truncated": total > displayed,
+            "truncated": False,
         }
 
     def _emit_table(self, dataframe):
