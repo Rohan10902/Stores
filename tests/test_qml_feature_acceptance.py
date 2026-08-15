@@ -30,14 +30,50 @@ PAGE_FILES = [
     "HealthPage.qml",
 ]
 
+# These are deliberately stable source-level contracts: the pages must expose
+# their core user workflow and call the real backend controller. We do not
+# assert implementation-specific signal handler spellings here because QML
+# signal connections may be expressed through Connections handlers without the
+# raw signal name appearing in the page source.
 PAGE_EXPECTATIONS = {
-    "HomePage.qml": ["Dashboard", "Compare & Validate", "Review One File", "Repair CSV / Text", "Create Store File"],
-    "ComparePage.qml": ["validationReady", "detailReady", "backend.validate.validate"],
-    "RepairPage.qml": ["repairReady", "backend.repair.inspect_repair", "backend.repair.repair"],
-    "SingleReviewPage.qml": ["singleReviewReady", "backend.review.review_single_file"],
-    "CreateStorePage.qml": ["creatorLoaded", "creatorReady", "backend.creator.validate_creator"],
-    "ExplorePage.qml": ["tableReady", "backend.health.load_data", "backend.health.sql"],
-    "HealthPage.qml": ["healthReady", "statsReady", "backend.health.stats"],
+    "HomePage.qml": [
+        "Dashboard",
+        "Compare & Validate",
+        "Review One File",
+        "Repair CSV / Text",
+        "Create Store File",
+    ],
+    "ComparePage.qml": [
+        "backend.validate.validate",
+        "backend.validate.detail",
+        "backend.validate.load_master",
+        "backend.validate.load_upload",
+    ],
+    "RepairPage.qml": [
+        "backend.repair.inspect_repair",
+        "backend.repair.repair",
+        "backend.repair.create_repair_record",
+    ],
+    "SingleReviewPage.qml": [
+        "backend.review.review_single_file",
+        "backend.review.export_single_review",
+    ],
+    "CreateStorePage.qml": [
+        "backend.creator.validate_creator",
+        "backend.creator.export_builder_file",
+        "backend.creator.load_creator_file",
+        "backend.creator.load_creator_text",
+    ],
+    "ExplorePage.qml": [
+        "backend.health.load_data",
+        "backend.health.search",
+        "backend.health.sql",
+    ],
+    "HealthPage.qml": [
+        "backend.health.load_data",
+        "backend.health.stats",
+        "backend.health.export_health_report",
+    ],
 }
 
 
@@ -59,7 +95,8 @@ def test_main_maps_every_workspace_page():
 def test_main_has_backend_and_workspace_navigation_contract():
     text = MAIN_QML.read_text(encoding="utf-8")
     assert "contextProperty(\"backend\"" not in text  # backend is injected by bootstrap, not QML
-    assert "StackView" in text
+    assert "StackLayout" in text
+    assert "Loader" in text
     for page_id in ["home", "compare", "repair", "review", "create", "explore", "health"]:
         assert page_id in text
 
