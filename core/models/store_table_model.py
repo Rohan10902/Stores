@@ -11,7 +11,6 @@ class StoreTableModel(QAbstractTableModel):
     """Qt model for the complete Store Builder dataset.
 
     The model owns the records; QML TableView owns only the visible delegates.
-    This is the scalable boundary for large datasets.
     """
 
     valueRole = Qt.UserRole + 1
@@ -155,6 +154,17 @@ class StoreTableModel(QAbstractTableModel):
             ensure_ascii=False,
         )
 
+    @Slot(result=str)
+    def selectedRecordsJson(self):
+        records = []
+        for row, selected in zip(self._rows, self._selected):
+            if selected:
+                records.append({
+                    field: row[index] if index < len(row) else ""
+                    for index, field in enumerate(self._headers)
+                })
+        return json.dumps(records, ensure_ascii=False)
+
     @Slot(result=int)
     def totalRows(self):
         return len(self._rows)
@@ -162,3 +172,10 @@ class StoreTableModel(QAbstractTableModel):
     @Slot(result=int)
     def selectedRowCount(self):
         return sum(1 for selected in self._selected if selected)
+
+    @Slot(result=int)
+    def nonEmptyRowCount(self):
+        return sum(
+            1 for row in self._rows
+            if any(str(value or "").strip() for value in row)
+        )
