@@ -69,6 +69,9 @@ class ProductionHardeningTests(unittest.TestCase):
                 "Store Name": "Example",
                 "SID": "S1",
                 "Nielsen Store Code": code,
+                "Active / Inactive": "1",
+                "Is Census": "1",
+                "Is Exceptions": "0",
             })
             rows.append(row)
         self.assertEqual(creator_validate(rows), [])
@@ -110,6 +113,9 @@ class ProductionHardeningTests(unittest.TestCase):
                 self.assertEqual(exported[1], "S1")
                 self.assertEqual(exported[8], "Suite 4")
                 self.assertEqual(exported[9], "411001")
+                self.assertEqual(exported[10], "1")
+                self.assertEqual(exported[11], "1")
+                self.assertEqual(exported[12], "0")
 
 
 if __name__ == "__main__":
