@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import os
 import tempfile
-from collections import Counter
 from pathlib import Path
 
 import pandas as pd
@@ -73,9 +72,7 @@ def _normalize_row(row: dict, nielsen_width: int = 0) -> dict[str, str]:
     values = {field: clean_value(row.get(field, "")) for field in STORE_FIELDS}
     for field in BINARY_STORE_FIELDS:
         values[field] = normalize_binary_value(values[field])
-    values["Nielsen Store Code"] = normalize_nielsen_code(
-        values["Nielsen Store Code"], nielsen_width
-    )
+    values["Nielsen Store Code"] = normalize_nielsen_code(values["Nielsen Store Code"], nielsen_width)
     return values
 
 
@@ -85,7 +82,7 @@ def _validate_choice(findings, row_no, field, value):
             "row": row_no,
             "field": field,
             "value": value,
-            "message": "Use 1 or 0",
+            "message": "Allowed values: 1 or 0",
             "severity": "ERROR",
         })
 
@@ -95,9 +92,7 @@ def creator_validate(rows: list[dict]) -> list[dict]:
     findings = []
     seen_nielsen: dict[str, int] = {}
     seen_composite: dict[tuple[str, str], int] = {}
-    nielsen_width = _suggested_width(
-        [row.get("Nielsen Store Code", "") for row in rows if isinstance(row, dict)]
-    )
+    nielsen_width = _suggested_width([row.get("Nielsen Store Code", "") for row in rows if isinstance(row, dict)])
 
     for index, row in enumerate(rows):
         row_no = index + 1
@@ -110,13 +105,7 @@ def creator_validate(rows: list[dict]) -> list[dict]:
         values = _normalize_row(row, nielsen_width)
         for field in REQUIRED_FIELDS:
             if not values[field]:
-                findings.append({
-                    "row": row_no,
-                    "field": field,
-                    "value": "",
-                    "message": "Required value is empty",
-                    "severity": "ERROR",
-                })
+                findings.append({"row": row_no, "field": field, "value": "", "message": "Required value is empty", "severity": "ERROR"})
 
         sid_key = norm_value(values["SID"])
         nielsen_key = norm_value(values["Nielsen Store Code"])
@@ -149,6 +138,7 @@ def creator_validate(rows: list[dict]) -> list[dict]:
 
 
 def review_dataframe(df: pd.DataFrame) -> dict:
+    """Profile a dataset without inventing missing schema columns as review failures."""
     structure = _detect_structure(df)
     if structure["kind"] != "HORIZONTAL":
         return {"rows": [{"row": 1, "severity": "REVIEW", "issues": [structure["message"]]}], "issueCount": 1, "findingCount": 1, "suggestedNielsenWidth": 0, "columns": [str(c) for c in df.columns], "structure": structure, "recordCount": 1 if structure["kind"] == "VERTICAL" else int(len(df))}
@@ -156,20 +146,21 @@ def review_dataframe(df: pd.DataFrame) -> dict:
     codes = [clean_value(value) for value in canonical.get("Nielsen Store Code", []) if clean_value(value)]
     suggested = _suggested_width(codes)
     rows = []
+    present_required = [field for field in REQUIRED_FIELDS if field in canonical.columns]
     for ix, record in canonical.iterrows():
         item = {"row": int(ix) + 2, "severity": "OK", "issues": []}
-        values = _normalize_row(record.to_dict(), suggested)
-        for field in REQUIRED_FIELDS:
-            if not values[field]:
+        for field in present_required:
+            if not clean_value(record.get(field, "")):
                 item["issues"].append(f"{field}: required value is blank")
         if "Nielsen Store Code" in canonical.columns and suggested:
             code = clean_value(record.get("Nielsen Store Code", ""))
             if code.isdigit() and len(code) != suggested:
                 item["issues"].append(f"Nielsen Store Code: {code} has width {len(code)}; dominant width is {suggested}")
         for field in BINARY_STORE_FIELDS:
-            raw = clean_value(record.get(field, ""))
-            if raw and not binary_ok(raw):
-                item["issues"].append(f"{field}: use 1 or 0")
+            if field in canonical.columns:
+                raw = clean_value(record.get(field, ""))
+                if raw and not binary_ok(raw):
+                    item["issues"].append(f"{field}: use 1 or 0")
         for field in ("Trip Received", "Last Trip"):
             if field in canonical.columns:
                 value = clean_value(record.get(field, ""))
