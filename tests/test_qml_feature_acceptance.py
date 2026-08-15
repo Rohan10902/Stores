@@ -25,8 +25,9 @@ PAGE_NAMES = [
 ]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def qml_application():
+    """Create a fresh QML engine per test to isolate Loader lifecycles."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     app = QApplication.instance() or QApplication([])
     engine = QQmlApplicationEngine()
@@ -41,6 +42,7 @@ def qml_application():
 
     root = engine.rootObjects()[0]
     yield app, engine, root, backend
+
     engine.clearComponentCache()
     engine.deleteLater()
     app.processEvents()
@@ -51,12 +53,12 @@ def _settle(app, rounds=8):
         app.processEvents()
 
 
-def test_every_workspace_page_loads_without_qml_runtime_errors(qml_application):
+@pytest.mark.parametrize("index,name", list(enumerate(PAGE_NAMES)))
+def test_every_workspace_page_loads_without_qml_runtime_errors(qml_application, index, name):
     app, _engine, root, _backend = qml_application
-    for index, name in enumerate(PAGE_NAMES):
-        root.setProperty("currentPage", index)
-        _settle(app)
-        assert bool(root.pageLoaded(index)), f"{name} page failed to load"
+    root.setProperty("currentPage", index)
+    _settle(app)
+    assert bool(root.pageLoaded(index)), f"{name} page failed to load"
 
 
 def test_compare_preview_payload_reaches_main_qml_model(qml_application):
