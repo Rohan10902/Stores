@@ -56,11 +56,11 @@ def test_creator_rejects_non_binary_values():
     assert any(item["field"] == "Is Census" and "1 or 0" in item["message"] for item in findings)
 
 
-def test_creator_export_writes_canonical_zero_one_values_and_padded_nielsen_code(tmp_path):
+def test_creator_export_writes_canonical_zero_one_values_and_infers_nielsen_padding_width(tmp_path):
     destination = tmp_path / "normalized.csv"
     rows = [
         valid_row(**{"Nielsen Store Code": "1", "Active / Inactive": "Inactive", "Is Census": "No", "Is Exceptions": "Yes"}),
-        valid_row(**{"SID": "S101", "Nielsen Store Code": "2"}),
+        valid_row(**{"SID": "S101", "Nielsen Store Code": "002"}),
     ]
     assert creator_validate(rows) == []
     export_creator(rows, str(destination))
