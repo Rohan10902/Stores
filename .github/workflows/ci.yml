@@ -51,6 +51,14 @@ jobs:
           python -m pytest tests/ -v --tb=short --junitxml=test-results.xml 2>&1 | Tee-Object -FilePath pytest-output.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: StoreLens Feature Acceptance Gate
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: "offscreen"
+        run: |
+          python -m pytest tests/test_workflow_acceptance.py tests/test_qml_feature_acceptance.py -v --tb=short --junitxml=feature-acceptance-results.xml 2>&1 | Tee-Object -FilePath feature-acceptance-output.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload Test Diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -59,6 +67,8 @@ jobs:
           path: |
             pytest-output.txt
             test-results.xml
+            feature-acceptance-output.txt
+            feature-acceptance-results.xml
 
       - name: Application Startup Smoke Test
         shell: pwsh
