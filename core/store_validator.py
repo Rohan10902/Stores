@@ -16,15 +16,15 @@ def _load_table(path: str) -> pd.DataFrame:
     return canonicalize_columns(dataframe.fillna("").astype(str))
 
 
-def _get(row, mapping, field):
+def _value(row, mapping, field):
     column = mapping.get(field, {}).get("column", "")
     if not column or column not in row.index:
         return ""
-    return norm_value(row[column])
+    return clean_value(row[column])
 
 
 def _key(row, mapping, fields):
-    return tuple(_get(row, mapping, field) for field in fields)
+    return tuple(norm_value(_value(row, mapping, field)) for field in fields)
 
 
 def _column_map(columns):
@@ -83,8 +83,8 @@ def compare(master, uploaded, key_fields=None):
     for index, upload_row in uploaded.iterrows():
         row_number = int(index) + 2
         key_tuple = _key(upload_row, upload_map, key_fields)
-        key_values = [_get(upload_row, upload_map, field) for field in key_fields]
-        key_string = " | ".join(value for value in key_values if value) or "No Key"
+        key_values = [_value(upload_row, upload_map, field) for field in key_fields]
+        key_string = " | ".join(value.casefold() for value in key_values if value) or "No Key"
         masters = master_groups.get(key_tuple, [])
         master_dict = {}
         upload_dict = {}
@@ -96,7 +96,7 @@ def compare(master, uploaded, key_fields=None):
             match_type = "INVALID_KEY"
             message = "Store identity key is blank."
             for field in fields:
-                upload_value = _get(upload_row, upload_map, field)
+                upload_value = _value(upload_row, upload_map, field)
                 master_dict[field] = ""
                 upload_dict[field] = upload_value
                 comparisons.append({"field": field, "master": "", "uploaded": upload_value, "result": "INVALID KEY", "severity": "ERROR"})
@@ -106,18 +106,18 @@ def compare(master, uploaded, key_fields=None):
             master_lines = ", ".join(str(item[0]) for item in masters[:10])
             message = f"Ambiguous identity: {len(masters)} master records match key ({master_lines}). No master record was selected automatically."
             for field in fields:
-                upload_value = _get(upload_row, upload_map, field)
+                upload_value = _value(upload_row, upload_map, field)
                 master_dict[field] = ""
                 upload_dict[field] = upload_value
                 comparisons.append({"field": field, "master": "", "uploaded": upload_value, "result": "AMBIGUOUS MASTER", "severity": "REVIEW"})
         elif len(masters) == 1:
             master_row = masters[0][1]
             for field in fields:
-                master_value = _get(master_row, master_map, field)
-                upload_value = _get(upload_row, upload_map, field)
+                master_value = _value(master_row, master_map, field)
+                upload_value = _value(upload_row, upload_map, field)
                 master_dict[field] = master_value
                 upload_dict[field] = upload_value
-                same = master_value == upload_value
+                same = norm_value(master_value) == norm_value(upload_value)
                 comparisons.append({
                     "field": field,
                     "master": master_value,
@@ -135,7 +135,7 @@ def compare(master, uploaded, key_fields=None):
             match_type = "NO_MATCH"
             message = "Store key not found in Master file."
             for field in fields:
-                upload_value = _get(upload_row, upload_map, field)
+                upload_value = _value(upload_row, upload_map, field)
                 master_dict[field] = ""
                 upload_dict[field] = upload_value
                 comparisons.append({"field": field, "master": "", "uploaded": upload_value, "result": "MISSING MASTER", "severity": "ERROR"})
