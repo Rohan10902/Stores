@@ -101,19 +101,8 @@ def test_explore_table_payload_reaches_page_model(qml_application):
     backend.health.tableReady.emit(payload)
     _settle(app)
 
-    # Main's Explore loader is active; locate the page by the QML property
-    # contract exposed by the loaded Item rather than relying on visual text.
-    page = None
-    for child in root.findChildren(type(root)):
-        if child.property("sourcePath") is not None and child.property("totalRows") is not None:
-            page = child
-            break
-    if page is None:
-        # QML child wrappers are not guaranteed to be returned as the same
-        # Python wrapper type, so verify the signal contract through the
-        # controller as the authoritative fallback.
-        pytest.skip("Qt wrapper did not expose the dynamically loaded Explore page")
-
+    page = root.pageItem(5)
+    assert page is not None
     assert list(page.property("columns")) == ["SID", "Store Name", "City"]
     rows = list(page.property("rows"))
     assert rows[0]["SID"] == "100"
@@ -121,7 +110,7 @@ def test_explore_table_payload_reaches_page_model(qml_application):
     assert page.property("totalRows") == 2
 
 
-def test_health_payload_and_statistics_reach_controller_contract(qml_application):
+def test_health_payload_and_statistics_reach_page_models(qml_application):
     app, _engine, root, backend = qml_application
     root.setProperty("currentPage", 6)
     _settle(app)
@@ -151,9 +140,11 @@ def test_health_payload_and_statistics_reach_controller_contract(qml_application
     backend.health.statsReady.emit(json.dumps(stats_payload))
     _settle(app)
 
-    # The controller must preserve structured objects. The QML health page
-    # formats them for display; it must never receive a pre-stringified
-    # '[object Object]' representation.
-    assert isinstance(health_payload["columnTypes"], dict)
-    assert isinstance(health_payload["profile"], dict)
-    assert stats_payload["rows"][0]["result"] == 2
+    page = root.pageItem(6)
+    assert page is not None
+    health_data = page.property("healthData")
+    stats_data = page.property("statsData")
+    assert health_data["columnTypes"]["SID"] == "text"
+    assert health_data["profile"]["rowCount"] == 2
+    assert stats_data["rows"][0]["result"] == 2
+    assert page.property("totalRows") == 0 or page.property("totalRows") == 2
