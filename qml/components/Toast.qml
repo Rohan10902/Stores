@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -28,15 +30,16 @@ Item {
     function show(msg, msgType) {
         var text = String(msg || "")
         if (text.indexOf("__STORELENS_PREVIEW_MASTER__") === 0) {
-            openPreview(text.substring("__STORELENS_PREVIEW_MASTER__".length), true)
+            root.openPreview(text.substring("__STORELENS_PREVIEW_MASTER__".length), true)
             return
         }
         if (text.indexOf("__STORELENS_PREVIEW_UPLOAD__") === 0) {
-            openPreview(text.substring("__STORELENS_PREVIEW_UPLOAD__".length), false)
+            root.openPreview(text.substring("__STORELENS_PREVIEW_UPLOAD__".length), false)
             return
         }
         root.message = text
-        if (msgType) root.type = String(msgType).toLowerCase()
+        if (msgType)
+            root.type = String(msgType).toLowerCase()
         root.toastVisible = true
         showAnim.restart()
         hideTimer.restart()
@@ -48,35 +51,36 @@ Item {
             var columns = Array.isArray(data.columns) ? data.columns : []
             var rows = Array.isArray(data.rows) ? data.rows : []
             if (isMaster) {
-                masterColumns = columns
-                masterRows = rows
-                masterTotal = Number(data.total || rows.length || 0)
-                previewMode = 0
+                root.masterColumns = columns
+                root.masterRows = rows
+                root.masterTotal = Number(data.total || rows.length || 0)
+                root.previewMode = 0
             } else {
-                uploadColumns = columns
-                uploadRows = rows
-                uploadTotal = Number(data.total || rows.length || 0)
-                previewMode = 1
+                root.uploadColumns = columns
+                root.uploadRows = rows
+                root.uploadTotal = Number(data.total || rows.length || 0)
+                root.previewMode = 1
             }
-            previewError = columns.length ? "" : "No columns were detected in the selected file."
-            previewVisible = true
-            toastVisible = false
+            root.previewError = columns.length ? "" : "No columns were detected in the selected file."
+            root.previewVisible = true
+            root.toastVisible = false
         } catch (error) {
-            previewError = "Unable to display the dataset preview."
-            previewVisible = true
-            toastVisible = false
+            root.previewError = "Unable to display the dataset preview."
+            root.previewVisible = true
+            root.toastVisible = false
         }
     }
 
-    function activeColumns() { return previewMode === 0 ? masterColumns : uploadColumns }
-    function activeRows() { return previewMode === 0 ? masterRows : uploadRows }
-    function activeTotal() { return previewMode === 0 ? masterTotal : uploadTotal }
+    function activeColumns() { return root.previewMode === 0 ? root.masterColumns : root.uploadColumns }
+    function activeRows() { return root.previewMode === 0 ? root.masterRows : root.uploadRows }
+    function activeTotal() { return root.previewMode === 0 ? root.masterTotal : root.uploadTotal }
     function cellValue(row, column) {
-        if (!Array.isArray(row) || column < 0 || column >= row.length) return ""
+        if (!Array.isArray(row) || column < 0 || column >= row.length)
+            return ""
         var value = row[column]
         return value === undefined || value === null ? "" : String(value)
     }
-    function closePreview() { previewVisible = false }
+    function closePreview() { root.previewVisible = false }
 
     Rectangle {
         visible: root.toastVisible
@@ -156,9 +160,22 @@ Item {
                                 Repeater {
                                     model: root.activeColumns()
                                     delegate: Rectangle {
+                                        id: headerDelegate
                                         required property string modelData
-                                        width: 170; height: 42; color: "transparent"; border.color: Theme.border
-                                        Text { anchors.fill: parent; anchors.margins: 8; text: modelData; color: Theme.textPrimary; font.bold: true; font.pixelSize: 11; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                        width: 170
+                                        height: 42
+                                        color: "transparent"
+                                        border.color: Theme.border
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.margins: 8
+                                            text: headerDelegate.modelData
+                                            color: Theme.textPrimary
+                                            font.bold: true
+                                            font.pixelSize: 11
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                     }
                                 }
                             }
@@ -167,20 +184,34 @@ Item {
                         Repeater {
                             model: root.activeRows()
                             delegate: Rectangle {
+                                id: rowDelegate
                                 required property var modelData
                                 required property int index
                                 width: previewTable.width
                                 height: 36
-                                color: index % 2 === 0 ? Theme.background : Theme.surface
+                                color: rowDelegate.index % 2 === 0 ? Theme.background : Theme.surface
                                 border.color: Theme.border
                                 Row {
                                     anchors.fill: parent
                                     Repeater {
                                         model: root.activeColumns().length
                                         delegate: Rectangle {
+                                            id: cellDelegate
                                             required property int index
-                                            width: 170; height: 36; color: "transparent"; border.color: Theme.border
-                                            Text { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8; text: root.cellValue(parent.parent.parent.modelData, index); color: Theme.textPrimary; font.pixelSize: 11; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                            width: 170
+                                            height: 36
+                                            color: "transparent"
+                                            border.color: Theme.border
+                                            Text {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 8
+                                                anchors.rightMargin: 8
+                                                text: root.cellValue(rowDelegate.modelData, cellDelegate.index)
+                                                color: Theme.textPrimary
+                                                font.pixelSize: 11
+                                                elide: Text.ElideRight
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
                                         }
                                     }
                                 }
