@@ -30,11 +30,6 @@ PAGE_FILES = [
     "HealthPage.qml",
 ]
 
-# These are deliberately stable source-level contracts: the pages must expose
-# their core user workflow and call the real backend controller. We do not
-# assert implementation-specific signal handler spellings here because QML
-# signal connections may be expressed through Connections handlers without the
-# raw signal name appearing in the page source.
 PAGE_EXPECTATIONS = {
     "HomePage.qml": [
         "Dashboard",
@@ -94,7 +89,7 @@ def test_main_maps_every_workspace_page():
 
 def test_main_has_backend_and_workspace_navigation_contract():
     text = MAIN_QML.read_text(encoding="utf-8")
-    assert "contextProperty(\"backend\"" not in text  # backend is injected by bootstrap, not QML
+    assert "contextProperty(\"backend\"" not in text
     assert "StackLayout" in text
     assert "Loader" in text
     for page_id in ["home", "compare", "repair", "review", "create", "explore", "health"]:
@@ -113,3 +108,42 @@ def test_qml_files_have_balanced_basic_braces():
     for path in files:
         text = re.sub(r'//.*', '', path.read_text(encoding="utf-8"))
         assert text.count("{") == text.count("}"), f"Unbalanced braces in {path.relative_to(ROOT)}"
+
+
+def test_store_builder_source_preview_uses_real_rows_not_numeric_repeater_model():
+    text = (QML_DIR / "pages" / "CreateStorePage.qml").read_text(encoding="utf-8")
+    assert "model: root.importedRows.slice(0, root.previewRowCount)" in text
+    assert "model: Math.min(root.previewRowCount, root.importedRows.length)" not in text
+    assert "readonly property var previewRow: modelData" in text
+
+
+def test_repair_qml_mapping_call_has_matching_controller_slot():
+    qml = (QML_DIR / "pages" / "RepairPage.qml").read_text(encoding="utf-8")
+    controller = (ROOT / "core" / "controllers" / "repair_controller.py").read_text(encoding="utf-8")
+    assert "backend.repair.map_repair_column" in qml
+    assert "def map_repair_column(" in controller
+    assert "@Slot(int, int, int)" in controller
+
+
+def test_health_ui_statistics_have_backend_compatible_operation_contract():
+    qml = (QML_DIR / "pages" / "HealthPage.qml").read_text(encoding="utf-8")
+    health = (ROOT / "core" / "health.py").read_text(encoding="utf-8")
+    assert '"unique"' in qml
+    assert 'if operation == "unique":' in health
+    assert 'operation = "nunique"' in health
+
+
+def test_backend_data_preview_contracts_preserve_actual_row_values():
+    explore = (QML_DIR / "pages" / "ExplorePage.qml").read_text(encoding="utf-8")
+    health = (QML_DIR / "pages" / "HealthPage.qml").read_text(encoding="utf-8")
+    review = (QML_DIR / "pages" / "SingleReviewPage.qml").read_text(encoding="utf-8")
+    assert "root.rowValue(rowDelegate.rowData" in explore
+    assert "root.rowValue(rowDelegate.rowData" in health
+    assert "root.cellValue(rowDelegate.rowData" in review
+
+
+def test_no_known_stale_repair_mapping_api_remains_in_controller_contract():
+    controller = (ROOT / "core" / "controllers" / "repair_controller.py").read_text(encoding="utf-8")
+    assert "def apply_repair_mapping(" in controller
+    assert "def map_repair_column(" in controller
+    assert "self.apply_repair_mapping(int(issue_index), int(col_index), target, False)" in controller
