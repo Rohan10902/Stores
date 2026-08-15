@@ -47,9 +47,12 @@ ApplicationWindow {
         if (index >= 0 && index < root.pageIds.length)
             root.currentPage = index
     }
-    function pageLoaded(index) {
+    function pageItem(index) {
         var loaders = [homeLoader, compareLoader, repairLoader, reviewLoader, createLoader, exploreLoader, healthLoader]
-        return index >= 0 && index < loaders.length && loaders[index].item !== null
+        return index >= 0 && index < loaders.length ? loaders[index].item : null
+    }
+    function pageLoaded(index) {
+        return root.pageItem(index) !== null
     }
     function parsePreview(payload, isMaster) {
         try {
