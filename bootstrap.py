@@ -3,6 +3,11 @@ import os
 import traceback
 from pathlib import Path
 
+# StoreLens customizes Qt Quick Controls. Force a non-native style before
+# QApplication is created so both development and packaged Windows builds
+# use the same control implementation.
+os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Basic")
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QUrl, QThreadPool, qInstallMessageHandler, QtMsgType
 from PySide6.QtQml import QQmlApplicationEngine
@@ -80,7 +85,10 @@ def create_application(sys_argv):
             message = f"QML: {url}:{warning.line()}:{warning.column()} - {warning.description()}"
             logger.error(message)
             if sys.stderr is not None:
-                print(message, file=sys.stderr, flush=True)
+                try:
+                    print(message, file=sys.stderr, flush=True)
+                except UnicodeEncodeError:
+                    print(message.encode("utf-8", errors="replace").decode("utf-8"), file=sys.stderr, flush=True)
 
     engine.warnings.connect(handle_qml_warnings)
 
