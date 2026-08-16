@@ -1,0 +1,126 @@
+name: StoreLens Production Readiness Gate
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-gate:
+    name: Dataset / Export / Lifecycle / UI Gate
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install runtime and gate tools
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-benchmark psutil ruff==0.16.0
+
+      - name: Compile source
+        run: python -m compileall -q core app.py bootstrap.py
+
+      - name: Run production data gates
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: "offscreen"
+          QT_QUICK_BACKEND: "software"
+          QSG_RHI_BACKEND: "software"
+          QT_OPENGL: "software"
+        run: |
+          python -m pytest tests/test_production_gate.py tests/test_store_table_model.py tests/test_store_normalization.py -v --tb=short --junitxml=production-gate-results.xml 2>&1 | Tee-Object -FilePath production-gate.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run feature regression gate
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: "offscreen"
+          QT_QUICK_BACKEND: "software"
+          QSG_RHI_BACKEND: "software"
+          QT_OPENGL: "software"
+        run: |
+          python -m pytest tests/test_workflow_acceptance.py tests/test_qml_feature_acceptance.py -v --tb=short 2>&1 | Tee-Object -FilePath feature-regression.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: QML static UI regression guard
+        shell: pwsh
+        run: |
+          $required = @(
+            'qml/pages/CreateStorePage.qml',
+            'qml/pages/SingleReviewPage.qml',
+            'qml/pages/RepairPage.qml'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) { throw "Required UI file missing: $path" }
+          }
+          $white = Get-ChildItem qml -Filter *.qml -Recurse | Select-String -Pattern 'color:\s*"#fff|color:\s*"white"' -CaseSensitive:$false
+          if ($white) {
+            $white | ForEach-Object { Write-Host "Potential hard-coded light UI surface: $($_.Path):$($_.LineNumber)" }
+          }
+
+      - name: Performance budget
+        shell: pwsh
+        run: |
+          python - <<'PY'
+          import time
+          from tests.test_production_gate import _row
+          import pandas as pd
+          from core.common import STORE_FIELDS, normalize_store_dataframe
+          rows = [_row(i) for i in range(1, 10001)]
+          frame = pd.DataFrame(rows, columns=STORE_FIELDS)
+          start = time.perf_counter()
+          result = normalize_store_dataframe(frame)
+          elapsed = time.perf_counter() - start
+          print(f"10k-row normalization: {elapsed:.3f}s")
+          if len(result) != 10000:
+              raise SystemExit('10k-row performance gate lost records')
+          if elapsed > 15:
+              raise SystemExit(f'10k-row normalization exceeded 15s budget: {elapsed:.3f}s')
+          PY
+
+      - name: Generate production readiness report
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          # StoreLens Production Readiness Report
+
+          Commit: $env:GITHUB_SHA
+          Ref: $env:GITHUB_REF
+          Generated: $(Get-Date -Format o)
+
+          ## Gates
+          - Dataset lifecycle: 200 repeated dataset replacements
+          - Large dataset: 10,000 records
+          - Export integrity: source SHA-256 unchanged
+          - Canonical binary flags: 1/0
+          - Required-field validation: enforced
+          - SQL schema isolation: tested
+          - Feature regression: workflow acceptance suite
+          - UI regression: required QML and light-surface guard
+          - Performance: 10k normalization budget
+          "@ | Set-Content production-readiness.md
+          Get-Content production-gate.log -ErrorAction SilentlyContinue | Select-Object -Last 120 | Add-Content production-readiness.md
+
+      - name: Upload production diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: StoreLens-Production-Readiness
+          path: |
+            production-readiness.md
+            production-gate.log
+            production-gate-results.xml
+            feature-regression.log
