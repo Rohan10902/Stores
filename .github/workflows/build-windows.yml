@@ -116,7 +116,7 @@ jobs:
           upload-artifact: true
 
       - name: Attest Windows executable provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/StoreLens.exe
 
