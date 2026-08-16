@@ -27,17 +27,10 @@ Item {
     }
     function urlToPath(value) {
         var text = String(value || "")
-        if (text.indexOf("file:///") === 0)
-            text = text.substring(8)
-        else if (text.indexOf("file://") === 0)
-            text = text.substring(7)
-        if (Qt.platform.os === "windows")
-            text = text.replace(/^\/+/, "")
-        try {
-            return decodeURIComponent(text)
-        } catch (error) {
-            return text
-        }
+        if (text.indexOf("file:///") === 0) text = text.substring(8)
+        else if (text.indexOf("file://") === 0) text = text.substring(7)
+        if (Qt.platform.os === "windows") text = text.replace(/^\/+/, "")
+        try { return decodeURIComponent(text) } catch (error) { return text }
     }
     function loadData() {
         if (root.backendAvailable() && root.sourcePath !== "")
@@ -48,8 +41,7 @@ Item {
             backend.health.stats(root.selectedColumn, root.selectedOperation, root.groupColumn)
     }
     function rowValue(row, column) {
-        if (row === null || row === undefined)
-            return ""
+        if (row === null || row === undefined) return ""
         if (Array.isArray(row)) {
             var index = root.columns.indexOf(column)
             if (index >= 0 && index < row.length && row[index] !== null && row[index] !== undefined)
@@ -62,30 +54,27 @@ Item {
         }
         return ""
     }
-    function statRows() {
-        return root.statsData && Array.isArray(root.statsData.rows) ? root.statsData.rows : []
-    }
+    function statRows() { return root.statsData && Array.isArray(root.statsData.rows) ? root.statsData.rows : [] }
     function formatHealthValue(value) {
-        if (value === null || value === undefined)
-            return "—"
-        if (Array.isArray(value))
-            return value.length + " item(s)"
+        if (value === null || value === undefined) return "—"
+        if (Array.isArray(value)) return value.length + " item(s)"
         if (typeof value === "object") {
             var keys = Object.keys(value)
-            if (!keys.length)
-                return "—"
+            if (!keys.length) return "—"
             return keys.slice(0, 3).map(function(key) { return key + ": " + String(value[key]) }).join(" • ") + (keys.length > 3 ? " …" : "")
         }
         return String(value)
+    }
+    function previewColumnWidth() {
+        var count = Math.max(1, root.columns.length)
+        var available = Math.max(560, root.width - Theme.spacingXLarge * 2 - 30)
+        return Math.max(110, Math.min(180, Math.floor(available / count)))
     }
 
     FileDialog {
         id: fileDialog
         title: "Select Dataset"
-        nameFilters: [
-            "Data Files (*.csv *.xlsx *.xls *.xlsm *.tsv *.txt)",
-            "All Files (*)"
-        ]
+        nameFilters: ["Data Files (*.csv *.xlsx *.xls *.xlsm *.tsv *.txt)", "All Files (*)"]
         onAccepted: {
             root.sourcePath = root.urlToPath(selectedFile)
             root.loadData()
@@ -99,8 +88,7 @@ Item {
         currentFile: "health_report.html"
         nameFilters: ["HTML Files (*.html)", "All Files (*)"]
         onAccepted: {
-            if (root.backendAvailable())
-                backend.health.export_health_report(root.urlToPath(selectedFile))
+            if (root.backendAvailable()) backend.health.export_health_report(root.urlToPath(selectedFile))
         }
     }
 
@@ -115,29 +103,16 @@ Item {
                 root.totalRows = Number(data.total || 0)
                 root.displayedRows = Number(data.displayed === undefined ? root.rows.length : data.displayed)
                 root.truncated = Boolean(data.truncated)
-                if (root.selectedColumn === "" && root.columns.length > 0)
-                    root.selectedColumn = String(root.columns[0])
+                if (root.selectedColumn === "" && root.columns.length > 0) root.selectedColumn = String(root.columns[0])
             } catch (error) {
-                root.columns = []
-                root.rows = []
-                root.totalRows = 0
-                root.displayedRows = 0
-                root.truncated = false
+                root.columns = []; root.rows = []; root.totalRows = 0; root.displayedRows = 0; root.truncated = false
             }
         }
         function onStatsReady(payload) {
-            try {
-                root.statsData = JSON.parse(String(payload || "{}"))
-            } catch (error) {
-                root.statsData = ({})
-            }
+            try { root.statsData = JSON.parse(String(payload || "{}")) } catch (error) { root.statsData = ({}) }
         }
         function onHealthReady(payload) {
-            try {
-                root.healthData = JSON.parse(String(payload || "{}"))
-            } catch (error) {
-                root.healthData = ({})
-            }
+            try { root.healthData = JSON.parse(String(payload || "{}")) } catch (error) { root.healthData = ({}) }
         }
     }
 
@@ -169,33 +144,11 @@ Item {
                 RowLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
-                    Text {
-                        text: "Dataset"
-                        color: Theme.textSecondary
-                        font.bold: true
-                        Layout.preferredWidth: 75
-                    }
-                    TextField {
-                        Layout.fillWidth: true
-                        readOnly: true
-                        text: root.sourcePath
-                        placeholderText: "Select dataset"
-                        color: Theme.textPrimary
-                    }
-                    AppButton {
-                        text: "Browse"
-                        onClicked: fileDialog.open()
-                    }
-                    PrimaryButton {
-                        text: "Analyze"
-                        enabled: root.sourcePath !== ""
-                        onClicked: root.loadData()
-                    }
-                    AppButton {
-                        text: "Export Report"
-                        enabled: root.totalRows > 0
-                        onClicked: reportDialog.open()
-                    }
+                    Text { text: "Dataset"; color: Theme.textSecondary; font.bold: true; Layout.preferredWidth: 75 }
+                    TextField { Layout.fillWidth: true; readOnly: true; text: root.sourcePath; placeholderText: "Select dataset"; color: Theme.textPrimary }
+                    AppButton { text: "Browse"; onClicked: fileDialog.open() }
+                    PrimaryButton { text: "Analyze"; enabled: root.sourcePath !== ""; onClicked: root.loadData() }
+                    AppButton { text: "Export Report"; enabled: root.totalRows > 0; onClicked: reportDialog.open() }
                 }
             }
 
@@ -218,20 +171,8 @@ Item {
                         Layout.preferredHeight: 82
                         ColumnLayout {
                             anchors.centerIn: parent
-                            Text {
-                                text: metricDelegate.modelData.value
-                                color: metricDelegate.modelData.tone
-                                font.pixelSize: 22
-                                font.bold: true
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Text {
-                                text: metricDelegate.modelData.label
-                                color: Theme.textSecondary
-                                font.pixelSize: 10
-                                font.bold: true
-                                Layout.alignment: Qt.AlignHCenter
-                            }
+                            Text { text: metricDelegate.modelData.value; color: metricDelegate.modelData.tone; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                            Text { text: metricDelegate.modelData.label; color: Theme.textSecondary; font.pixelSize: 10; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                         }
                     }
                 }
@@ -245,47 +186,15 @@ Item {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
-                    Text {
-                        text: "Column Statistics"
-                        color: Theme.textPrimary
-                        font.pixelSize: 15
-                        font.bold: true
-                    }
+                    Text { text: "Column Statistics"; color: Theme.textPrimary; font.pixelSize: 15; font.bold: true }
                     RowLayout {
                         Layout.fillWidth: true
-                        ComboBox {
-                            id: columnCombo
-                            Layout.fillWidth: true
-                            model: root.columns
-                            currentIndex: Math.max(0, root.columns.indexOf(root.selectedColumn))
-                            onActivated: root.selectedColumn = currentText
-                        }
-                        ComboBox {
-                            id: operationCombo
-                            Layout.preferredWidth: 170
-                            model: ["count", "unique", "nulls", "mean", "median", "min", "max", "sum"]
-                            currentIndex: Math.max(0, model.indexOf(root.selectedOperation))
-                            onActivated: root.selectedOperation = currentText
-                        }
-                        ComboBox {
-                            id: groupCombo
-                            Layout.preferredWidth: 190
-                            model: ["No Group"].concat(root.columns)
-                            currentIndex: root.groupColumn === "" ? 0 : root.columns.indexOf(root.groupColumn) + 1
-                            onActivated: root.groupColumn = currentIndex <= 0 ? "" : root.columns[currentIndex - 1]
-                        }
-                        PrimaryButton {
-                            text: "Calculate"
-                            enabled: root.selectedColumn !== ""
-                            onClicked: root.calculateStats()
-                        }
+                        ComboBox { id: columnCombo; Layout.fillWidth: true; model: root.columns; currentIndex: Math.max(0, root.columns.indexOf(root.selectedColumn)); onActivated: root.selectedColumn = currentText }
+                        ComboBox { id: operationCombo; Layout.preferredWidth: 170; model: ["count", "unique", "nulls", "mean", "median", "min", "max", "sum"]; currentIndex: Math.max(0, model.indexOf(root.selectedOperation)); onActivated: root.selectedOperation = currentText }
+                        ComboBox { id: groupCombo; Layout.preferredWidth: 190; model: ["No Group"].concat(root.columns); currentIndex: root.groupColumn === "" ? 0 : root.columns.indexOf(root.groupColumn) + 1; onActivated: root.groupColumn = currentIndex <= 0 ? "" : root.columns[currentIndex - 1] }
+                        PrimaryButton { text: "Calculate"; enabled: root.selectedColumn !== ""; onClicked: root.calculateStats() }
                     }
-                    Text {
-                        text: root.selectedColumn === "" ? "Select a column to calculate statistics." : "Column: " + root.selectedColumn + (root.groupColumn !== "" ? " • Grouped by " + root.groupColumn : "")
-                        color: Theme.textSecondary
-                        font.pixelSize: 11
-                        Layout.fillWidth: true
-                    }
+                    Text { text: root.selectedColumn === "" ? "Select a column to calculate statistics." : "Column: " + root.selectedColumn + (root.groupColumn !== "" ? " • Grouped by " + root.groupColumn : ""); color: Theme.textSecondary; font.pixelSize: 11; Layout.fillWidth: true }
                 }
             }
 
@@ -298,12 +207,7 @@ Item {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
-                    Text {
-                        text: "Statistics Result"
-                        color: Theme.textPrimary
-                        font.pixelSize: 15
-                        font.bold: true
-                    }
+                    Text { text: "Statistics Result"; color: Theme.textPrimary; font.pixelSize: 15; font.bold: true }
                     RowLayout {
                         Layout.fillWidth: true
                         Text { text: "Column: " + String(root.statsData.column || ""); color: Theme.textSecondary; Layout.fillWidth: true }
@@ -327,18 +231,8 @@ Item {
                                 anchors.fill: parent
                                 anchors.leftMargin: 8
                                 anchors.rightMargin: 8
-                                Text {
-                                    text: String(statDelegate.modelData.label || "")
-                                    color: Theme.textSecondary
-                                    Layout.preferredWidth: 230
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    text: String(statDelegate.modelData.result === undefined ? "" : statDelegate.modelData.result)
-                                    color: Theme.textPrimary
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
+                                Text { text: String(statDelegate.modelData.label || ""); color: Theme.textSecondary; Layout.preferredWidth: 230; elide: Text.ElideRight }
+                                Text { text: String(statDelegate.modelData.result === undefined ? "" : statDelegate.modelData.result); color: Theme.textPrimary; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
                         }
                     }
@@ -354,16 +248,11 @@ Item {
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMedium
-                    Text {
-                        text: "Dataset Health"
-                        color: Theme.textPrimary
-                        font.pixelSize: 15
-                        font.bold: true
-                    }
+                    Text { text: "Dataset Health"; color: Theme.textPrimary; font.pixelSize: 15; font.bold: true }
                     GridLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        columns: 3
+                        columns: root.width < 900 ? 2 : 3
                         rowSpacing: Theme.spacingSmall
                         columnSpacing: Theme.spacingMedium
                         Repeater {
@@ -380,20 +269,8 @@ Item {
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
                                     anchors.rightMargin: 8
-                                    Text {
-                                        text: healthDelegate.modelData
-                                        color: Theme.textSecondary
-                                        font.pixelSize: 10
-                                        font.bold: true
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideRight
-                                    }
-                                    Text {
-                                        text: root.formatHealthValue(root.healthData[healthDelegate.modelData])
-                                        color: Theme.textPrimary
-                                        font.bold: true
-                                        elide: Text.ElideRight
-                                    }
+                                    Text { text: healthDelegate.modelData; color: Theme.textSecondary; font.pixelSize: 10; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text { text: root.formatHealthValue(root.healthData[healthDelegate.modelData]); color: Theme.textPrimary; font.bold: true; elide: Text.ElideRight }
                                 }
                             }
                         }
@@ -427,14 +304,14 @@ Item {
                             id: tableFlick
                             anchors.fill: parent
                             clip: true
-                            contentWidth: Math.max(width, root.columns.length * 160)
+                            contentWidth: Math.max(width, root.columns.length * root.previewColumnWidth())
                             contentHeight: tableColumn.height
                             boundsBehavior: Flickable.StopAtBounds
                             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                             ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
                             Column {
                                 id: tableColumn
-                                width: Math.max(tableFlick.width, root.columns.length * 160)
+                                width: Math.max(tableFlick.width, root.columns.length * root.previewColumnWidth())
                                 Rectangle {
                                     width: tableColumn.width
                                     height: 40
@@ -447,7 +324,7 @@ Item {
                                             delegate: Rectangle {
                                                 id: headerDelegate
                                                 required property string modelData
-                                                width: 160
+                                                width: root.previewColumnWidth()
                                                 height: 40
                                                 color: "transparent"
                                                 border.color: Theme.border
@@ -471,7 +348,7 @@ Item {
                                                 id: cellDelegate
                                                 required property string modelData
                                                 required property int index
-                                                width: 160
+                                                width: root.previewColumnWidth()
                                                 height: 40
                                                 color: cellDelegate.index % 2 === 0 ? Theme.background : Theme.surface
                                                 border.color: Theme.border
@@ -482,13 +359,7 @@ Item {
                                 }
                             }
                         }
-                        Text {
-                            visible: root.rows.length === 0
-                            anchors.centerIn: parent
-                            text: root.sourcePath === "" ? "Load a dataset to begin." : "No preview rows available."
-                            color: Theme.textMuted
-                            font.pixelSize: 13
-                        }
+                        Text { visible: root.rows.length === 0; anchors.centerIn: parent; text: root.sourcePath === "" ? "Load a dataset to begin." : "No preview rows available."; color: Theme.textMuted; font.pixelSize: 13 }
                     }
                 }
             }
