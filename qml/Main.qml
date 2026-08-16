@@ -17,6 +17,20 @@ ApplicationWindow {
     title: "StoreLens"
     color: Theme.background
 
+    // Keep native Qt Quick Controls dark so Windows does not introduce white
+    // ComboBox/TextField surfaces into the application's dark visual system.
+    palette.window: Theme.background
+    palette.base: Theme.background
+    palette.alternateBase: Theme.surface
+    palette.text: Theme.textPrimary
+    palette.button: Theme.surfaceElevated
+    palette.buttonText: Theme.textPrimary
+    palette.highlight: Theme.primary
+    palette.highlightedText: Theme.textPrimary
+    palette.mid: Theme.border
+    palette.dark: Theme.backgroundAlt
+    palette.light: Theme.surfaceHover
+
     property int currentPage: 0
     property var masterPreviewColumns: []
     property var masterPreviewRows: []
@@ -35,8 +49,13 @@ ApplicationWindow {
     readonly property var pageIds: [
         "home", "compare", "repair", "review", "create", "explore", "health"
     ]
-    readonly property int previewColumnWidth: 180
     readonly property int previewRowHeight: 38
+
+    function previewColumnWidth() {
+        var count = Math.max(1, root.activeColumns().length)
+        var available = Math.max(520, root.width - Theme.sidebarWidth - 100)
+        return Math.max(120, Math.min(180, Math.floor(available / count)))
+    }
 
     function navigateTo(pageId) {
         var index = root.pageIds.indexOf(pageId)
@@ -192,13 +211,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     currentIndex: root.currentPage
-                    Loader {
-                        id: homeLoader
-                        active: root.currentPage === 0
-                        source: "pages/HomePage.qml"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                    }
+                    Loader { id: homeLoader; active: root.currentPage === 0; source: "pages/HomePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
                     Loader { id: compareLoader; active: root.currentPage === 1; source: "pages/ComparePage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
                     Loader { id: repairLoader; active: root.currentPage === 2; source: "pages/RepairPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
                     Loader { id: reviewLoader; active: root.currentPage === 3; source: "pages/SingleReviewPage.qml"; Layout.fillWidth: true; Layout.fillHeight: true }
@@ -254,14 +267,14 @@ ApplicationWindow {
                     anchors.fill: parent
                     visible: root.previewError === "" && root.activeColumns().length > 0
                     clip: true
-                    contentWidth: Math.max(width, root.activeColumns().length * root.previewColumnWidth)
+                    contentWidth: Math.max(width, root.activeColumns().length * root.previewColumnWidth())
                     contentHeight: previewRows.height
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                     ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
                     Column {
                         id: previewRows
-                        width: Math.max(rowsFlick.width, root.activeColumns().length * root.previewColumnWidth)
+                        width: Math.max(rowsFlick.width, root.activeColumns().length * root.previewColumnWidth())
                         Rectangle {
                             width: previewRows.width
                             height: 42
@@ -274,7 +287,7 @@ ApplicationWindow {
                                     delegate: Rectangle {
                                         id: headerDelegate
                                         required property string modelData
-                                        width: root.previewColumnWidth
+                                        width: root.previewColumnWidth()
                                         height: 42
                                         color: "transparent"
                                         border.color: Theme.border
@@ -300,7 +313,7 @@ ApplicationWindow {
                                         delegate: Rectangle {
                                             id: cellDelegate
                                             required property int index
-                                            width: root.previewColumnWidth
+                                            width: root.previewColumnWidth()
                                             height: root.previewRowHeight
                                             color: "transparent"
                                             border.color: Theme.border
