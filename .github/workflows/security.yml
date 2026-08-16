@@ -41,10 +41,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
-          deny-licenses: GPL-2.0;GPL-3.0
+          deny-licenses: GPL-2.0-only,GPL-3.0-only
 
   pip-audit:
     name: Python Dependency Audit
