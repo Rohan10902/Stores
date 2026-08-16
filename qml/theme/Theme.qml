@@ -32,17 +32,23 @@ QtObject {
     readonly property color textMuted: "#6E839B"
     readonly property color textDisabled: "#4B5E73"
 
-    readonly property int sidebarWidth: 252
-    readonly property int headerHeight: 64
-    readonly property int buttonHeight: 40
-    readonly property int fieldHeight: 38
+    // Responsive scale keeps the existing visual system intact while preventing
+    // excessive padding on smaller Windows windows and preserving the desktop feel.
+    readonly property real viewportScale: Qt.application.activeWindow
+        ? Math.max(0.82, Math.min(1.0, Qt.application.activeWindow.width / 1500.0))
+        : 1.0
 
-    readonly property int spacingTiny: 4
-    readonly property int spacingSmall: 8
-    readonly property int spacingMedium: 12
-    readonly property int spacingLarge: 18
-    readonly property int spacingXLarge: 26
-    readonly property int spacingXXLarge: 34
+    readonly property int sidebarWidth: Math.round(252 * viewportScale)
+    readonly property int headerHeight: Math.round(64 * viewportScale)
+    readonly property int buttonHeight: Math.round(40 * viewportScale)
+    readonly property int fieldHeight: Math.round(38 * viewportScale)
+
+    readonly property int spacingTiny: Math.max(3, Math.round(4 * viewportScale))
+    readonly property int spacingSmall: Math.max(6, Math.round(8 * viewportScale))
+    readonly property int spacingMedium: Math.max(10, Math.round(12 * viewportScale))
+    readonly property int spacingLarge: Math.max(14, Math.round(18 * viewportScale))
+    readonly property int spacingXLarge: Math.max(20, Math.round(26 * viewportScale))
+    readonly property int spacingXXLarge: Math.max(26, Math.round(34 * viewportScale))
 
     readonly property int radiusSmall: 6
     readonly property int radiusMedium: 9
