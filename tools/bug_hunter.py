@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 RULES: list[tuple[str, str, str, str]] = [
-    ("qml-scope", r"unqualified access|missing-property|modelData|\bparent\.", "QML delegate scope", "Audit the delegate under ComponentBehavior: Bound; add required properties and explicit delegate IDs instead of relying on modelData/index/parent scope."),
+    ("qml-scope", r"unqualified access|missing-property", "QML delegate scope", "Audit the delegate under ComponentBehavior: Bound; add required properties and explicit delegate IDs instead of relying on implicit model/index/parent scope."),
     ("csv-tokenize", r"tokeniz|Expected \d+ fields|ParserError|Error tokenizing data", "CSV parsing", "Inspect CSV dialect/quoting/encoding handling and preserve a readable parse error; do not discard the file or leave the preview empty."),
     ("duplicate-dialog", r"popup|dialog|window.*twice|twice|duplicate.*dialog|multiple.*window", "Dialog lifecycle", "Check repeated signal connections, duplicate component creation, and stale modal objects. A browse action must create/trigger exactly one dialog."),
     ("stale-state", r"stale|previous.*dataset|old.*dataset|master.*preview|previous.*preview", "Dataset state isolation", "Clear and replace feature-local dataset/model state on every load. Do not keep global preview state shared between pages."),
