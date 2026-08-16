@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -99,6 +104,19 @@ jobs:
         run: |
           Get-FileHash dist\StoreLens.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  StoreLens.exe" } | Set-Content dist\SHA256SUMS.txt
 
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: dist/StoreLens.exe
+          format: cyclonedx-json
+          output-file: dist/StoreLens-sbom.cdx.json
+          artifact-name: StoreLens-SBOM
+
+      - name: Attest Windows executable provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/StoreLens.exe
+
       - name: Upload Windows One-File Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -106,6 +124,7 @@ jobs:
           path: |
             dist/StoreLens.exe
             dist/SHA256SUMS.txt
+            dist/StoreLens-sbom.cdx.json
             packaged-startup.out
             packaged-startup.err
             packaged-startup.marker
