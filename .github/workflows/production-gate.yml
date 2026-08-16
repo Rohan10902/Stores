@@ -73,7 +73,7 @@ jobs:
       - name: Performance budget
         shell: pwsh
         run: |
-          python - <<'PY'
+          $code = @'
           import time
           from tests.test_production_gate import _row
           import pandas as pd
@@ -88,7 +88,9 @@ jobs:
               raise SystemExit('10k-row performance gate lost records')
           if elapsed > 15:
               raise SystemExit(f'10k-row normalization exceeded 15s budget: {elapsed:.3f}s')
-          PY
+          '@
+          Set-Content performance_gate.py $code
+          python performance_gate.py
 
       - name: Generate production readiness report
         if: always()
