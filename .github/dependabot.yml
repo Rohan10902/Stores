@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-runtime:
+        patterns:
+          - "PySide6"
+          - "pandas"
+          - "openpyxl"
+          - "xlrd"
+          - "lxml"
+          - "duckdb"
+      test-and-build:
+        patterns:
+          - "pytest"
+          - "pytest-benchmark"
+          - "psutil"
+          - "ruff"
+          - "pyinstaller"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
