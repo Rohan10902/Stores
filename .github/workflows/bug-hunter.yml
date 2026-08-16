@@ -1,0 +1,93 @@
+name: StoreLens Bug Hunter
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: "Commit SHA to inspect (leave blank for main)"
+        required: false
+        default: ""
+  workflow_run:
+    workflows:
+      - StoreLens Production CI
+      - StoreLens Windows Release Candidate
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    name: Diagnose StoreLens
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Resolve inspection commit
+        id: target
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_run') {
+            "sha=${{ github.event.workflow_run.head_sha }}" >> $env:GITHUB_OUTPUT
+            "run_id=${{ github.event.workflow_run.id }}" >> $env:GITHUB_OUTPUT
+          } elseif ('${{ inputs.target_sha }}' -ne '') {
+            "sha=${{ inputs.target_sha }}" >> $env:GITHUB_OUTPUT
+            "run_id=" >> $env:GITHUB_OUTPUT
+          } else {
+            "sha=${{ github.sha }}" >> $env:GITHUB_OUTPUT
+            "run_id=" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Checkout inspected revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Collect failed GitHub Actions logs
+        if: steps.target.outputs.run_id != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.target.outputs.run_id }}
+        run: |
+          gh run view $env:RUN_ID --repo $env:GITHUB_REPOSITORY --log-failed 2>&1 | Tee-Object -FilePath ci-failed.log
+          if (-not (Test-Path ci-failed.log)) { New-Item ci-failed.log -ItemType File | Out-Null }
+
+      - name: Run Bug Hunter
+        shell: pwsh
+        run: |
+          if (Test-Path ci-failed.log) {
+            python tools/bug_hunter.py --root . --logs ci-failed.log --output bug-hunter-report.md | Tee-Object -FilePath bug-hunter-console.txt
+          } else {
+            python tools/bug_hunter.py --root . --output bug-hunter-report.md | Tee-Object -FilePath bug-hunter-console.txt
+          }
+
+      - name: Publish Bug Hunter report
+        if: always()
+        shell: pwsh
+        run: |
+          Add-Content $env:GITHUB_STEP_SUMMARY "# StoreLens Bug Hunter"
+          Add-Content $env:GITHUB_STEP_SUMMARY ""
+          if (Test-Path bug-hunter-report.md) {
+            Get-Content bug-hunter-report.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          } else {
+            Add-Content $env:GITHUB_STEP_SUMMARY "Bug Hunter did not produce a report."
+          }
+
+      - name: Upload Bug Hunter diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: StoreLens-Bug-Hunter
+          path: |
+            bug-hunter-report.md
+            bug-hunter-console.txt
+            ci-failed.log
+          if-no-files-found: ignore
