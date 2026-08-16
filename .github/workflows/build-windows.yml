@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
@@ -67,6 +67,7 @@ jobs:
           QT_QUICK_BACKEND: "software"
           QSG_RHI_BACKEND: "software"
           QT_OPENGL: "software"
+          QT_QUICK_CONTROLS_STYLE: "Basic"
         run: |
           Remove-Item source-startup.marker -ErrorAction SilentlyContinue
           $output = & python bootstrap.py 2>&1
@@ -88,6 +89,7 @@ jobs:
           QT_QUICK_BACKEND: "software"
           QSG_RHI_BACKEND: "software"
           QT_OPENGL: "software"
+          QT_QUICK_CONTROLS_STYLE: "Basic"
         run: |
           Remove-Item packaged-startup.marker -ErrorAction SilentlyContinue
           $exe = Resolve-Path "dist\StoreLens.exe"
@@ -102,15 +104,16 @@ jobs:
       - name: Generate SHA-256 Checksum
         shell: pwsh
         run: |
-          Get-FileHash dist\StoreLens.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  StoreLens.exe" } | Set-Content dist\SHA256SUMS.txt
+          Get-FileHash dist\StoreLens.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  StoreLens.exe" } | Set-Content dist\SHA256SUMS.txt -Encoding utf8
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          path: dist/StoreLens.exe
+          path: dist
           format: cyclonedx-json
           output-file: dist/StoreLens-sbom.cdx.json
           artifact-name: StoreLens-SBOM
+          upload-artifact: true
 
       - name: Attest Windows executable provenance
         uses: actions/attest-build-provenance@v2
