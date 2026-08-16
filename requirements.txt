@@ -1,8 +1,8 @@
 # StoreLens production runtime baseline.
 # Keep major versions stable where the application has compatibility-sensitive APIs.
 PySide6==6.11.1
-pandas==2.3.3
+pandas==3.0.5
 openpyxl==3.1.5
 xlrd==2.0.2
 lxml==6.1.1
-duckdb==1.5.4
+duckdb==1.5.5
