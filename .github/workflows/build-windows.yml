@@ -121,7 +121,7 @@ jobs:
           subject-path: dist/StoreLens.exe
 
       - name: Upload Windows One-File Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: StoreLens-Windows-OneFile
           path: |
