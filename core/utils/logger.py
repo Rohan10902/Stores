@@ -18,6 +18,25 @@ def log_directory() -> Path:
     return Path.home() / ".storelens" / "logs"
 
 
+class _UnicodeSafeStreamHandler(logging.StreamHandler):
+    """Keep application logging alive when Windows uses a legacy console encoding."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            super().emit(record)
+        except UnicodeEncodeError:
+            try:
+                message = self.format(record)
+                stream = self.stream
+                encoding = getattr(stream, "encoding", None) or "utf-8"
+                safe = message.encode(encoding, errors="replace").decode(encoding, errors="replace")
+                stream.write(safe + self.terminator)
+                self.flush()
+            except (OSError, UnicodeError):
+                # Logging must never crash the application.
+                pass
+
+
 def setup_logging(level: int = logging.INFO) -> logging.Logger:
     logger = logging.getLogger(_LOGGER_NAME)
     logger.setLevel(level)
@@ -26,14 +45,19 @@ def setup_logging(level: int = logging.INFO) -> logging.Logger:
         return logger
 
     formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s.%(funcName)s:%(lineno)d] - %(message)s")
-    console = logging.StreamHandler(sys.stdout)
+    console = _UnicodeSafeStreamHandler(sys.stdout)
     console.setFormatter(formatter)
     logger.addHandler(console)
 
     try:
         directory = log_directory()
         directory.mkdir(parents=True, exist_ok=True)
-        file_handler = RotatingFileHandler(directory / "storelens.log", maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
+        file_handler = RotatingFileHandler(
+            directory / "storelens.log",
+            maxBytes=2 * 1024 * 1024,
+            backupCount=3,
+            encoding="utf-8",
+        )
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except OSError:
