@@ -40,7 +40,7 @@ jobs:
           }
 
       - name: Checkout inspected revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.target.outputs.sha }}
           fetch-depth: 1
