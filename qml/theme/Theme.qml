@@ -32,16 +32,20 @@ QtObject {
     readonly property color textMuted: "#6E839B"
     readonly property color textDisabled: "#4B5E73"
 
-    // Responsive scale keeps the existing visual system intact while preventing
-    // excessive padding on smaller Windows windows and preserving the desktop feel.
-    readonly property real viewportScale: Qt.application.activeWindow
-        ? Math.max(0.82, Math.min(1.0, Qt.application.activeWindow.width / 1500.0))
+    // Scale from both dimensions so short Windows windows do not become vertically cramped.
+    // The 0.82 floor keeps controls usable at the application's 1150x700 minimum size.
+    readonly property real viewportWidthScale: Qt.application.activeWindow
+        ? Qt.application.activeWindow.width / 1500.0
         : 1.0
+    readonly property real viewportHeightScale: Qt.application.activeWindow
+        ? Qt.application.activeWindow.height / 920.0
+        : 1.0
+    readonly property real viewportScale: Math.max(0.82, Math.min(1.0, viewportWidthScale, viewportHeightScale))
 
     readonly property int sidebarWidth: Math.round(252 * viewportScale)
     readonly property int headerHeight: Math.round(64 * viewportScale)
-    readonly property int buttonHeight: Math.round(40 * viewportScale)
-    readonly property int fieldHeight: Math.round(38 * viewportScale)
+    readonly property int buttonHeight: Math.max(34, Math.round(40 * viewportScale))
+    readonly property int fieldHeight: Math.max(34, Math.round(38 * viewportScale))
 
     readonly property int spacingTiny: Math.max(3, Math.round(4 * viewportScale))
     readonly property int spacingSmall: Math.max(6, Math.round(8 * viewportScale))
